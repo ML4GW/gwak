@@ -89,6 +89,7 @@ input, select, textarea {
     .avo {
         font-size: 150px;
         z-index: -1;
+        margin: 2px;
         position: absolute;
     }
 
