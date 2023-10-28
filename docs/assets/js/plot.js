@@ -1,4 +1,4 @@
-let go_fetch=(filename, title)=>{
+let go_fetch=(filename, folder, title)=>{
 fetch(filename).then((res) => res.json()).then((data) => {
 
 const layout = {
@@ -24,7 +24,7 @@ const layout = {
                 data.points[i].y.toPrecision(4) + '\n\n';
         }
 
-        show_image(`data/${data.points[0].data.file[data.points[0].pointNumber]}`);
+        show_image(`${folder}/${data.points[0].data.file[data.points[0].pointNumber]}`);
 
     });
 });
@@ -33,11 +33,11 @@ const layout = {
 
 document.getElementsByClassName("button")[0].addEventListener('click', function(){
     document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
-    go_fetch('data_ryan.json', 'O3a GWAK Detections')
+    go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections')
 })
 document.getElementsByClassName("button")[0].addEventListener('click', function(){
     document.getElementsByClassName("button")[0].innerHTML = "O3b analysis"
-    go_fetch('data_ryan.json', 'O3b GWAK Detections')
+    go_fetch('all_O3b_spectrogram.json', 'all_O3b_spectrogram', 'O3b GWAK Detections')
 })
 document.getElementsByClassName("button")[1].addEventListener('click', function(){
     document.getElementsByClassName("button")[1].innerHTML = "Burst Challenge"

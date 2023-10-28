@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataFolder = path.join(__dirname, 'dataO3a');
+const dataFolder = path.join(__dirname, 'all_O3a_spectrogram');
 
 const files = fs.readdirSync(dataFolder);
 
@@ -17,7 +17,7 @@ files.forEach((file) => {
     f.push(file);
 });
 
-fs.writeFile(path.join(__dirname, 'dataO3a.json'), JSON.stringify([{x, y, file: f, mode: "markers"}], null, 2), (err) => {
+fs.writeFile(path.join(__dirname, 'all_O3a_spectrogram.json'), JSON.stringify([{x, y, file: f, mode: "markers"}], null, 2), (err) => {
     if (err) {
         console.log(err);
     }
