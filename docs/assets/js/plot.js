@@ -43,11 +43,11 @@ document.getElementsByClassName("button")[1].addEventListener('click', function(
 })
 document.getElementsByClassName("button")[2].addEventListener('click', function(){
     document.getElementsByClassName("button")[2].innerHTML = "Burst O3a training"
-    go_fetch('data_moreno.json', 'all_O3b_spectrogram', 'Burst GWAK Detections O3a training')
+    go_fetch('burst_trainingO3a.json', 'burst_trainingO3a', 'Burst GWAK Detections O3a training')
 })
 document.getElementsByClassName("button")[3].addEventListener('click', function(){
     document.getElementsByClassName("button")[3].innerHTML = "Burst O3b training"
-    go_fetch('data_moreno.json', 'all_O3b_spectrogram', 'Burst GWAK Detections O3b training')
+    go_fetch('burst_trainingO3b.json', 'burst_trainingO3b', 'Burst GWAK Detections O3b training')
 })
 document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
 go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections')
