@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataFolder = path.join(__dirname, 'burst_trainingO3a');
+const dataFolder = path.join(__dirname, 'burst_trainingO3b');
 
 const files = fs.readdirSync(dataFolder);
 
@@ -17,7 +17,7 @@ files.forEach((file) => {
     f.push(file);
 });
 
-fs.writeFile(path.join(__dirname, 'burst_trainingO3a.json'), JSON.stringify([{x, y, file: f, mode: "markers"}], null, 2), (err) => {
+fs.writeFile(path.join(__dirname, 'burst_trainingO3b.json'), JSON.stringify([{x, y, file: f, mode: "markers"}], null, 2), (err) => {
     if (err) {
         console.log(err);
     }
