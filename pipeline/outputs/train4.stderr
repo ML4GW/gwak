@@ -1,5 +1,0 @@
-2023-02-06 10:07:42.184279: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1532] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 1623 MB memory:  -> device: 0, name: NVIDIA GeForce GTX 750 Ti, pci bus id: 0000:02:00.0, compute capability: 5.0
-2023-02-06 10:07:42.189133: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1532] Created device /job:localhost/replica:0/task:0/device:GPU:1 with 1623 MB memory:  -> device: 1, name: NVIDIA GeForce GTX 750 Ti, pci bus id: 0000:03:00.0, compute capability: 5.0
-2023-02-06 10:07:42.190107: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1532] Created device /job:localhost/replica:0/task:0/device:GPU:2 with 1623 MB memory:  -> device: 2, name: NVIDIA GeForce GTX 750 Ti, pci bus id: 0000:83:00.0, compute capability: 5.0
-2023-02-06 10:07:42.190988: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1532] Created device /job:localhost/replica:0/task:0/device:GPU:3 with 1623 MB memory:  -> device: 3, name: NVIDIA GeForce GTX 750 Ti, pci bus id: 0000:84:00.0, compute capability: 5.0
-2023-02-06 10:07:53.818286: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100

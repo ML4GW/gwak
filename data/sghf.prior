@@ -1,0 +1,8 @@
+hrss = Uniform(name='hrss', minimum=1e-21, maximum=2e-21, boundary=None)
+q = Uniform(name='q', minimum=25, maximum=75,  boundary=None)
+frequency = Uniform(name='frequency', minimum=512, maximum=1024)
+phase = Uniform(name='phase', minimum=0, maximum=2 * np.pi, boundary=None)
+eccentricity = Uniform(name = 'eccentricity', minimum=0, maximum=0.01)
+dec = Cosine(name='dec')
+ra = Uniform(name='ra', minimum=0, maximum= 2 * np.pi, boundary='periodic')
+psi = Uniform(name='psi', minimum=0, maximum= 2 * np.pi)

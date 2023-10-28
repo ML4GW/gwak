@@ -1,9 +1,28 @@
-name: anomaly-base
+name: gwak
 channels:
-    - conda-forge
+  - conda-forge
 dependencies:
-    - python=3.9
-    - keras=2.9.0
-    - numpy=1.23.0
-    - matplotlib=3.5.2
-    - scipy=1.8.1       
+  - python=3.9
+  - gwpy
+  - astropy
+  # frame file I/O dependencies
+  - python-ldas-tools-framecpp
+  - python-nds2-client
+  # omicron dependencies
+  - python-ligo-lw
+  - pyomicron
+  - omicron>=4.0.0
+  - dqsegdb2
+  - uproot
+  # injection dependencies
+  - bilby<1.2
+  - lalsuite
+  - pip:
+    - tensorflow==2.12.0
+    - scipy==1.6.1
+    - scikit-learn
+    - h5py
+    - snakemake
+    - matplotlib
+    - numpy
+    - setGPU

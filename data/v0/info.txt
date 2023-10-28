@@ -1,0 +1,26 @@
+/home/katya.govorkova/gwak/v0/train/bbh.npy 
+Dataset bbh shape is (84271, 2, 100) 
+/home/katya.govorkova/gwak/v0/train/sg.npy 
+Dataset sg shape is (89307, 2, 100) 
+/home/katya.govorkova/gwak/v0/train/background.npy 
+Dataset background shape is (90000, 2, 100) 
+/home/katya.govorkova/gwak/v0/train/glitch.npy 
+Dataset glitch shape is (144, 2, 100) 
+/home/katya.govorkova/gwak/v0/test/bbh.npy 
+Dataset bbh shape is (9364, 2, 100) 
+/home/katya.govorkova/gwak/v0/test/sg.npy 
+Dataset sg shape is (9923, 2, 100) 
+/home/katya.govorkova/gwak/v0/test/background.npy 
+Dataset background shape is (10000, 2, 100) 
+/home/katya.govorkova/gwak/v0/test/glitch.npy 
+Dataset glitch shape is (16, 2, 100) 
+/home/katya.govorkova/gwak/v0/data/timeslides.npy 
+Dataset timeslides shape is (2, 5050368) 
+/home/katya.govorkova/gwak/v0/data/bbh_fm_optimization.npy 
+Dataset bbh_fm_optimizatio shape is (500, 2, 26624) 
+/home/katya.govorkova/gwak/v0/data/sg_fm_optimization.npy 
+Dataset sg_fm_optimizatio shape is (500, 2, 26624) 
+/home/katya.govorkova/gwak/v0/data/bbh_varying_snr.npy 
+Dataset bbh_varying_snr shape is (500, 2, 26624) 
+/home/katya.govorkova/gwak/v0/data/sg_varying_snr.npy 
+Dataset sg_varying_snr shape is (500, 2, 26624) 

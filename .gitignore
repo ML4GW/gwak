@@ -1,0 +1,10 @@
+.snakemake/
+*.pyc
+data/*.hdf5
+output/
+*.DS_Store*
+*.ffl
+tmp/*
+*._*.py
+*._*.pdf
+*.pt
