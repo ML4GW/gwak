@@ -13,7 +13,7 @@ files.forEach((file) => {
     if(!file.match(/\d+_.+/)) return;
     const [date, value, value2] = file.split('_');
     x.push(gpsTimeToDate(date));
-    y.push(value2);
+    y.push(value2.replaceAll(".png", ""));
     f.push(file);
 });
 

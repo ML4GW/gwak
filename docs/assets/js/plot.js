@@ -3,6 +3,8 @@ fetch(filename).then((res) => res.json()).then((data) => {
 
 const layout = {
         title: title,
+        width: 1100,
+        height: 650,
         hovermode: 'closest',
         xaxis: {
             title: "Date"
@@ -35,16 +37,20 @@ document.getElementsByClassName("button")[0].addEventListener('click', function(
     document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
     go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections')
 })
-document.getElementsByClassName("button")[0].addEventListener('click', function(){
-    document.getElementsByClassName("button")[0].innerHTML = "O3b analysis"
+document.getElementsByClassName("button")[1].addEventListener('click', function(){
+    document.getElementsByClassName("button")[1].innerHTML = "O3b analysis"
     go_fetch('all_O3b_spectrogram.json', 'all_O3b_spectrogram', 'O3b GWAK Detections')
 })
-document.getElementsByClassName("button")[1].addEventListener('click', function(){
-    document.getElementsByClassName("button")[1].innerHTML = "Burst Challenge"
-    go_fetch('data_moreno.json', 'Burst GWAK Detections')
+document.getElementsByClassName("button")[2].addEventListener('click', function(){
+    document.getElementsByClassName("button")[2].innerHTML = "Burst O3a training"
+    go_fetch('data_moreno.json', 'all_O3b_spectrogram', 'Burst GWAK Detections O3a training')
+})
+document.getElementsByClassName("button")[3].addEventListener('click', function(){
+    document.getElementsByClassName("button")[3].innerHTML = "Burst O3b training"
+    go_fetch('data_moreno.json', 'all_O3b_spectrogram', 'Burst GWAK Detections O3b training')
 })
 document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
-go_fetch('data_ryan.json', 'O3a GWAK Detections')
+go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections')
 
 
 function show_image(src){
