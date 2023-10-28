@@ -87,9 +87,10 @@ input, select, textarea {
     }
 
     .avo {
+        padding: 20px;
         font-size: 150px;
         z-index: -1;
-        margin: 2px;
+        top-margin: 2px;
         position: absolute;
     }
 
@@ -139,7 +140,7 @@ input, select, textarea {
 
         a:hover {
             border-bottom-color: transparent;
-            color: #49bf9d !important;
+            color: #FFFFFF !important;
             text-decoration: none;
         }
 
@@ -2686,14 +2687,14 @@ input, select, textarea {
     #main {
         margin-left: 18%;
         max-width: 54em;
-        padding: 8em 4em 4em 4em;
+        padding: 2em 4em 4em 4em;
         width: calc(100% - 18%);
     }
 
         #main > section {
             border-top: solid 2px #efefef;
-            margin: 4em 0 0 0;
-            padding: 4em 0 0 0;
+            margin: 2em 0 0 0;
+            padding: 2em 0 0 0;
         }
 
             #main > section:first-child {
