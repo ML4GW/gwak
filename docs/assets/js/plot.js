@@ -11,8 +11,9 @@ const layout = {
         },
         yaxis: {
             title: "FAR",
-            tickvals: [-1.617, -2.225, -2.985, -3.091],
-            ticktext: ['1/2 days', '1/week', '1/month', '1/year']
+            tickvals: [-1.065, -2.153, -3.299, -4.849, -6.725, -8.498],
+            ticktext: ['1/month', '1/year', '1/10 years', '1/100 years',
+                '1/1000 years', '1/10000 years']
         }
     };
 
