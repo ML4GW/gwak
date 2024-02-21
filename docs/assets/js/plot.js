@@ -35,8 +35,16 @@ const layout = {
 
 
 document.getElementsByClassName("button")[0].addEventListener('click', function(){
-    document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
-    go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections')
+    document.getElementsByClassName("button")[0].innerHTML = "O3a old"
+    go_fetch('all_O3a_spectrogram_old.json', 'all_O3a_spectrogram_old', 'O3a GWAK Detections before Heuristics')
+})
+document.getElementsByClassName("button")[0].addEventListener('click', function(){
+    document.getElementsByClassName("button")[0].innerHTML = "O3a new pearson"
+    go_fetch('all_O3a_spectrogram_pearson.json', 'all_O3a_spectrogram_pearson', 'O3a GWAK Detections using Pearson and Heuristics')
+})
+document.getElementsByClassName("button")[0].addEventListener('click', function(){
+    document.getElementsByClassName("button")[0].innerHTML = "O3a new"
+    go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections no Pearson but with Heuristics')
 })
 document.getElementsByClassName("button")[1].addEventListener('click', function(){
     document.getElementsByClassName("button")[1].innerHTML = "O3b analysis"
