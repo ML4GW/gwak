@@ -79,24 +79,24 @@ const layout = {
 //     document.getElementsByClassName("button")[1].innerHTML = "O3a analysis"
 //     go_fetch('all_O3a_spectrogram.json', 'all_O3a_spectrogram', 'O3a GWAK Detections no Pearson but with Heuristics')
 // })
+document.getElementsByClassName("button")[0].addEventListener('click', function(){
+    document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
+    go_fetch('all_O3a_spectrogram_boom.json', 'all_O3a_spectrogram_boom', 'O3a GWAK Detections')
+})
 document.getElementsByClassName("button")[1].addEventListener('click', function(){
-    document.getElementsByClassName("button")[1].innerHTML = "O3a analysis"
-    go_fetch('all_O3a_spectrogram_boom.json', 'all_O3a_spectrogram_boom', 'O3a GWAK Detections BOOM')
+    document.getElementsByClassName("button")[1].innerHTML = "O3b analysis"
+    go_fetch('all_O3b_spectrogram_new.json', 'all_O3b_spectrogram_new', 'O3b GWAK Detections')
 })
 document.getElementsByClassName("button")[2].addEventListener('click', function(){
-    document.getElementsByClassName("button")[2].innerHTML = "O3b analysis"
-    go_fetch('all_O3b_spectrogram.json', 'all_O3b_spectrogram', 'O3b GWAK Detections')
-})
-document.getElementsByClassName("button")[3].addEventListener('click', function(){
-    document.getElementsByClassName("button")[3].innerHTML = "Burst O3a training"
+    document.getElementsByClassName("button")[2].innerHTML = "Burst O3a training"
     go_fetch('burst_trainingO3a.json', 'burst_trainingO3a', 'Burst GWAK Detections O3a training')
 })
-document.getElementsByClassName("button")[4].addEventListener('click', function(){
-    document.getElementsByClassName("button")[4].innerHTML = "Burst O3b training"
+document.getElementsByClassName("button")[3].addEventListener('click', function(){
+    document.getElementsByClassName("button")[3].innerHTML = "Burst O3b training"
     go_fetch('burst_trainingO3b.json', 'burst_trainingO3b', 'Burst GWAK Detections O3b training')
 })
-document.getElementsByClassName("button")[1].innerHTML = "O3a analysis"
-go_fetch('all_O3a_spectrogram_boom.json', 'all_O3a_spectrogram_boom', 'O3a GWAK Detections BOOM')
+document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
+go_fetch('all_O3a_spectrogram_boom.json', 'all_O3a_spectrogram_boom', 'O3a GWAK Detections')
 
 
 function show_image(src){
