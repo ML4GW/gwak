@@ -66,6 +66,40 @@ const layout = {
 });
 }
 
+let go_fetch_new=(filename, folder, title)=>{
+fetch(filename).then((res) => res.json()).then((data) => {
+
+const layout = {
+        title: title,
+        width: 1100,
+        height: 650,
+        hovermode: 'closest',
+        xaxis: {
+            title: "Date"
+        },
+        yaxis: {
+            title: "FAR",
+            tickvals: [-1.325, -2.075, -2.675, -3.8, -5.025, -6.425, -7.545],
+            ticktext: ['1/day', '1/week', '1/month', '1/year', '1/10 years', '1/100 years', '1/1000 years']        }
+    };
+
+    Plotly.newPlot('plot', data, layout);
+
+    document.getElementById('plot').on('plotly_click', function(data){
+
+        var pts = '';
+        for(var i=0; i < data.points.length; i++){
+            pts = 'x = '+data.points[i].x +'\ny = '+
+                data.points[i].y.toPrecision(4) + '\n\n';
+        }
+
+        show_image(`${folder}/${data.points[0].data.file[data.points[0].pointNumber]}`);
+
+    });
+});
+}
+
+
 
 // document.getElementsByClassName("button")[0].addEventListener('click', function(){
 //     document.getElementsByClassName("button")[0].innerHTML = "O3a old"
@@ -81,7 +115,7 @@ const layout = {
 // })
 document.getElementsByClassName("button")[0].addEventListener('click', function(){
     document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
-    go_fetch('all_O3a_spectrogram_paper.json', 'all_O3a_spectrogram_paper', 'O3a GWAK Detections')
+    go_fetch_new('all_O3a_spectrogram_paper.json', 'all_O3a_spectrogram_paper', 'O3a GWAK Detections')
 })
 document.getElementsByClassName("button")[1].addEventListener('click', function(){
     document.getElementsByClassName("button")[1].innerHTML = "O3a analysis Old"
@@ -100,7 +134,7 @@ document.getElementsByClassName("button")[4].addEventListener('click', function(
     go_fetch('burst_trainingO3b.json', 'burst_trainingO3b', 'Burst GWAK Detections O3b training')
 })
 document.getElementsByClassName("button")[0].innerHTML = "O3a analysis"
-go_fetch('all_O3a_spectrogram_paper.json', 'all_O3a_spectrogram_paper', 'O3a GWAK Detections')
+go_fetch_new('all_O3a_spectrogram_paper.json', 'all_O3a_spectrogram_paper', 'O3a GWAK Detections')
 
 
 function show_image(src){
