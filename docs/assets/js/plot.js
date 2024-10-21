@@ -35,6 +35,82 @@ let go_fetch=(filename, folder, title)=>{
 fetch(filename).then((res) => res.json()).then((data) => {
 
 const layout = {
+        shapes: [
+        {
+            type: 'line',
+            xref: 'paper',
+            x0: 0.1,
+            y0: -1.75,
+            x1: 1,
+            y1: -1.75,
+            line:{
+                color: '#E5659D',
+                width: 2,
+            },
+        },
+        {
+            type: 'line',
+            xref: 'paper',
+            x0: 0.11,
+            y0: -4.57,
+            x1: 1,
+            y1: -4.57,
+            line:{
+                color: '#E5659D',
+                width: 2,
+            },
+        },
+        {
+            type: 'line',
+            xref: 'paper',
+            x0: 0.12,
+            y0: -6.42,
+            x1: 1,
+            y1: -6.42,
+            line:{
+                color: '#E5659D',
+                width: 2,
+            },
+        },
+        ],
+            annotations: [
+                {
+                    xref: 'paper',
+                    x: 0,  // Place at the end of the line (adjust as needed)
+                    y: -1.75,  // Same y-coordinate as the line
+                    text: 'Cat2 1/day',  // The label for the shape
+                    showarrow: false,
+                    font: {
+                        size: 14,
+                        color: '#E5659D',  // Same color as the line
+                    },
+                    align: 'left'
+                },
+                {
+                    xref: 'paper',
+                    x: 0,  // Place at the end of the line (adjust as needed)
+                    y: -4.57,  // Same y-coordinate as the line
+                    text: 'Cat2 1/week',  // The label for the shape
+                    showarrow: false,
+                    font: {
+                        size: 14,
+                        color: '#E5659D',  // Same color as the line
+                    },
+                    align: 'left'
+                },
+                {
+                    xref: 'paper',
+                    x: 0,  // Place at the end of the line (adjust as needed)
+                    y: -6.42,  // Same y-coordinate as the line
+                    text: 'Cat2 1/month',  // The label for the shape
+                    showarrow: false,
+                    font: {
+                        size: 14,
+                        color: '#E5659D',  // Same color as the line
+                    },
+                    align: 'left'
+                },
+            ],
         title: title,
         width: 1100,
         height: 650,
@@ -51,6 +127,7 @@ const layout = {
     };
 
     Plotly.newPlot('plot', data, layout);
+
 
     document.getElementById('plot').on('plotly_click', function(data){
 
