@@ -40,9 +40,9 @@ const layout = {
             type: 'line',
             xref: 'paper',
             x0: 0.1,
-            y0: -1.75,
+            y0: -17.96,
             x1: 1,
-            y1: -1.75,
+            y1: -17.96,
             line:{
                 color: '#E5659D',
                 width: 2,
@@ -52,9 +52,9 @@ const layout = {
             type: 'line',
             xref: 'paper',
             x0: 0.11,
-            y0: -4.57,
+            y0: -19.72,
             x1: 1,
-            y1: -4.57,
+            y1: -19.72,
             line:{
                 color: '#E5659D',
                 width: 2,
@@ -64,9 +64,9 @@ const layout = {
             type: 'line',
             xref: 'paper',
             x0: 0.12,
-            y0: -6.42,
+            y0: -19.96,
             x1: 1,
-            y1: -6.42,
+            y1: -19.96,
             line:{
                 color: '#E5659D',
                 width: 2,
@@ -77,7 +77,7 @@ const layout = {
                 {
                     xref: 'paper',
                     x: 0,  // Place at the end of the line (adjust as needed)
-                    y: -1.75,  // Same y-coordinate as the line
+                    y: -17.96,  // Same y-coordinate as the line
                     text: 'Cat2 1/day',  // The label for the shape
                     showarrow: false,
                     font: {
@@ -89,7 +89,7 @@ const layout = {
                 {
                     xref: 'paper',
                     x: 0,  // Place at the end of the line (adjust as needed)
-                    y: -4.57,  // Same y-coordinate as the line
+                    y: -19.72,  // Same y-coordinate as the line
                     text: 'Cat2 1/week',  // The label for the shape
                     showarrow: false,
                     font: {
@@ -101,7 +101,7 @@ const layout = {
                 {
                     xref: 'paper',
                     x: 0,  // Place at the end of the line (adjust as needed)
-                    y: -6.42,  // Same y-coordinate as the line
+                    y: -19.96,  // Same y-coordinate as the line
                     text: 'Cat2 1/month',  // The label for the shape
                     showarrow: false,
                     font: {
