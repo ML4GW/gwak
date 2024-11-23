@@ -11,8 +11,8 @@ const layout = {
         },
         yaxis: {
             title: "FAR",
-            tickvals: [-1.065, -2.153, -3.299, -4.849, -6.725, -8.498],
-            ticktext: ['1/day', '1/week', '1/month', '1/year', '1/10 years', '1/100 years', '1/1000 years']        }
+            tickvals: [-0.3899999999999997, -0.9100000000000001, -1.3899999999999997, -2.4299999999999997, -3.69, -5.13],
+            ticktext: ['1/day', '1/week', '1/month', '1/year', '1/10 years', '1/100 years', '1/1000 years']                 }
     };
 
     Plotly.newPlot('plot', data, layout);
@@ -44,8 +44,8 @@ const layout = {
         },
         yaxis: {
             title: "FAR",
-            tickvals: [-1.75, -4.57, -6.42],
-            ticktext: ['1/day', '1/week', '1/month']
+            tickvals: [-3.3899999999999997, -6.25, -8.11, -9.75, -9.97, -9.99],
+            ticktext: ['1/day', '1/week', '1/month', '1/year', '1/10 years', '1/100 years', '1/1000 years']
         }
     };
 
