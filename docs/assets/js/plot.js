@@ -89,7 +89,11 @@ document.getElementsByClassName("button")[0].addEventListener('click', function(
     go_fetch_all('all_O3.json', 'all_O3', 'O3 GWAK Detections')
 })
 document.getElementsByClassName("button")[1].addEventListener('click', function(){
-    document.getElementsByClassName("button")[1].innerHTML = "Category 2 GWAK Detections"
+    document.getElementsByClassName("button")[1].innerHTML = "O3 GWAK Detections NEW"
+    go_fetch_all('all_O3_new.json', 'all_O3_new', 'O3 GWAK Detections NEW')
+})
+document.getElementsByClassName("button")[2].addEventListener('click', function(){
+    document.getElementsByClassName("button")[2].innerHTML = "Category 2 GWAK Detections"
     go_fetch_cat2('all_O3_cat2.json', 'all_O3_cat2', 'Category 2 GWAK Detections')
 })
 
