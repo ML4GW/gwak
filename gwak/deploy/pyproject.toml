@@ -1,10 +1,9 @@
 [tool.poetry]
-name = "export"
+name = "deploy"
 version = "0.1.0"
 description = ""
 authors = ["Andy Chen <andy.c.80297@gmail.com>"]
 readme = "README.md"
-license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.12"
@@ -12,8 +11,6 @@ python = ">=3.9,<3.12"
 # ml4gw applications (local) 
 ml4gw = {path = "../../ml4gw", develop = true}
 ml4gw-hermes = {path = "../../hermes", develop = true}
-# ml4gw = "^0.5"
-# ml4gw-hermes = {version = ">=0.2.0", extras = ["torch"]}
 
 spython = "0.2.14"
 nvidia-cudnn-cu11 = "8.9.6.50"
@@ -21,6 +18,10 @@ tensorrt = "8.5.2.2"
 
 # workaround for: https://github.com/python-poetry/poetry-plugin-export/issues/183
 urllib3 = ">=1.25.4,<1.27"
+jsonargparse = "^4.36.0"
+onnx = "^1.17.0"
+psutil = "^6.1.1"
+h5py = "^3.12.1"
 
 [[tool.poetry.source]]
 name = "torch"

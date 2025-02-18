@@ -1,0 +1,17 @@
+project: white_noise_burst
+model_dir: /home/hongyin.chen/anti-gravity/gwak/gwak/output
+output_dir: /home/hongyin.chen/anti-gravity/gwak/gwak/output/export
+clean: True
+background_batch_size: 256
+stride_batch_size: 1
+num_ifos: 2
+gwak_instances: 6
+platform: TORCHSCRIPT
+
+psd_length: 64
+kernel_length: 0.09765625
+fduration: 1
+fftlength: 2
+sample_rate: 2048
+preproc_instances: 1
+inference_sampling_rate: 1

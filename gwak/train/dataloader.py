@@ -15,7 +15,6 @@ import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.gw import compute_observed_strain, get_ifo_geometry
-from bilby.gw.conversion import bilby_to_lalsimulation_spins
 
 from torch.distributions.uniform import Uniform
 from ml4gw.distributions import Cosine
@@ -342,10 +341,12 @@ class SignalDataloader(GwakBaseDataloader):
         tensors, vertices = get_ifo_geometry(*ifos)
 
         # sample from prior and generate waveforms
-        parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
-
-        ra = self.ra_prior.sample((batch_size,))
-        dec = self.dec_prior.sample((batch_size,))
+        if parameters is not None:
+            parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
+        if ra is not None:
+            ra = self.ra_prior.sample((batch_size,))
+        if dec is not None:
+            dec = self.dec_prior.sample((batch_size,))
         phic = self.phic_prior.sample((batch_size,))
 
         cross, plus = self.waveform(**parameters)
@@ -543,7 +544,7 @@ class AugmentationSignalDataloader(GwakBaseDataloader):
             return batch
 
 
-class BBHDataloader(SignalDataloader):
+class BBHDataloader(AugmentationSignalDataloader):
 
     def __init__(
         self,

@@ -7,7 +7,7 @@ This repo is dedicated to the updated version of the algorithm presented in the 
 The current projects include
 - [`data`](./gwak/data/README.md) - Scripts for generating training and testing data
 - [`train`](./gwak/train/README.md) - Pytorch (lightning) code for training neural-networks
-- [`export`](./gwak/export/README.md) - Pytorch (lightning) code for exporting trained neural-networks
+- [`deploy`](./gwak/deploy/README.md) - Triton wapper (hermes) code to deploy trained neural-networks
 
 The repo includes implementation of both `gwak1` and `gwak2`, where the configs for `gwak1` live in the corresponding folder and in the `Snakefile` the corresponding rules have `_gwak1`.
 
@@ -77,15 +77,12 @@ $ pip install -e .
 $ pip install -U 'jsonargparse[signatures]>=4.27.7'
 ```
 
-# Containerize
-Set the container path
+- Installation for deployment
 
+Run the following command at base enviroment. 
 ```
-echo "export GWAK_CONTAINER_ROOT=<your/own/path>" >> ~/.bash_profile
+(base)$ pip install snakemake==7.32.4 pulp==2.6.0
+(base)$ cd gwak/gwak/deploy
+(base)$ poetry install
 ```
-
-To access container simply run 
-
-```
-apptainer shell $GWAK_CONTAINER_ROOT/project.sif
-```
+Use ```poetry add <package>``` to add new packages to the deploy application. 

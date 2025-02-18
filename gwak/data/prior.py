@@ -125,9 +125,9 @@ class CuspBBC(BasePrior):
     def __init__(self):
         super().__init__()
         self.params = OrderedDict(
-            waveform = 'cusp',
+            power = Constant(-4.0 / 3.0),
             amplitude = Uniform(4.0e-22, 4.0e-21),
-            f_high = 1000
+            f_high = Constant(1000)
         )
 
 class KinkBBC(BasePrior):
@@ -135,9 +135,9 @@ class KinkBBC(BasePrior):
     def __init__(self):
         super().__init__()
         self.params = OrderedDict(
-            waveform = 'kink',
+            power = Constant(-5.0 / 3.0),
             amplitude = Uniform(1.4e-21, 1.4e-20),
-            f_high = 1000
+            f_high = Constant(1000)
         )
 
 class KinkkinkBBC(BasePrior):
@@ -145,9 +145,9 @@ class KinkkinkBBC(BasePrior):
     def __init__(self):
         super().__init__()
         self.params = OrderedDict(
-            waveform = 'kinkkink',
+            power = Constant(-2.0),
             amplitude = Uniform(4.7e-21, 4.7e-20),
-            f_high = 1000
+            f_high = Constant(1000)
         )
 
 class LAL_BBHPrior(BasePrior):

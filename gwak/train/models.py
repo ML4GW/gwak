@@ -40,7 +40,9 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         
         # Modifiy these to read the last training/valdation data 
         # to acess the input shape. 
-        X = torch.randn(1, 200, 2)
+        # X = torch.randn(1, 200, 2) # GWAK 1
+        X = torch.randn(1, 2, 200) # GWAK 2
+
         trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
