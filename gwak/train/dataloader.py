@@ -544,7 +544,7 @@ class AugmentationSignalDataloader(GwakBaseDataloader):
             return batch
 
 
-class BBHDataloader(GwakBaseDataloader):
+class BBHDataloader(SignalDataloader):
 
     def __init__(
         self,

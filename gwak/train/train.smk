@@ -49,4 +49,4 @@ rule train:
 
 rule train_all:
     input:
-        expand(rules.train.log, datatype=['sine_gaussian_lf', 'sine_gaussian_hf', 'bbh', 'background', 'glitches'])
+        expand(rules.train.log, datatype=['sine_gaussian', 'bbh', 'background', 'kink', 'kinkkink', 'white_noise_burst', 'gaussian', 'cusp'])
