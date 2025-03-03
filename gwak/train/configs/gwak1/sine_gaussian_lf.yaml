@@ -4,7 +4,7 @@ trainer:
   callbacks:
     - class_path: callback.ValidationCallback
   accelerator: gpu
-  devices: [4]
+  devices: [1]
   # accelerator: auto
   # devices: auto
   strategy: ddp_find_unused_parameters_true

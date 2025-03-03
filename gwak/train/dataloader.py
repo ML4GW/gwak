@@ -561,9 +561,10 @@ class BBHDataloader(AugmentationSignalDataloader):
         ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
-        if parameters is None:
-            # sample from prior and generate waveforms
+        if parameters is not None:
             parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
+        else:  parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
+        
         if ra is None:
             ra = self.ra_prior.sample((batch_size,))
         if dec is None:
