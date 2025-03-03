@@ -46,6 +46,36 @@ def read_h5_data(
 
     return data_list
 
+def read_gwpy_frames(
+    test_data_dir: Path,
+):
+    """
+    Reads a list of GWPy frame files from a directory and extracts data
+    for the given channel. Returns a list of numpy arrays.
+
+    Parameters
+    ----------
+    test_data_dir : Path
+        Directory that contains GWPy frame files (e.g. *.gwf).
+    channel : str
+        The channel name to read from each file. For example: 'H1:GWOSC-16KHZ_R1_STRAIN'.
+
+    Returns
+    -------
+    data_list : list of np.ndarray
+        List of arrays containing the time-series data for each file.
+    """
+    data_files = sorted(test_data_dir.glob("*.gwf"))
+    data_list = []
+
+    for file in data_files:
+        # Read the time series from the specified channel
+        ts_h1 = TimeSeries.read(file, channel="H1:STRAIN_BURST_0")
+        ts_l1 = TimeSeries.read(file, channel="L1:STRAIN_BURST_0")
+        # Convert the data values to float32 if desired
+        data_list.append([ts_h1.value.astype("float32"), ts_l1.value.astype("float32")])
+
+    return data_list
 
 def static_infer_process(
     batcher,

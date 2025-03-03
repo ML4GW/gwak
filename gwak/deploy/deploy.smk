@@ -1,11 +1,10 @@
-models = ['white_noise_burst', 'gaussian', 'sine_gaussian', 'cusp', 'kink', 'kinkkink', 'bbh'] 
+models = ['gwak1','white_noise_burst', 'gaussian', 'sine_gaussian', 'cusp', 'kink'] 
 
 wildcard_constraints:
     deploymodels = '|'.join(models)
 
 DEPLOY_CLI = {
-    'white_noise_burst': 'white_noise_burst',
-    'gaussian': 'gaussian'
+    'gwak1': 'gwak1',
 }
 
 rule export: 
@@ -31,7 +30,7 @@ rule infer:
         ../deploy/deploy/cli_infer.py --config ../{input.config} --project {params.cli}'
 
 rule export_all:
-    input: expand(rules.export.output, deploymodels='white_noise_burst')
+    input: expand(rules.export.output, deploymodels='gwak1')
 
 rule infer_all:
-    input: expand(rules.infer.output, deploymodels='white_noise_burst')
+    input: expand(rules.infer.output, deploymodels='gwak1')

@@ -5,10 +5,10 @@ kernel_length: 0.09765625
 batch_size: 256
 stride_batch_size: 1
 sample_rate: 2048
-test_data_dir: /home/hongyin.chen/Data/GWAK_data/gwak_test_data
+test_data_dir: /scratch/burst.benchmark/o4b-2/
 project: white_noise_purst
-model_repo_dir: /home/hongyin.chen/anti-gravity/gwak/gwak/output/export
+model_repo_dir: /home/eric.moreno//gwak2/gwak/output/export
 image: hermes/tritonserver:23.01
-result_dir: /home/hongyin.chen/anti-gravity/gwak/gwak/output/infer
-load_data_patients: 5
+result_dir: /home/eric.moreno/gwak2/gwak/output/infer
+load_data_patients: 40
 

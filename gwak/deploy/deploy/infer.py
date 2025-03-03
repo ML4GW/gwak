@@ -54,10 +54,16 @@ def infer(
 
     logging.info(f"Loading data files ...")
     logging.info(f"    Data directory at {test_data_dir}")
+    
     data_list = read_h5_data(
         test_data_dir = test_data_dir, 
         key="data"
     )
+    
+    # data_list = read_gwpy_frames(
+    #     test_data_dir = test_data_dir, 
+    # )
+
     # data_list = [np.random.normal(0, 1, (256, 2, 133320)).astype("float32") for _ in range(2)]
 
     with serve_context:

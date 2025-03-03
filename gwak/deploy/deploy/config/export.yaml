@@ -1,6 +1,9 @@
-project: white_noise_burst
-model_dir: /home/hongyin.chen/anti-gravity/gwak/gwak/output
-output_dir: /home/hongyin.chen/anti-gravity/gwak/gwak/output/export
+project: gwak1
+model_dir: /home/eric.moreno/gwak2/gwak/output/
+output_dir: /home/eric.moreno/gwak2/gwak/output/export
+model_files: ['background/model_JIT.pt', 'glitches/model_JIT.pt', 'sine_gaussian_hf/model_JIT.pt', 'sine_gaussian_lf/model_JIT.pt', 'bbh/model_JIT.pt']
+combiner_model_file: /home/katya.govorkova/gwak-paper-final-models/trained/fm_model.pt
+
 clean: True
 background_batch_size: 256
 stride_batch_size: 1

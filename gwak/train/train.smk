@@ -34,7 +34,7 @@ rule train_gwak1:
 
 rule train_gwak1_all:
     input:
-        expand(rules.train_gwak1.log, datatype='background')
+        expand(rules.train_gwak1.log, datatype=['sine_gaussian_lf', 'sine_gaussian_hf', 'bbh', 'background', 'glitches'])
 
 rule train:
     input:
@@ -49,4 +49,4 @@ rule train:
 
 rule train_all:
     input:
-        expand(rules.train.log, datatype=['white_noise_burst', 'kinkkink', 'gaussian', 'cusp'])
+        expand(rules.train.log, datatype=['sine_gaussian_lf', 'sine_gaussian_hf', 'bbh', 'background', 'glitches'])

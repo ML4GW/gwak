@@ -76,6 +76,7 @@ def get_background(
             gpsend=seg_end,
             urltype="file",
         )
+        print(files, f"{ifo}:{channels[num]}", seg_start, seg_end, sample_rate, verbose)
         
         strains[ifo] = TimeSeries.read(
             files, 
