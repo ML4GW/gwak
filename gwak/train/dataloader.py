@@ -341,11 +341,11 @@ class SignalDataloader(GwakBaseDataloader):
         tensors, vertices = get_ifo_geometry(*ifos)
 
         # sample from prior and generate waveforms
-        if parameters is not None:
+        if parameters is None:
             parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
-        if ra is not None:
+        if ra is None:
             ra = self.ra_prior.sample((batch_size,))
-        if dec is not None:
+        if dec is None:
             dec = self.dec_prior.sample((batch_size,))
         phic = self.phic_prior.sample((batch_size,))
 
@@ -544,7 +544,7 @@ class AugmentationSignalDataloader(GwakBaseDataloader):
             return batch
 
 
-class BBHDataloader(AugmentationSignalDataloader):
+class BBHDataloader(GwakBaseDataloader):
 
     def __init__(
         self,
@@ -561,9 +561,8 @@ class BBHDataloader(AugmentationSignalDataloader):
         ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
-        if parameters is not None:
+        if parameters is None:
             parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
-        else:  parameters = self.prior.sample(batch_size) # dict[str, torch.tensor]
         
         if ra is None:
             ra = self.ra_prior.sample((batch_size,))
