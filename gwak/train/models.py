@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from einops import rearrange, repeat
 
+
 class GwakBaseModelClass(pl.LightningModule):
 
     def get_logger(self):
@@ -25,6 +26,98 @@ class GwakBaseModelClass(pl.LightningModule):
         logger = logging.getLogger(logger_name)
         logger.setLevel(logging.INFO)
         return logger
+
+
+class Linear(GwakBaseModelClass):
+    def __init__(self, n_dims, backgrounds, val_backgrounds, sigs, new_shape,
+            learning_rate=1e-3, svm_epochs=100, fm_model_path='final_model.pth'):
+        super().__init__()
+        self.network = nn.Linear(n_dims, 1)
+
+        # Store full backgrounds for training and validation
+        self.backgrounds = backgrounds
+        self.val_backgrounds = val_backgrounds
+
+        # Signals are fixed (assumed to be same in training & validation)
+        self.sigs = torch.from_numpy(sigs).float()
+
+        self.new_shape = new_shape
+        self.learning_rate = learning_rate
+        self.svm_epochs = svm_epochs
+        self.fm_model_path = fm_model_path
+
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        return self.network(x)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.network.parameters(), lr=self.learning_rate)
+
+    def training_step(self, batch, batch_idx):
+        i = batch_idx  # Each batch corresponds to a background chunk
+        small_bkgs = torch.from_numpy(
+            self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape]
+        ).float().to(self.device)
+
+        total_loss = 0.0
+
+        for epoch in range(self.svm_epochs):
+            background_MV = self.network(small_bkgs)
+            signal_MV = self.network(self.sigs.to(self.device))
+
+            # Take min score for each signal example
+            signal_MV = torch.min(signal_MV, dim=1)[0]
+
+            zero = torch.tensor(0.0, device=self.device)
+
+            background_loss = torch.maximum(zero, 1 - background_MV).mean()
+            signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
+
+            loss = background_loss + signal_loss
+
+            if epoch % 50 == 0:
+                self.log(f'weight_epoch_{epoch}', self.network.layer.weight.data[0].cpu().numpy(), prog_bar=False)
+                self.log(f'loss_epoch_{epoch}', loss.item(), prog_bar=False)
+
+            total_loss += loss
+
+        avg_loss = total_loss / self.svm_epochs
+        self.log('train_loss', avg_loss, prog_bar=True)
+        return avg_loss
+
+    def validation_step(self, batch, batch_idx):
+        """Validation step processes all validation data at once."""
+        small_bkgs = torch.from_numpy(self.val_backgrounds).float().to(self.device)
+        sigs = self.sigs.to(self.device)
+
+        background_MV = self.network(small_bkgs)
+        signal_MV = self.network(sigs)
+
+        # Take min score for each signal example
+        signal_MV = torch.min(signal_MV, dim=1)[0]
+
+        zero = torch.tensor(0.0, device=self.device)
+
+        background_loss = torch.maximum(zero, 1 - background_MV).mean()
+        signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
+
+        loss = background_loss + signal_loss
+        self.log('val_loss', loss, prog_bar=True)
+
+        return loss
+
+    def on_train_epoch_end(self):
+        torch.save(self.network.state_dict(), self.fm_model_path)
+        print("Final Weights:", self.network.layer.weight.data.cpu().numpy()[0])
+
+    def train_dataloader(self):
+        # Simulate 10 "batches", each corresponding to a background chunk
+        return torch.utils.data.DataLoader(range(10), batch_size=1, shuffle=False)
+
+    def val_dataloader(self):
+        # Single "batch" covering all validation data (you can split this if needed)
+        return torch.utils.data.DataLoader([0], batch_size=1, shuffle=False)
 
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
