@@ -17,6 +17,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 from einops import rearrange, repeat
+from losses import SupervisedSimCLRLoss
 
 class GwakBaseModelClass(pl.LightningModule):
 
@@ -725,14 +726,18 @@ class Crayon(GwakBaseModelClass):
         return callbacks
     
 class EncoderTransformer(nn.Module):
-    def __init__(self, num_timesteps:int=200, num_features:int=2, latent_dim:int=16):
+    def __init__(self, num_timesteps:int=200, 
+                 num_features:int=2, 
+                 latent_dim:int=16, 
+                 dim_feedforward:int=128, 
+                 nhead:int=2):
         super().__init__()
         self.num_timesteps = num_timesteps
         self.num_features = num_features
         self.latent_dim = latent_dim
+        self.dim_feedforward = dim_feedforward
+        self.nhead = nhead
 
-        dim_feedforward = 128
-        nhead=2
         self.transformer1 = nn.TransformerEncoderLayer(d_model=num_features,  
                                                        nhead=nhead, 
                                                        dim_feedforward=dim_feedforward,
@@ -741,14 +746,18 @@ class EncoderTransformer(nn.Module):
         self.transformer2 = nn.TransformerEncoderLayer(d_model=num_features*2,  nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True)
         self.layer2 = nn.Linear(num_features*2, num_features*2)
         self.transformer3 = nn.TransformerEncoderLayer(d_model=num_features*2,  nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True)
-        self.layer3 = nn.Linear(num_timesteps*(num_features*2), latent_dim * 4)
+       
+        #self.layer3 = nn.Linear(num_timesteps*(num_features*2), latent_dim * 4)
+        self.layer3 = nn.Linear(num_features*2, latent_dim * 4)
         self.layer4 = nn.Linear(latent_dim*4, latent_dim*4)
         self.layer5 = nn.Linear(latent_dim*4, latent_dim)
 
     def forward(self, x):
         num_batches, num_ifos, num_timesteps = x.shape
 
-        x = x.reshape(num_batches, num_timesteps, num_ifos)
+        #x = x.reshape(num_batches, num_timesteps, num_ifos)
+        x = x.transpose(1,2) # I believe this is the correct way to do it, reshape does something different
+        # we want B, F, T --> B, T, F for the transformer
         x = self.transformer1(x)
         x = F.relu(self.layer1(x))
 
@@ -756,8 +765,8 @@ class EncoderTransformer(nn.Module):
         x = F.relu(self.layer2(x))
         
         x = self.transformer3(x)
-        #print(772000000, x.shape)
-        x = x.reshape( (num_batches, self.num_timesteps * (self.num_features*2)))
+        x = torch.mean(x,dim=1) # time average
+        #x = x.reshape( (num_batches, self.num_timesteps * (self.num_features*2)))
 
         x = F.relu(self.layer3(x))
         x = F.relu(self.layer4(x))
@@ -773,7 +782,8 @@ class Tarantula(GwakBaseModelClass):
         num_timesteps: int = 200,
         d_output:int = 16,
         d_contrastive_space: int = 16,
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        supervised_simclr: bool = False
         ):
 
         super().__init__()
@@ -782,58 +792,66 @@ class Tarantula(GwakBaseModelClass):
         self.num_timesteps = num_timesteps
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
-
         self.temperature = temperature
+        self.supervised_simclr = supervised_simclr
+
         self.model = EncoderTransformer(num_timesteps = self.num_timesteps,
                                           num_features = self.num_ifos,
                                           latent_dim = self.d_output)
         
-        
         self.projection_head = ProjectionHeadModel(d_input = self.d_output,
-                                                    d_output = self.d_contrastive_space)
-
-    def simCLR(self, z0, z1):
-        N = len(z0)
-        z = torch.stack((z0, z1), dim=1).reshape(-1, z0.shape[1]) #intertwine
-        z_norm = z / torch.norm(z, dim=1)[:, None]
-        Sij = z_norm @ torch.transpose(z_norm, 0, 1) / self.temperature
-        Sij_exp = torch.exp( Sij )
-        denom_k = torch.sum( Sij_exp, dim=1 ) - torch.diagonal(Sij_exp)
-        numerator_k = torch.diag(Sij, diagonal=-1)[::2]
-        return 1/(2*N) * ( -2 * torch.sum(numerator_k) + torch.sum(torch.log(denom_k))  )
+                                                   d_output = self.d_contrastive_space)
+        
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
+                                                  contrast_mode='all', 
+                                                  base_temperature=self.temperature)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters())#, lr=config.learning_rate
         return optimizer
         
     def training_step(self, batch, batch_idx):
-        aug_0, aug_1 = batch[0], batch[1]
-        z0 = self.model(aug_0)
-        z1 = self.model(aug_1)
-        embd_0 = self.projection_head(z0)
-        embd_1 = self.projection_head(z1)
-
-        self.metric = self.simCLR(embd_0, embd_1)
-
+        if self.supervised_simclr:
+            x,labels = batch
+            x_embd = self.model(x)
+            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            loss = self.loss_function(z_embd,labels=labels)
+        else:
+            batch, labels = batch
+            aug_0, aug_1 = batch[0], batch[1]
+            z0 = self.model(aug_0)
+            z1 = self.model(aug_1)
+            embd_0 = self.projection_head(z0).unsqueeze(1)
+            embd_1 = self.projection_head(z1).unsqueeze(1)
+            embds = torch.cat((embd_0, embd_1), dim=1)
+            loss = self.loss_function(embds,labels=None)
 
         self.log(
-            'train_loss',
-            self.metric,
+            'train/loss',
+            loss,
             sync_dist=True)
 
-        return self.metric
+        return loss
 
     @torch.no_grad
     def validation_step(self, batch, batch_idx):
-        aug_0, aug_1 = batch[0], batch[1]
-        z0 = self.model(aug_0)
-        z1 = self.model(aug_1)
-        embd_0 = self.projection_head(z0)
-        embd_1 = self.projection_head(z1)
-        loss = self.simCLR(embd_0, embd_1)
+        if self.supervised_simclr:
+            x,labels = batch
+            x_embd = self.model(x)
+            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            loss = self.loss_function(z_embd,labels=labels)
+        else:
+            batch, labels = batch
+            aug_0, aug_1 = batch[0], batch[1]
+            z0 = self.model(aug_0)
+            z1 = self.model(aug_1)
+            embd_0 = self.projection_head(z0).unsqueeze(1)
+            embd_1 = self.projection_head(z1).unsqueeze(1)
+            embds = torch.cat((embd_0, embd_1), dim=1)
+            loss = self.loss_function(embds,labels=None)
 
         self.log(
-            'val_loss',
+            'val/loss',
             loss,
             sync_dist=True)
 
@@ -849,7 +867,7 @@ class Tarantula(GwakBaseModelClass):
         # if using ray tune don't append lightning
         # model checkpoint since we'll be using ray's
         checkpoint = ModelCheckpoint(
-            monitor='val_loss',
+            monitor='val/loss',
             save_last=True,
             auto_insert_metric_name=False
             )

@@ -4,7 +4,7 @@ trainer:
   callbacks:
     - class_path: callback.ValidationCallback
   accelerator: gpu
-  devices: [1]
+  devices: [0]
   # accelerator: auto
   # devices: auto
   strategy: ddp_find_unused_parameters_true
@@ -15,74 +15,38 @@ trainer:
   accumulate_grad_batches: 1
 ckpt_path: null
 model:
-  class_path: models.Crayon
+  class_path: models.Tarantula
   init_args:
     num_ifos: 2
     num_timesteps: 200
+    temperature: 0.1
+    supervised_simclr: true
 data:
-  class_path: dataloader.MultiSignalDataloader
+  class_path: dataloader.SignalDataloader
   init_args:
-    data_dir: /home/katya.govorkova/gwak2_background
+    signal_classes:
+      - "SineGaussian"
+      - "BBH"
+    priors:
+      - class_path: gwak.data.prior.SineGaussianBBC
+      - class_path: gwak.data.prior.LAL_BBHPrior
+    waveforms:
+      - class_path: ml4gw.waveforms.SineGaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.IMRPhenomPv2
+        init_args: {}
+    extra_kwargs:
+      - null
+      - ringdown_duration: 0.9
+    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak2_background
     sample_rate: 2048
     kernel_length: 0.09765625
     psd_length: 64
     fduration: 1
     fftlength: 2
-    batch_size: 8
-    batches_per_epoch: 8
-    num_workers: 5
-    signal_classes: 
-      - class_path: dataloader.SignalDataloader
-        init_args:
-          data_dir: /home/katya.govorkova/gwak2_background
-          sample_rate: 2048
-          kernel_length: 0.09765625
-          psd_length: 64
-          fduration: 1
-          fftlength: 2
-          batch_size: 8
-          batches_per_epoch: 8
-          num_workers: 5
-          prior: gwak.data.prior.SineGaussianBBC
-          waveform:
-            class_path: ml4gw.waveforms.SineGaussian
-          data_saving_file: output/sg.h5
-      - class_path: dataloader.BBHDataloader
-        init_args:  
-          data_dir: /home/katya.govorkova/gwak2_background
-          sample_rate: 2048
-          kernel_length: 0.09765625
-          psd_length: 64
-          fduration: 1
-          fftlength: 2
-          batch_size: 8
-          batches_per_epoch: 8
-          num_workers: 5
-          prior: gwak.data.prior.LAL_BBHPrior
-          waveform:
-            class_path: ml4gw.waveforms.IMRPhenomPv2
-          ringdown_duration: 0.9
-          data_saving_file: output/bbh.h5
-
-
-
-
-
-    waveforms:
-      - class_path: ml4gw.waveforms.SineGaussian
-    signal_class:
-      class_path: dataloader.SignalDataloader
-      init_args:
-        data_dir: /home/katya.govorkova/gwak2_background
-        sample_rate: 2048
-        kernel_length: 0.09765625
-        psd_length: 64
-        fduration: 1
-        fftlength: 2
-        batch_size: 8
-        batches_per_epoch: 8
-        num_workers: 5
-        prior: gwak.data.prior.SineGaussianBBC
-        waveform:
-          class_path: ml4gw.waveforms.SineGaussian
-        data_saving_file: output/sg.h5
+    batch_size: 128
+    batches_per_epoch: 10
+    num_workers: 1
+    data_saving_file: output/mixed_SG_BBH.h5
