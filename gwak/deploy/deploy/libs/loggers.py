@@ -5,8 +5,8 @@ import logging
 def gwak_logger(
     log_file,
     log_level=logging.DEBUG,
-    log_format = "%(asctime)s %(name)s %(levelname)s:\t%(message)s",
-    date_format = "%H:%M:%S"
+    log_format="%(asctime)s %(name)s %(levelname)s:\t%(message)s",
+    date_format="%H:%M:%S"
 ):
 
     logging.basicConfig(
