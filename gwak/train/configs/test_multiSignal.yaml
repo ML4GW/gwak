@@ -10,7 +10,7 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
-  max_epochs: 2
+  max_epochs: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
 ckpt_path: null
@@ -40,7 +40,7 @@ data:
     extra_kwargs:
       - null
       - ringdown_duration: 0.9
-    data_dir: /home/katya.govorkova/gwak2_background
+    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak2_background
     sample_rate: 2048
     kernel_length: 0.09765625
     psd_length: 64
