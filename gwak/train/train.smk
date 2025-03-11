@@ -56,3 +56,18 @@ rule train_all:
 rule train_multiSig_test:
     input:
         expand('output/{datatype}',datatype=['test_multiSignal'])
+
+rule train_linear_metric:
+    input:
+        config = 'train/configs/linear_metric.yaml'
+    params:
+        cli = lambda wildcards: CLI[wildcards.datatype]
+    log:
+        artefact = directory('output/linear_metric/{datatype}/')
+    shell:
+        'python {params.cli} fit --config {input.config} \
+            --trainer.logger.save_dir {log.artefact}'
+
+rule train_linear_all:
+    input:
+        expand(rules.train_linear_metric.log, datatype=['test_multiSignal'])

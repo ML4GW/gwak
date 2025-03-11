@@ -4,23 +4,20 @@ trainer:
   callbacks:
     - class_path: callback.ValidationCallback
   accelerator: gpu
-  devices: [0]
+  devices: [1]
   # accelerator: auto
   # devices: auto
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
-  max_epochs: 2
+  max_epochs: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
 ckpt_path: null
 model:
-  class_path: models.Tarantula
+  class_path: models.Linear
   init_args:
-    num_ifos: 2
-    num_timesteps: 200
-    temperature: 0.1
-    supervised_simclr: true
+    n_dims: 10
 data:
   class_path: dataloader.SignalDataloader
   init_args:
