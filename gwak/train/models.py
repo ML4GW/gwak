@@ -19,6 +19,7 @@ import torch.nn as nn
 from einops import rearrange, repeat
 from losses import SupervisedSimCLRLoss
 
+
 class GwakBaseModelClass(pl.LightningModule):
 
     def get_logger(self):
@@ -34,13 +35,13 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         torch.cuda.empty_cache()
 
         module = pl_module.__class__.load_from_checkpoint(
-            self.best_model_path, 
-            arch=pl_module.model, 
+            self.best_model_path,
+            arch=pl_module.model,
             metric=pl_module.metric
         )
-        
-        # Modifiy these to read the last training/valdation data 
-        # to acess the input shape. 
+
+        # Modifiy these to read the last training/valdation data
+        # to acess the input shape.
         # X = torch.randn(1, 200, 2) # GWAK 1
         X = torch.randn(1, 2, 200) # GWAK 2
 
@@ -50,6 +51,102 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         with open(os.path.join(save_dir, "model_JIT.pt"), "wb") as f:
             torch.jit.save(trace, f)
+
+
+class Linear(GwakBaseModelClass):
+    def __init__(self, backgrounds=None, val_backgrounds=None, new_shape=None,
+            n_dims=16, learning_rate=1e-3, svm_epochs=100, fm_model_path='output/final_model.pth'):
+        super().__init__()
+        self.network = nn.Linear(16, 1)
+
+        # Store full backgrounds for training and validation
+        self.backgrounds = backgrounds
+        self.val_backgrounds = val_backgrounds
+
+        self.new_shape = new_shape
+        self.learning_rate = learning_rate
+        self.svm_epochs = svm_epochs
+        self.fm_model_path = fm_model_path
+
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        return self.network(x)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.network.parameters(), lr=self.learning_rate)
+
+    def training_step(self, batch, batch_idx):
+        i = batch_idx  # Each batch corresponds to a background chunk
+        small_bkgs = 0 # torch.from_numpy(
+        #     self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape]
+        # ).float().to(self.device)
+
+        # Load first model (frozen for inference)
+        weights = "output/test_multiSignal/model_JIT.pt"
+        with open(weights, "rb") as f:
+            graph = torch.jit.load(f)
+        graph.eval() # Set to evaluation mode
+        graph.to(device=self.device)
+        batch = graph(batch[0])
+
+        total_loss = 0.0
+
+        for epoch in range(self.svm_epochs):
+            background_MV = torch.tensor(0.0, device=self.device) # self.network(small_bkgs)
+            signal_MV = self.network(batch)
+
+            # Take min score for each signal example
+            signal_MV = torch.min(signal_MV, dim=1)[0]
+
+            zero = torch.tensor(0.0, device=self.device)
+
+            background_loss = torch.maximum(zero, 1 - background_MV).mean()
+            signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
+
+            loss = background_loss + signal_loss
+
+            # if epoch % 50 == 0:
+            #     self.log(f'weight_epoch_{epoch}', self.network.layer.weight.data[0].cpu().numpy(), prog_bar=False)
+            #     self.log(f'loss_epoch_{epoch}', loss.item(), prog_bar=False)
+
+            total_loss += loss
+
+        avg_loss = total_loss / self.svm_epochs
+        self.log('train_loss', avg_loss, prog_bar=True)
+        return avg_loss
+
+    def validation_step(self, batch, batch_idx):
+        """Validation step processes all validation data at once."""
+        # small_bkgs = torch.from_numpy(self.val_backgrounds).float().to(self.device)
+
+        # Load first model (frozen for inference)
+        weights = "output/test_multiSignal/model_JIT.pt"
+        with open(weights, "rb") as f:
+            graph = torch.jit.load(f)
+        graph.eval() # Set to evaluation mode
+        graph.to(device=self.device)
+        batch = graph(batch[0])
+
+        background_MV = torch.tensor(0.0, device=self.device) #  self.network(small_bkgs)
+        signal_MV = self.network(batch)
+
+        # Take min score for each signal example
+        signal_MV = torch.min(signal_MV, dim=1)[0]
+
+        zero = torch.tensor(0.0, device=self.device)
+
+        background_loss = torch.maximum(zero, 1 - background_MV).mean()
+        signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
+
+        loss = background_loss + signal_loss
+        self.log('val_loss', loss, prog_bar=True)
+
+        return loss
+
+    # def on_train_epoch_end(self):
+    #     torch.save(self.network.state_dict(), self.fm_model_path)
+    #     print("Final Weights:", self.network.layer.weight.data.cpu().numpy()[0])
 
 
 class Encoder(nn.Module):
@@ -73,19 +170,19 @@ class Encoder(nn.Module):
 
         self.encoder_dense_scale = 20
         self.linear1 = nn.Linear(
-            in_features=2**8, 
+            in_features=2**8,
             out_features=self.encoder_dense_scale * 4
         )
         self.linear2 = nn.Linear(
-            in_features=self.encoder_dense_scale * 4, 
+            in_features=self.encoder_dense_scale * 4,
             out_features=self.encoder_dense_scale * 2
         )
         self.linear_passthrough = nn.Linear(
-            2 * seq_len, 
+            2 * seq_len,
             self.encoder_dense_scale * 2
         )
         self.linear3 = nn.Linear(
-            in_features=self.encoder_dense_scale * 4, 
+            in_features=self.encoder_dense_scale * 4,
             out_features=self.embedding_dim
         )
 
@@ -160,18 +257,18 @@ class Decoder(nn.Module):
 class LargeLinear(GwakBaseModelClass):
 
     def __init__(
-            self, 
-            num_ifos=2, 
-            num_timesteps=200, 
+            self,
+            num_ifos=2,
+            num_timesteps=200,
             bottleneck=8
         ):
-        
+
         super(LargeLinear, self).__init__()
         self.num_timesteps = num_timesteps
         self.num_ifos = num_ifos
 
         self.model = nn.Sequential(OrderedDict([
-            ("Reshape_Layer", nn.Flatten(1)), # Consider use torch.view() instead 
+            ("Reshape_Layer", nn.Flatten(1)), # Consider use torch.view() instead
             ("E_Linear1", nn.Linear(num_timesteps * 2, 2**7)),
             ("E_ReLU1", nn.ReLU()),
             ("E_Linear2", nn.Linear(2**7, 2**9)),
@@ -179,7 +276,7 @@ class LargeLinear(GwakBaseModelClass):
             ("E_Linear3", nn.Linear(2**9, bottleneck)),
             ("E_ReLU3", nn.ReLU()),
         ]))
-        
+
         self.decoder = nn.Sequential(OrderedDict([
             ("D_Linear1", nn.Linear(bottleneck, 2**9)),
             ("D_ReLU1", nn.ReLU()),
@@ -198,9 +295,9 @@ class LargeLinear(GwakBaseModelClass):
         x = x.reshape(batch_size, self.num_ifos, self.num_timesteps)
 
         loss_fn = torch.nn.L1Loss()
-        
+
         loss = loss_fn(batch, x)
-        
+
         self.log(
             'train_loss',
             loss,
@@ -209,7 +306,7 @@ class LargeLinear(GwakBaseModelClass):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        
+
         x = batch
         batch_size = x.shape[0]
 
@@ -221,7 +318,7 @@ class LargeLinear(GwakBaseModelClass):
         loss_fn = torch.nn.L1Loss()
 
         self.metric = loss_fn(batch, x)
-        
+
         self.log(
             'val_loss',
             self.metric,
@@ -232,7 +329,7 @@ class LargeLinear(GwakBaseModelClass):
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters())
         return optimizer
-    
+
     def configure_callbacks(self) -> Sequence[pl.Callback]:
         # checkpoint for saving best model
         # that will be used for downstream export
@@ -266,13 +363,13 @@ class Autoencoder(GwakBaseModelClass):
         self.num_ifos = num_ifos
         self.bottleneck = bottleneck
         self.model = Encoder(
-            seq_len=num_timesteps, 
-            n_features=num_ifos, 
+            seq_len=num_timesteps,
+            n_features=num_ifos,
             embedding_dim=bottleneck
         )
         self.decoder = Decoder(
-            seq_len=num_timesteps, 
-            n_features=num_ifos, 
+            seq_len=num_timesteps,
+            n_features=num_ifos,
             input_dim=bottleneck
         )
         self.model___ = S4Model(d_input=self.num_ifos,
@@ -302,7 +399,7 @@ class Autoencoder(GwakBaseModelClass):
             )
 
         return self.metric
-    
+
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         x = batch
@@ -659,7 +756,7 @@ class Crayon(GwakBaseModelClass):
         self.model = S4Model(d_input=self.num_ifos,
                     length=self.num_timesteps,
                     d_output = self.d_output)
-        
+
         self.projection_head = ProjectionHeadModel(d_input = self.d_output,
                                                     d_output = self.d_contrastive_space)
         
@@ -670,7 +767,7 @@ class Crayon(GwakBaseModelClass):
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(),lr=1e-4)
         return optimizer
-        
+
     def training_step(self, batch, batch_idx):
         if self.supervised_simclr:
             x,labels = batch
@@ -738,12 +835,12 @@ class Crayon(GwakBaseModelClass):
         callbacks.append(checkpoint)
 
         return callbacks
-    
+
 class EncoderTransformer(nn.Module):
-    def __init__(self, num_timesteps:int=200, 
-                 num_features:int=2, 
-                 latent_dim:int=16, 
-                 dim_feedforward:int=128, 
+    def __init__(self, num_timesteps:int=200,
+                 num_features:int=2,
+                 latent_dim:int=16,
+                 dim_feedforward:int=128,
                  nhead:int=2):
         super().__init__()
         self.num_timesteps = num_timesteps
@@ -752,15 +849,15 @@ class EncoderTransformer(nn.Module):
         self.dim_feedforward = dim_feedforward
         self.nhead = nhead
 
-        self.transformer1 = nn.TransformerEncoderLayer(d_model=num_features,  
-                                                       nhead=nhead, 
+        self.transformer1 = nn.TransformerEncoderLayer(d_model=num_features,
+                                                       nhead=nhead,
                                                        dim_feedforward=dim_feedforward,
                                                        batch_first=True)
         self.layer1 = nn.Linear(num_features, num_features*2)
         self.transformer2 = nn.TransformerEncoderLayer(d_model=num_features*2,  nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True)
         self.layer2 = nn.Linear(num_features*2, num_features*2)
         self.transformer3 = nn.TransformerEncoderLayer(d_model=num_features*2,  nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True)
-       
+
         #self.layer3 = nn.Linear(num_timesteps*(num_features*2), latent_dim * 4)
         self.layer3 = nn.Linear(num_features*2, latent_dim * 4)
         self.layer4 = nn.Linear(latent_dim*4, latent_dim*4)
@@ -777,7 +874,7 @@ class EncoderTransformer(nn.Module):
 
         x = self.transformer2(x)
         x = F.relu(self.layer2(x))
-        
+
         x = self.transformer3(x)
         x = torch.mean(x,dim=1) # time average
         #x = x.reshape( (num_batches, self.num_timesteps * (self.num_features*2)))
@@ -787,7 +884,7 @@ class EncoderTransformer(nn.Module):
         x = self.layer5(x)
 
         return x
-    
+
 class Tarantula(GwakBaseModelClass):
 
     def __init__(
@@ -812,18 +909,18 @@ class Tarantula(GwakBaseModelClass):
         self.model = EncoderTransformer(num_timesteps = self.num_timesteps,
                                           num_features = self.num_ifos,
                                           latent_dim = self.d_output)
-        
+
         self.projection_head = ProjectionHeadModel(d_input = self.d_output,
                                                    d_output = self.d_contrastive_space)
-        
+
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
-                                                  contrast_mode='all', 
+                                                  contrast_mode='all',
                                                   base_temperature=self.temperature)
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters())#, lr=config.learning_rate
         return optimizer
-        
+
     def training_step(self, batch, batch_idx):
         if self.supervised_simclr:
             x,labels = batch
