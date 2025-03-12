@@ -10,15 +10,18 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
+  log_every_n_steps: 10
   max_epochs: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
 ckpt_path: null
 model:
-  class_path: models.Tarantula
+  class_path: models.Crayon
   init_args:
     num_ifos: 2
     num_timesteps: 200
+    d_output: 8
+    d_contrastive_space: 8
     temperature: 0.1
     supervised_simclr: true
 data:

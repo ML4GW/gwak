@@ -644,7 +644,8 @@ class Crayon(GwakBaseModelClass):
         num_timesteps: int = 200,
         d_output:int = 10,
         d_contrastive_space: int = 20,
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        supervised_simclr: bool = False,
         ):
 
         super().__init__()
@@ -652,8 +653,8 @@ class Crayon(GwakBaseModelClass):
         self.num_timesteps = num_timesteps
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
-
         self.temperature = temperature
+        self.supervised_simclr = supervised_simclr
 
         self.model = S4Model(d_input=self.num_ifos,
                     length=self.num_timesteps,
@@ -661,46 +662,59 @@ class Crayon(GwakBaseModelClass):
         
         self.projection_head = ProjectionHeadModel(d_input = self.d_output,
                                                     d_output = self.d_contrastive_space)
-
-    def simCLR(self, z0, z1):
-        N = len(z0)
-        z = torch.stack((z0, z1), dim=1).reshape(-1, z0.shape[1]) #intertwine
-        z_norm = z / torch.norm(z, dim=1)[:, None]
-        Sij = z_norm @ torch.transpose(z_norm, 0, 1) / self.temperature
-        Sij_exp = torch.exp( Sij )
-        denom_k = torch.sum( Sij_exp, dim=1 ) - torch.diagonal(Sij_exp)
-        numerator_k = torch.diag(Sij, diagonal=-1)[::2]
-        return 1/(2*N) * ( -2 * torch.sum(numerator_k) + torch.sum(torch.log(denom_k))  )
+        
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
+                                                  contrast_mode='all', 
+                                                  base_temperature=self.temperature)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters())#, lr=config.learning_rate
+        optimizer = optim.AdamW(self.parameters(),lr=1e-4)
         return optimizer
         
     def training_step(self, batch, batch_idx):
-        aug_0, aug_1 = batch[0], batch[1]
-        embd_0 = self.projection_head(self.model(aug_0))
-        embd_1 = self.projection_head(self.model(aug_1))
+        if self.supervised_simclr:
+            x,labels = batch
+            x_embd = self.model(x)
+            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            loss = self.loss_function(z_embd,labels=labels)
+        else:
+            batch, labels = batch
+            aug_0, aug_1 = batch[0], batch[1]
+            z0 = self.model(aug_0)
+            z1 = self.model(aug_1)
+            embd_0 = self.projection_head(z0).unsqueeze(1)
+            embd_1 = self.projection_head(z1).unsqueeze(1)
+            embds = torch.cat((embd_0, embd_1), dim=1)
+            loss = self.loss_function(embds,labels=None)
 
-        self.metric = self.simCLR(embd_0, embd_1)
-        #loss = self.simCLR(embd_0, embd_1)
+        self.metric = loss.detach()
 
         self.log(
-            'train_loss',
-            self.metric,
+            'train/loss',
+            loss,
             sync_dist=True)
 
-        return self.metric
+        return loss
 
     @torch.no_grad
     def validation_step(self, batch, batch_idx):
-        aug_0, aug_1 = batch[0], batch[1]
-        embd_0 = self.projection_head(self.model(aug_0))
-        embd_1 = self.projection_head(self.model(aug_1))
-
-        loss = self.simCLR(embd_0, embd_1)
+        if self.supervised_simclr:
+            x,labels = batch
+            x_embd = self.model(x)
+            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            loss = self.loss_function(z_embd,labels=labels)
+        else:
+            batch, labels = batch
+            aug_0, aug_1 = batch[0], batch[1]
+            z0 = self.model(aug_0)
+            z1 = self.model(aug_1)
+            embd_0 = self.projection_head(z0).unsqueeze(1)
+            embd_1 = self.projection_head(z1).unsqueeze(1)
+            embds = torch.cat((embd_0, embd_1), dim=1)
+            loss = self.loss_function(embds,labels=None)
 
         self.log(
-            'val_loss',
+            'val/loss',
             loss,
             sync_dist=True)
 
@@ -716,7 +730,7 @@ class Crayon(GwakBaseModelClass):
         # if using ray tune don't append lightning
         # model checkpoint since we'll be using ray's
         checkpoint = ModelCheckpoint(
-            monitor='val_loss',
+            monitor='val/loss',
             save_last=True,
             auto_insert_metric_name=False
             )
@@ -815,7 +829,7 @@ class Tarantula(GwakBaseModelClass):
             x,labels = batch
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
-            loss = self.loss_function(z_embd,labels=labels)
+            self.metric = self.loss_function(z_embd,labels=labels)
         else:
             batch, labels = batch
             aug_0, aug_1 = batch[0], batch[1]
@@ -824,14 +838,14 @@ class Tarantula(GwakBaseModelClass):
             embd_0 = self.projection_head(z0).unsqueeze(1)
             embd_1 = self.projection_head(z1).unsqueeze(1)
             embds = torch.cat((embd_0, embd_1), dim=1)
-            loss = self.loss_function(embds,labels=None)
+            self.metric = self.loss_function(embds,labels=None)
 
         self.log(
             'train/loss',
-            loss,
+            self.metric,
             sync_dist=True)
 
-        return loss
+        return self.metric
 
     @torch.no_grad
     def validation_step(self, batch, batch_idx):
