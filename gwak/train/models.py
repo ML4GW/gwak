@@ -36,8 +36,7 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         module = pl_module.__class__.load_from_checkpoint(
             self.best_model_path,
-            arch=pl_module.model,
-            metric=pl_module.metric
+            **pl_module.hparams['init_args']
         )
 
         # Modifiy these to read the last training/valdation data
@@ -720,17 +719,28 @@ class S4Model(nn.Module):
 
         return x
 
-class ProjectionHeadModel(nn.Module):
-    def __init__(self, d_input, d_output):
+class MLP(nn.Module):
+    def __init__(self, d_input:int, hidden_dims:list[int], d_output, dropout=0.0, activation=nn.ReLU(), output_activation=None):
         super().__init__()
         #copying the paper of having one-layer MLP
-        self.d_input = d_input
-        self.d_output = d_output
-
-        self.layer = nn.Linear(d_input, d_output)
+        layers = []
+        if len(hidden_dims) == 0:
+            layers.append(nn.Linear(d_input, d_output))
+        else:
+            dcurr = d_input
+            for dh in hidden_dims:
+                layers.append(nn.Linear(dcurr,dh))
+                layers.append(activation)
+                layers.append(nn.Dropout(dropout))
+                dcurr = dh
+            layers.append(nn.Linear(dcurr,d_output))
+        if output_activation is not None:
+            layers.append(output_activation)
+        
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return F.relu(self.layer(x))
+        return self.model(x)
 
 
 class Crayon(GwakBaseModelClass):
@@ -757,8 +767,7 @@ class Crayon(GwakBaseModelClass):
                     length=self.num_timesteps,
                     d_output = self.d_output)
 
-        self.projection_head = ProjectionHeadModel(d_input = self.d_output,
-                                                    d_output = self.d_contrastive_space)
+        self.projection_head = MLP(d_input = self.d_output, hidden_dims=[], d_output = self.d_contrastive_space)
         
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
                                                   contrast_mode='all', 
@@ -839,50 +848,140 @@ class Crayon(GwakBaseModelClass):
 class EncoderTransformer(nn.Module):
     def __init__(self, num_timesteps:int=200,
                  num_features:int=2,
+                 num_layers: int=4,
+                 nhead: int=2,
                  latent_dim:int=16,
-                 dim_feedforward:int=128,
-                 nhead:int=2):
+                 dim_factor_feedforward:int=4,
+                 dropout:float=0.1,
+                 embed_first:bool=True):
         super().__init__()
         self.num_timesteps = num_timesteps
         self.num_features = num_features
         self.latent_dim = latent_dim
-        self.dim_feedforward = dim_feedforward
+        self.dim_feedforward = dim_factor_feedforward*latent_dim
+        self.dropout = dropout
         self.nhead = nhead
+        self.embed_first = embed_first
 
-        self.transformer1 = nn.TransformerEncoderLayer(d_model=num_features,
-                                                       nhead=nhead,
-                                                       dim_feedforward=dim_feedforward,
-                                                       batch_first=True)
-        self.layer1 = nn.Linear(num_features, num_features*2)
-        self.transformer2 = nn.TransformerEncoderLayer(d_model=num_features*2,  nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True)
-        self.layer2 = nn.Linear(num_features*2, num_features*2)
-        self.transformer3 = nn.TransformerEncoderLayer(d_model=num_features*2,  nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True)
+        if self.embed_first:
+            # linear embedding into the latent dimension
+            self.embedding = nn.Linear(num_features, latent_dim, bias=False)
 
-        #self.layer3 = nn.Linear(num_timesteps*(num_features*2), latent_dim * 4)
-        self.layer3 = nn.Linear(num_features*2, latent_dim * 4)
-        self.layer4 = nn.Linear(latent_dim*4, latent_dim*4)
-        self.layer5 = nn.Linear(latent_dim*4, latent_dim)
+        # self-attention layers
+        attn_layers = []
+        for i in range(num_layers):
+            attn_layers.append(nn.TransformerEncoderLayer(d_model=latent_dim,
+                                                           nhead=nhead,
+                                                           dim_feedforward=self.dim_feedforward,
+                                                           dropout=dropout,
+                                                           batch_first=True))
+        self.attn_layers = nn.ModuleList(attn_layers)
 
     def forward(self, x):
-        num_batches, num_ifos, num_timesteps = x.shape
+        x = x.transpose(1,2) # we get data in the shape (B,F,T) but transformers like (B,T,F)
+        if self.embed_first:
+            x = self.embedding(x)
 
-        #x = x.reshape(num_batches, num_timesteps, num_ifos)
-        x = x.transpose(1,2) # I believe this is the correct way to do it, reshape does something different
-        # we want B, F, T --> B, T, F for the transformer
-        x = self.transformer1(x)
-        x = F.relu(self.layer1(x))
+        for layer in self.attn_layers:
+            x = layer(x)
 
-        x = self.transformer2(x)
-        x = F.relu(self.layer2(x))
+        return x
+    
+class ClassAttentionBlock(nn.Module):
+    def __init__(self, num_timesteps:int=200,
+                 dim:int=2,
+                 nhead: int=2,
+                 dropout:float=0.1,
+                 dim_factor_feedforward:int=4,
+                 scale_heads:bool=True,
+                 scale_attn:bool=True,
+                 scale_fc:bool=True,
+                 scale_resids:bool=True,
+                 ):
+        super().__init__()
+        self.num_timesteps = num_timesteps
+        self.dim = dim
+        self.dim_feedforward = dim_factor_feedforward * dim
+        self.nhead = nhead
+        self.dropout = nn.Dropout(dropout) # shared dropout to use multiple places
+        self.scale_heads = scale_heads
+        self.scale_attn = scale_attn
+        self.head_dim = dim // nhead
 
-        x = self.transformer3(x)
-        x = torch.mean(x,dim=1) # time average
-        #x = x.reshape( (num_batches, self.num_timesteps * (self.num_features*2)))
+        # self-attention
+        self.attn = nn.MultiheadAttention(
+            embed_dim=self.dim,
+            num_heads=nhead,
+            dropout=dropout,
+            batch_first=True
+        )
+        # linear layers
+        self.fc1 = nn.Linear(self.dim, self.dim_feedforward)
+        self.act = nn.ReLU()
+        self.fc2 = nn.Linear(self.dim_feedforward,self.dim)
 
-        x = F.relu(self.layer3(x))
-        x = F.relu(self.layer4(x))
-        x = self.layer5(x)
+        # layer norms
+        self.pre_attn_norm = nn.LayerNorm(self.dim)
+        self.post_attn_norm = nn.LayerNorm(self.dim) if scale_attn else None
+        self.pre_fc_norm = nn.LayerNorm(self.dim)
+        self.post_fc_norm = nn.LayerNorm(self.dim_feedforward) if scale_fc else None
 
+        # attention head scaling and residual scaling
+        self.c_attn = nn.Parameter(torch.ones(nhead), requires_grad=True) if scale_heads else None
+        self.w_resid = nn.Parameter(torch.ones(self.dim), requires_grad=True) if scale_resids else None
+
+    def forward(self, x, x_cls):
+        # x has shape (B,T,F) where F = num features, T = num timesteps
+        # x_cls has shape (B,1,F) where F = num features
+        
+        # do self attention
+        residual = x_cls
+        u = torch.cat([x_cls,x],dim=1) # shape (B,T+1,F)
+        u = self.pre_attn_norm(u)
+        x = self.attn(x_cls,u,u,key_padding_mask=None,attn_mask=None,need_weights=False,is_causal=False)[0]
+
+        # do attention head scaling if using
+        if self.c_attn is not None:
+            tgt_len = x.size(1) # sequence length i.e. 1, since it's just the class token
+            x = x.view(-1, tgt_len, self.nhead, self.head_dim) # shape (B,1,H,F//H)
+            x = torch.einsum('bthd,h->btdh', x, self.c_attn)
+            x = x.reshape(-1, tgt_len, self.dim) # back to (B,1,F)
+
+        # dropout and normalize
+        if self.post_attn_norm is not None:
+            x = self.post_attn_norm(x)
+        x = self.dropout(x)
+        x += residual
+
+        # feedforward layers
+        residual = x
+        x = self.pre_fc_norm(x)
+        x = self.act(self.fc1(x))
+        x = self.dropout(x)
+        if self.post_fc_norm is not None:
+            x = self.post_fc_norm(x)
+        x = self.fc2(x)
+        x = self.dropout(x)
+        if self.w_resid is not None:
+            residual = torch.mul(self.w_resid, residual)
+        x += residual
+
+        return x
+        
+class ClassAttention(nn.Module):
+    def __init__(self,dim,blocks:list[nn.Module]):
+        super().__init__()
+        self.dim = dim
+        self.blocks = nn.ModuleList(blocks)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, self.dim), requires_grad=True) # define class token
+        self.norm = nn.LayerNorm(self.dim)
+
+    def forward(self,x):
+        # x has shape (B,T,F)
+        cls_tokens = self.cls_token.expand(x.size(0), 1, -1)
+        for block in self.blocks:
+            cls_tokens = block(x,cls_tokens)
+        x = self.norm(cls_tokens).squeeze(1) # shape (B,F)
         return x
 
 class Tarantula(GwakBaseModelClass):
@@ -891,41 +990,89 @@ class Tarantula(GwakBaseModelClass):
         self,
         num_ifos: int = 2,
         num_timesteps: int = 200,
+        latent_dim: int = 64,
+        num_layers: int = 4,
+        num_head: int = 2,
+        num_cls_layers: int = 2,
+        fc_output_dims:list[int] = [],
         d_output:int = 16,
         d_contrastive_space: int = 16,
+        dropout: float = 0.1,
+        cls_dropout: float = 0.0,
+        feedforward_factor:int = 4,
         temperature: float = 0.1,
         supervised_simclr: bool = False
         ):
 
         super().__init__()
+        self.save_hyperparameters()
 
         self.num_ifos = num_ifos
         self.num_timesteps = num_timesteps
+        self.latent_dim = latent_dim
+        self.num_layers = num_layers
+        self.num_head = num_head
+        self.num_cls_layers = num_cls_layers
+        self.fc_output_dims = fc_output_dims
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
+        self.dropout = dropout
+        self.cls_dropout = cls_dropout
+        self.feedforward_factor = feedforward_factor
         self.temperature = temperature
         self.supervised_simclr = supervised_simclr
 
-        self.model = EncoderTransformer(num_timesteps = self.num_timesteps,
-                                          num_features = self.num_ifos,
-                                          latent_dim = self.d_output)
+        # define the self attention blocks
+        self.self_attn = EncoderTransformer(
+            num_timesteps=self.num_timesteps,
+            num_features=self.num_ifos,
+            num_layers=self.num_layers,
+            nhead=self.num_head,
+            latent_dim=self.latent_dim,
+            dim_factor_feedforward=self.feedforward_factor,
+            embed_first=True
+        )
 
-        self.projection_head = ProjectionHeadModel(d_input = self.d_output,
-                                                   d_output = self.d_contrastive_space)
+        # define the class attention blocks
+        class_attn_blocks = []
+        for i in range(self.num_cls_layers):
+            class_attn_blocks.append(
+                ClassAttentionBlock(
+                    num_timesteps=self.num_timesteps,
+                    dim=self.latent_dim,
+                    nhead=self.num_head,
+                    dropout=self.cls_dropout,
+                    dim_factor_feedforward=self.feedforward_factor
+                )
+            )
+        self.class_attn = ClassAttention(self.latent_dim,class_attn_blocks)
 
+        # additional linear layer to project class token to d_output
+        self.fc_out = MLP(d_input=self.latent_dim, hidden_dims=self.fc_output_dims, d_output=self.d_output)
+
+        # define the model
+        self.model = nn.Sequential(self.self_attn,self.class_attn,self.fc_out)
+
+        # projection head with 1 hidden layer for SimCLR
+        self.projection_head = MLP(d_input=self.d_output,
+                                   hidden_dims=[self.d_output],
+                                   d_output=self.d_contrastive_space
+        )
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
                                                   contrast_mode='all',
                                                   base_temperature=self.temperature)
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters())#, lr=config.learning_rate
-        return optimizer
+        #lr = self.hparams.optimizer.learning_rate
+        #optimizer = optim.AdamW(self.parameters(),lr=lr)
+        #return optimizer
+        pass
 
     def training_step(self, batch, batch_idx):
         if self.supervised_simclr:
             x,labels = batch
-            x_embd = self.model(x)
-            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            x_embd = self.model(x) # shape (B,1,d_embd)
+            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd)
             self.metric = self.loss_function(z_embd,labels=labels)
         else:
             batch, labels = batch

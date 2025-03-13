@@ -39,7 +39,7 @@ class GwakFileDataloader(pl.LightningDataModule):
         data_saving_file: Path = None
     ):
         super().__init__()
-        self.train_fnames, self.val_fnames = self.train_val_split(data_dir)
+        self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
         self.sample_rate = sample_rate
         self.kernel_length = kernel_length
         self.psd_length = psd_length
@@ -56,13 +56,14 @@ class GwakFileDataloader(pl.LightningDataModule):
 
         self._logger = self.get_logger()
 
-    def train_val_split(self, data_dir, val_split=0.2):
+    def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
 
         all_files = list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
-        n_train_files = int(n_all_files * (1 - val_split))
+        n_train_files = int(n_all_files * (1 - val_split - test_split))
+        n_val_files = int(n_all_files * val_split)
 
-        return all_files[:n_train_files], all_files[n_train_files:]
+        return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
     def train_dataloader(self):
 
@@ -86,6 +87,24 @@ class GwakFileDataloader(pl.LightningDataModule):
     def val_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
+            channels=['H1', 'L1'],
+            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+        )
+
+        pin_memory = isinstance(
+            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset, num_workers=self.num_workers, pin_memory=False
+        )
+        return dataloader
+    
+    def test_dataloader(self):
+        dataset = Hdf5TimeSeriesDataset(
+            self.test_fnames,
             channels=['H1', 'L1'],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
@@ -183,7 +202,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         data_saving_file: Path = None
     ):
         super().__init__()
-        self.train_fnames, self.val_fnames = self.train_val_split(data_dir)
+        self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
         self.sample_rate = sample_rate
         self.kernel_length = kernel_length
         self.psd_length = psd_length
@@ -210,13 +229,14 @@ class GwakBaseDataloader(pl.LightningDataModule):
             "fftlength": fftlength,
         }
 
-    def train_val_split(self, data_dir, val_split=0.2):
+    def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
 
         all_files = list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
-        n_train_files = int(n_all_files * (1 - val_split))
+        n_train_files = int(n_all_files * (1 - val_split - test_split))
+        n_val_files = int(n_all_files * val_split)
 
-        return all_files[:n_train_files], all_files[n_train_files:]
+        return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
     def train_dataloader(self):
 
@@ -240,6 +260,24 @@ class GwakBaseDataloader(pl.LightningDataModule):
     def val_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
+            channels=['H1', 'L1'],
+            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+        )
+
+        pin_memory = isinstance(
+            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset, num_workers=self.num_workers, pin_memory=False
+        )
+        return dataloader
+    
+    def test_dataloader(self):
+        dataset = Hdf5TimeSeriesDataset(
+            self.test_fnames,
             channels=['H1', 'L1'],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
@@ -324,19 +362,19 @@ class GwakBaseDataloader(pl.LightningDataModule):
 class SignalDataloader(GwakBaseDataloader):
     def __init__(
         self,
-        signal_classes: list[str], # string names of signal class(es) desired
-        priors: list[data.BasePrior], # priors for each class
-        waveforms: list[torch.nn.Module], # waveforms for each class
-        extra_kwargs: list[Optional[dict]], # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
+        signal_classes: list[str] | str, # string names of signal class(es) desired
+        priors: list[data.BasePrior] | data.BasePrior, # priors for each class
+        waveforms: list[torch.nn.Module] | torch.nn.Module, # waveforms for each class
+        extra_kwargs: list[Optional[dict]] | Optional[dict], # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.signal_classes = signal_classes
+        self.signal_classes = signal_classes if type(signal_classes) == list else [signal_classes]
         self.num_classes = len(signal_classes)
-        self.waveforms = waveforms
-        self.priors = priors
-        self.extra_kwargs = extra_kwargs
+        self.waveforms = waveforms if type(waveforms) == list else [waveforms]
+        self.priors = priors if type(priors) == list else [priors]
+        self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
