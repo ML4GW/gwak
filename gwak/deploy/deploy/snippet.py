@@ -11,7 +11,7 @@ from hermes.aeriel.client import InferenceClient
 from infer_data import get_shifts_meta_data, Sequence
 from deploy.libs import gwak_logger
 
-gwak_logger()
+gwak_logger("log.log")
 
 def run_infer(
     triton_server_ip: str,

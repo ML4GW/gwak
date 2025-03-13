@@ -53,8 +53,8 @@ class Sequence:
 
         self.sample_rate = sample_rate
         self.stride = int(sample_rate / inference_sampling_rate)
-        self.step_size = self.stride * batch_size
-
+        self.step_size = self.stride * (kernel_size / sample_rate)
+        
         self.strain_dict = {}
         self.fname = fname
         with h5py.File(self.fname, "r") as h:
@@ -81,7 +81,8 @@ class Sequence:
 
     def __iter__(self):
 
-        bh_state = np.empty(self.state_shape, dtype=self.precision)
+        # Check if this line will hide potential implmetation error! 
+        bh_state = np.empty(self.state_shape, dtype=self.precision) 
         inj_state = None
 
         for i in range(len(self)):

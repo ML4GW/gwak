@@ -32,7 +32,7 @@ rule infer:
         ../deploy/deploy/cli_infer.py --config ../{input.config} --project {params.cli}'
 
 rule export_all:
-    input: expand(rules.export.output, deploymodels='bbh')
+    input: expand(rules.export.output, deploymodels='white_noise_burst')
 
 rule infer_all:
     input: expand(rules.infer.output, deploymodels='white_noise_burst')

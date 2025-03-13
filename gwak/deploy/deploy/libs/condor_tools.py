@@ -23,12 +23,11 @@ def make_subfile(
     
     
     condor_config["log"] = "job.log"
-    condor_config["output"] = "gwak.out"
+    condor_config["output"] = "job.out"
     condor_config["error"] = "job.err"
     
-    condor_config["getenv"] = True
-    # config_base["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \
-    #     PATH={os.environ.get('PATH')}"
+    # condor_config["getenv"] = True
+    condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
     
     
     condor_config["request_cpus"] = 1
@@ -41,7 +40,7 @@ def make_subfile(
             f.write(f"{key} = {value}\n")
         
         f.write("queue 0")
-            
+
 
 def make_infer_config(
     config_file: Path,
@@ -104,10 +103,33 @@ def track_job(job_id):
         print(f"Error checking job status: {e}")
 
 
-def wait_for_job_completion(log_file="gwak.out"):
+def wait_for_job_completion(job_id, log_file="job.log"):
     try:
-        logging.info(f"Waiting for jobs to complete...")
-        subprocess.run(["condor_wait", log_file], check=True)
-        logging.info(f"Job has completed!")
+        logging.info(f"Waiting for job {job_id} to complete...")
+        subprocess.run(["condor_wait", log_file, job_id], check=True)
+        logging.info(f"Job {job_id} has completed!")
     except subprocess.CalledProcessError:
-        logging.info(f"Error while waiting for job.")
+        logging.info(f"Error while waiting for job {job_id}.")
+        
+        
+
+def wait_for_jobs_popen(jobs):
+    """
+    Wait for multiple Condor jobs in parallel using subprocess.Popen.
+    
+    :param jobs: List of tuples (log_file, job_id).
+    """
+    processes = []
+    
+    for log_file, job_id in jobs:
+        logging.info(f"Starting condor_wait for job {job_id} (log: {log_file})...")
+        p = subprocess.Popen(["condor_wait", str(log_file), job_id])
+        processes.append((p, log_file, job_id))
+    
+    # Wait for all processes to complete
+    for proc, log_file, job_id in processes:
+        proc.wait()  # Blocks until the process finishes
+        if proc.returncode == 0:
+            logging.info(f"Job {job_id} (log: {log_file}) completed.")
+        else:
+            logging.error(f"Job {job_id} (log: {log_file}) failed with exit code {p.returncode}.")

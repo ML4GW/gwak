@@ -14,7 +14,7 @@ from hermes.aeriel.client import InferenceClient
 
 from libs.infer_blocks import get_ip_address, read_h5_data, static_infer_process, stream_jobs
 from deploy.libs import gwak_logger
-from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, wait_for_job_completion
+from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, wait_for_jobs_popen
 from infer_data import get_shifts_meta_data, Sequence
 
 
@@ -25,7 +25,7 @@ def infer(
     kernel_length: float,
     Tb: int,
     batch_size: int,
-#     stride_batch_size: int,
+    stride_batch_size: int,
     sample_rate: int,
     fname: Path, 
     data_foramt: str,
@@ -49,7 +49,7 @@ def infer(
     gwak_logger(log_file)
     
     ip = get_ip_address()
-    kernel_size = int(kernel_length * sample_rate)
+    kernel_size = int(kernel_length * sample_rate * stride_batch_size)
     gwak_streamer = f"gwak-{project}-streamer"
 
     # Data handler
@@ -71,7 +71,8 @@ def infer(
         time.sleep(load_model_patients)
         
         submit_count = 0
-        job_ids=[] 
+        jobs=[]
+        start = time.time()
         for fname, (seg_start, seg_end) in zip(fnames, segments):
             for shift in range(num_shifts):
                 
@@ -79,12 +80,13 @@ def infer(
                 sequence_id = adler32(fingerprint)
                 
                 _shifts = [s * (shift + 1) for s in shifts]
-
-                config_file = result_dir / f"condor/job_{submit_count:03d}/config.yaml"
+                job_dir = result_dir / f"condor/job_{submit_count:03d}"
+                
+                config_file = job_dir / "config.yaml"
                 make_infer_config(
                     config_file=config_file,
                     triton_server_ip=ip,
-                    gwak_streamer=gwak_streamer, 
+                    gwak_streamer=gwak_streamer,
                     sequence_id=sequence_id,
                     strain_file=fname, 
                     shifts=_shifts,
@@ -92,21 +94,29 @@ def infer(
                     ifos=ifos,
                     kernel_size=kernel_size,
                 )
-                
-                sub_file = result_dir / f"condor/job_{submit_count:03d}/condor.sub"
+
+                sub_file = job_dir / "condor.sub"
                 make_subfile(
                     filename=sub_file,
                     arguments = Path("deploy/snippet.py").resolve(),
                     config=config_file.resolve()
                 )
+
+                job_id = submit_condor_job(sub_file=sub_file)
+                jobs.append((job_dir / "job.log" ,job_id))
                 
-                # job_list.append(
-                    
-                # job_id = submit_condor_job(sub_file=sub_file)
-                # job_ids.append(job_id)
-                
-        logging.info(f"Open triton server for 5 mins!")
-        time.sleep(300)
+                submit_count += 1
+        
+            # wait_for_job_completion(job_id, log_file=job_dir / "job.log")
+                # breakpoint()
+        wait_for_jobs_popen(jobs)
+        logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")
+        # logging.info(f"Open triton server for 5 mins!")
+        # time.sleep(300)
+        # Merge outputs
+        
+        
+        
                 # # logging.info(some_stuff)
                 # # print(result)
                 # submit_count += 1
