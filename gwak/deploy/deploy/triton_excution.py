@@ -8,7 +8,7 @@ from pathlib import Path
 from jsonargparse import ArgumentParser, ActionConfigFile
 
 from hermes.aeriel.client import InferenceClient
-from infer_data import get_shifts_meta_data, Sequence
+from infer_data import Sequence
 from deploy.libs import gwak_logger
 
 gwak_logger("log.log")
@@ -72,7 +72,9 @@ def run_infer(
         # Job Done leaving client 
 
     results = np.stack(results)
-    result_file = Path(f"sequence_{sequence_id}.h5")
+    saving_dir = Path("../../inference_result")
+    saving_dir.mkdir(parents=True, exist_ok=True)
+    result_file = saving_dir / f"sequence_{sequence_id}.h5"
     logging.info(f"Collecting result to {result_file.resolve()}")
 
     with h5py.File(result_file, "w") as f:

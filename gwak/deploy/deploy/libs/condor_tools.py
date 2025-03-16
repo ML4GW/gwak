@@ -1,5 +1,7 @@
+
 import re
 import os, sys
+import time
 import logging
 import subprocess
 
@@ -10,13 +12,14 @@ from pathlib import Path
 
 
 def make_subfile(
-    filename,
+    job_dir,
     arguments,
     config
 ):
     
     condor_config = {}
-    
+    submit_file = job_dir / "condor.sub"
+
     condor_config["universe"] = "vanilla"
     condor_config["executable"] = sys.executable
     condor_config["arguments"] = f"{arguments} --config {config}"
@@ -31,19 +34,20 @@ def make_subfile(
     
     
     condor_config["request_cpus"] = 1
-    condor_config["request_memory"] = "512M"
-    condor_config["request_disk"] = "1G"
+    condor_config["request_memory"] = "1G"
+    condor_config["request_disk"] = "2G"
     condor_config["accounting_group"] = "ligo.dev.o4.cbc.explore.test"
     
-    with open(filename, "w") as f:
+    with open(submit_file, "w") as f:
         for key, value in condor_config.items():
             f.write(f"{key} = {value}\n")
         
         f.write("queue 0")
 
+    return submit_file
 
 def make_infer_config(
-    config_file: Path,
+    job_dir: Path,
     triton_server_ip,
     gwak_streamer, # gwak-white_noise_burst-streamer
     sequence_id,
@@ -57,17 +61,17 @@ def make_infer_config(
     # inj_type=None,
 ): 
 
-    config_file.parent.mkdir(parents=True, exist_ok=True)
+    job_dir.mkdir(parents=True, exist_ok=True)
+    config_file = job_dir / "config.yaml"
+
     with open(config_file, "w") as f:
         for key, value in locals().items():  # Loop through all function arguments
-            if key in ("config_file", "f"):
+            if key in ("job_dir", "config_file", "f"):
                 continue
 
             f.write(f"{key}: {value}\n")  # Write each key-value pair
     
-
-
-
+    return config_file
 
 def submit_condor_job(sub_file:Path):
     
@@ -91,45 +95,42 @@ def submit_condor_job(sub_file:Path):
         return None
 
 
-def track_job(job_id):
-    try:
-        result = subprocess.run(["condor_q", job_id], capture_output=True, text=True)
-        if result.stdout.strip():
-            print(f"Job {job_id} is still running or in queue.")
-            print(result.stdout)
-        else:
-            print(f"Job {job_id} is not in the queue (may have completed).")
-    except Exception as e:
-        print(f"Error checking job status: {e}")
+def condor_submit_with_rate_limit(
+    sub_files: list,
+    rate_limit: int= 20
+):
 
+    job_status = {
+        "Waiting": sub_files,
+        "Running": [],
+        "Done": []
+    }
+    
+    total_jobs = len(job_status["Waiting"])
 
-def wait_for_job_completion(job_id, log_file="job.log"):
-    try:
-        logging.info(f"Waiting for job {job_id} to complete...")
-        subprocess.run(["condor_wait", log_file, job_id], check=True)
-        logging.info(f"Job {job_id} has completed!")
-    except subprocess.CalledProcessError:
-        logging.info(f"Error while waiting for job {job_id}.")
-        
-        
+    while len(job_status["Done"]) < total_jobs :
 
-def wait_for_jobs_popen(jobs):
-    """
-    Wait for multiple Condor jobs in parallel using subprocess.Popen.
-    
-    :param jobs: List of tuples (log_file, job_id).
-    """
-    processes = []
-    
-    for log_file, job_id in jobs:
-        logging.info(f"Starting condor_wait for job {job_id} (log: {log_file})...")
-        p = subprocess.Popen(["condor_wait", str(log_file), job_id])
-        processes.append((p, log_file, job_id))
-    
-    # Wait for all processes to complete
-    for proc, log_file, job_id in processes:
-        proc.wait()  # Blocks until the process finishes
-        if proc.returncode == 0:
-            logging.info(f"Job {job_id} (log: {log_file}) completed.")
-        else:
-            logging.error(f"Job {job_id} (log: {log_file}) failed with exit code {p.returncode}.")
+        # Check if we need to submit new jobs
+        if len(job_status["Running"]) < rate_limit:
+            
+            try: 
+                logging.info(f"Submitting {job_status['Waiting'][0]}")
+                job_id = submit_condor_job(sub_file=job_status["Waiting"][0])
+
+                # Add in to Running track list
+                job_status["Running"].append((job_status["Waiting"][0], job_id))
+                job_status["Waiting"].pop(0)
+                continue
+            except IndexError:
+                pass
+                
+        time.sleep(10)
+        # Check if any job is done
+        result = subprocess.run("condor_q", capture_output=True, text=True)
+        for idx, (sub_file, job_id) in enumerate(job_status["Running"]):
+
+            if not (job_id in result.stdout):
+
+                job_status["Done"].append(sub_file)
+                job_status["Running"].pop(idx)
+                print(f"Job {job_id} done!")

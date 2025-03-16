@@ -12,9 +12,9 @@ from pathlib import Path
 from hermes.aeriel.serve import serve
 from hermes.aeriel.client import InferenceClient
 
-from libs.infer_blocks import get_ip_address, read_h5_data, static_infer_process, stream_jobs
+from deploy.libs.infer_blocks import get_ip_address 
 from deploy.libs import gwak_logger
-from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, wait_for_jobs_popen
+from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, condor_submit_with_rate_limit
 from infer_data import get_shifts_meta_data, Sequence
 
 
@@ -34,20 +34,21 @@ def infer(
     model_repo_dir: Path,
     image: Path,
     result_dir: Path,
+    rate_limit: int = 20,
     load_model_patients: int=10,
     inference_sampling_rate: float = 1,
     **kwargs,
 ):
-    
+
     result_dir = result_dir / project
     model_repo_dir = model_repo_dir / project
-    
+
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
     result_dir.mkdir(parents=True, exist_ok=True)
 
     gwak_logger(log_file)
-    
+
     ip = get_ip_address()
     kernel_size = int(kernel_length * sample_rate * stride_batch_size)
     gwak_streamer = f"gwak-{project}-streamer"
@@ -69,22 +70,23 @@ def infer(
         
         logging.info(f"Waiting {load_model_patients} seconds to load model to triton!")
         time.sleep(load_model_patients)
-        
-        submit_count = 0
-        jobs=[]
+
+        submit_num = 0
+        sub_files = []
+
         start = time.time()
         for fname, (seg_start, seg_end) in zip(fnames, segments):
             for shift in range(num_shifts):
-                
+
                 fingerprint = f"{seg_start}{seg_end}{shift}".encode()
                 sequence_id = adler32(fingerprint)
-                
+
                 _shifts = [s * (shift + 1) for s in shifts]
-                job_dir = result_dir / f"condor/job_{submit_count:03d}"
-                
-                config_file = job_dir / "config.yaml"
-                make_infer_config(
-                    config_file=config_file,
+                job_dir = result_dir / f"condor/job_{submit_num:03d}"
+
+
+                config_file = make_infer_config(
+                    job_dir=job_dir,
                     triton_server_ip=ip,
                     gwak_streamer=gwak_streamer,
                     sequence_id=sequence_id,
@@ -95,89 +97,18 @@ def infer(
                     kernel_size=kernel_size,
                 )
 
-                sub_file = job_dir / "condor.sub"
-                make_subfile(
-                    filename=sub_file,
-                    arguments = Path("deploy/snippet.py").resolve(),
+                submit_file = make_subfile(
+                    job_dir=job_dir,
+                    arguments=Path("deploy/triton_excution.py").resolve(),
                     config=config_file.resolve()
                 )
 
-                job_id = submit_condor_job(sub_file=sub_file)
-                jobs.append((job_dir / "job.log" ,job_id))
-                
-                submit_count += 1
-        
-            # wait_for_job_completion(job_id, log_file=job_dir / "job.log")
-                # breakpoint()
-        wait_for_jobs_popen(jobs)
+                sub_files.append(submit_file)
+                submit_num += 1
+
+        condor_submit_with_rate_limit(
+            sub_files=sub_files,
+            rate_limit=rate_limit
+        )
+
         logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")
-        # logging.info(f"Open triton server for 5 mins!")
-        # time.sleep(300)
-        # Merge outputs
-        
-        
-        
-                # # logging.info(some_stuff)
-                # # print(result)
-                # submit_count += 1
-                # breakpoint()
-                # wait_for_job_completion()
-        # wait_for_job_completion(
-        #     job_id,
-        #     log_file
-            
-        # )
-        # job_ids[0]
-        # print(job_ids)
-
-                # logging.info("Waiting")
-                # # time.sleep(180)
-        # breakpoint()
-
-
-
-
-                # One segment of strain data
-                # sequence = Sequence(
-                #     fname=fname,
-                #     shifts=_shifts,
-                #     batch_size=batch_size,
-                #     ifos=ifos,
-                #     kernel_size=kernel_size,
-                #     sample_rate=sample_rate,
-                #     inference_sampling_rate=inference_sampling_rate,
-                #     inj_type=None,
-                # )
-
-                # client_1 = InferenceClient(address, gwak_streamer)
-
-                # results = []
-                # with client_1:
-                #     logging.info(f"Inference on sequence_id: {sequence_id}")
-                #     for i, (bh_state, inj_state) in enumerate(tqdm(sequence)):
-
-                #         sequence_start = (i == 0)
-                #         sequence_end = (i == (len(sequence) - 1))
-
-                #         client_1.infer(
-                #             bh_state,
-                #             request_id=i,
-                #             sequence_id=sequence_id,
-                #             sequence_start=sequence_start,
-                #             sequence_end=sequence_end,
-                #         )
-
-                #         result = client_1.get()
-                #         while result is None:
-                #             result = client_1.get()
-
-                #         results.append(result[0])
-
-                # results = np.stack(results)
-
-                # result_file = result_dir / f"sequence_{sequence_id}.h5"
-                # logging.info(f"Collecting result to {result_file.resolve()}")
-                # time.sleep(5)
-                # with h5py.File(result_file, "w") as f:
-                #     f.create_dataset(f"data", data=results)
-            
