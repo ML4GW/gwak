@@ -1,4 +1,4 @@
-# Andresen_2016 = [ 
+Andresen_2016 = [ 
 #    "s11", 
     "s20", # Burst
     "s20s", # Burst 
@@ -11,7 +11,7 @@ Andresen_2019 = [
     "s15fr", # Burst
 ]
 
-# OConnor_2018 = [ 
+OConnor_2018 = [ 
 #     "mesa20", 
 #     "mesa20_pert", 
 #     "mesa20_LR", 
