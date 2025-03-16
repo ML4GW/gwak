@@ -1,8 +1,10 @@
 import os
 import time
 import logging
+import h5py
 from typing import Sequence
 from collections import OrderedDict
+from sklearn.model_selection import train_test_split
 
 import torch
 import torch.nn as nn
@@ -52,34 +54,68 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
             torch.jit.save(trace, f)
 
 
-class Linear(GwakBaseModelClass):
-    def __init__(self, backgrounds=None, val_backgrounds=None, new_shape=None,
-            n_dims=16, learning_rate=1e-3, svm_epochs=100, fm_model_path='output/final_model.pth'):
-        super().__init__()
-        self.network = nn.Linear(16, 1)
+class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
-        # Store full backgrounds for training and validation
-        self.backgrounds = backgrounds
-        self.val_backgrounds = val_backgrounds
+    def on_train_end(self, trainer, pl_module):
+        torch.cuda.empty_cache()
+
+        module = pl_module.__class__.load_from_checkpoint(
+            self.best_model_path,
+            **pl_module.hparams['init_args']
+        )
+
+        # Modifiy these to read the last training/valdation data
+        # to acess the input shape.
+        X = torch.randn(1, 2, 200) # GWAK 2
+        # Load first model (frozen for inference)
+        weights = "output/test_multiSignal/model_JIT.pt"
+        with open(weights, "rb") as f:
+            graph = torch.jit.load(f)
+        graph.eval() # Set to evaluation mode
+        X = graph(X)
+
+        trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
+
+        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
+
+        with open(os.path.join(save_dir, "model_JIT.pt"), "wb") as f:
+            torch.jit.save(trace, f)
+
+
+class Linear(GwakBaseModelClass):
+    def __init__(
+            self,
+            backgrounds='/home/hongyin.chen/whiten_timeslide.h5',
+            new_shape=512,
+            n_dims=16,
+            learning_rate=1e-3):
+        super().__init__()
+        self.model = nn.Linear(n_dims, 1)
+
+        # Open the HDF5 file
+        with h5py.File(backgrounds, "r") as h:
+            # Load the dataset
+            data = h["data"][:]  # Convert HDF5 dataset to NumPy array
+
+        # Splitting into train and validation sets (80% train, 20% validation)
+        self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
-        self.svm_epochs = svm_epochs
-        self.fm_model_path = fm_model_path
 
         self.save_hyperparameters()
 
     def forward(self, x):
-        return self.network(x)
+        return self.model(x)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.network.parameters(), lr=self.learning_rate)
+        return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def training_step(self, batch, batch_idx):
         i = batch_idx  # Each batch corresponds to a background chunk
-        small_bkgs = 0 # torch.from_numpy(
-        #     self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape]
-        # ).float().to(self.device)
+        small_bkgs = torch.from_numpy(
+            self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape]
+        ).float().to(self.device)
 
         # Load first model (frozen for inference)
         weights = "output/test_multiSignal/model_JIT.pt"
@@ -88,47 +124,10 @@ class Linear(GwakBaseModelClass):
         graph.eval() # Set to evaluation mode
         graph.to(device=self.device)
         batch = graph(batch[0])
+        small_bkgs = graph(small_bkgs)
 
-        total_loss = 0.0
-
-        for epoch in range(self.svm_epochs):
-            background_MV = torch.tensor(0.0, device=self.device) # self.network(small_bkgs)
-            signal_MV = self.network(batch)
-
-            # Take min score for each signal example
-            signal_MV = torch.min(signal_MV, dim=1)[0]
-
-            zero = torch.tensor(0.0, device=self.device)
-
-            background_loss = torch.maximum(zero, 1 - background_MV).mean()
-            signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
-
-            loss = background_loss + signal_loss
-
-            # if epoch % 50 == 0:
-            #     self.log(f'weight_epoch_{epoch}', self.network.layer.weight.data[0].cpu().numpy(), prog_bar=False)
-            #     self.log(f'loss_epoch_{epoch}', loss.item(), prog_bar=False)
-
-            total_loss += loss
-
-        avg_loss = total_loss / self.svm_epochs
-        self.log('train_loss', avg_loss, prog_bar=True)
-        return avg_loss
-
-    def validation_step(self, batch, batch_idx):
-        """Validation step processes all validation data at once."""
-        # small_bkgs = torch.from_numpy(self.val_backgrounds).float().to(self.device)
-
-        # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        graph.to(device=self.device)
-        batch = graph(batch[0])
-
-        background_MV = torch.tensor(0.0, device=self.device) #  self.network(small_bkgs)
-        signal_MV = self.network(batch)
+        background_MV = self.model(small_bkgs)
+        signal_MV = self.model(batch)
 
         # Take min score for each signal example
         signal_MV = torch.min(signal_MV, dim=1)[0]
@@ -139,14 +138,66 @@ class Linear(GwakBaseModelClass):
         signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
 
         loss = background_loss + signal_loss
-        self.log('val_loss', loss, prog_bar=True)
+
+        self.log(
+            'train_loss',
+            loss,
+            on_epoch=True, # Newly added
+            sync_dist=True)
 
         return loss
 
-    # def on_train_epoch_end(self):
-    #     torch.save(self.network.state_dict(), self.fm_model_path)
-    #     print("Final Weights:", self.network.layer.weight.data.cpu().numpy()[0])
+    @torch.no_grad()
+    def validation_step(self, batch, batch_idx):
+        """Validation step processes all validation data at once."""
+        small_bkgs = torch.from_numpy(self.val_backgrounds).float().to(self.device)
 
+        # Load first model (frozen for inference)
+        weights = "output/test_multiSignal/model_JIT.pt"
+        with open(weights, "rb") as f:
+            graph = torch.jit.load(f)
+        graph.eval() # Set to evaluation mode
+        graph.to(device=self.device)
+        batch = graph(batch[0])
+        small_bkgs = graph(small_bkgs)
+
+        background_MV = self.model(small_bkgs)
+        signal_MV = self.model(batch)
+
+        # Take min score for each signal example
+        signal_MV = torch.min(signal_MV, dim=1)[0]
+
+        zero = torch.tensor(0.0, device=self.device)
+
+        background_loss = torch.maximum(zero, 1 - background_MV).mean()
+        signal_loss = torch.maximum(zero, 1 + signal_MV).mean()
+
+        loss = background_loss + signal_loss
+        self.log(
+            'val/loss',
+            loss,
+            sync_dist=True)
+
+        return loss
+
+    def configure_callbacks(self) -> Sequence[pl.Callback]:
+        # checkpoint for saving best model
+        # that will be used for downstream export
+        # and inference tasks
+        # checkpoint for saving multiple best models
+        callbacks = []
+
+        # if using ray tune don't append lightning
+        # model checkpoint since we'll be using ray's
+        checkpoint = LinearModelCheckpoint(
+            monitor='val/loss',
+            save_last=True,
+            auto_insert_metric_name=False
+            )
+
+        callbacks.append(checkpoint)
+
+        return callbacks
 
 class Encoder(nn.Module):
 
@@ -304,6 +355,7 @@ class LargeLinear(GwakBaseModelClass):
             sync_dist=True)
         return loss
 
+    @torch.no_grad()
     def validation_step(self, batch, batch_idx):
 
         x = batch
