@@ -1,4 +1,5 @@
 import re
+import toml
 import h5py
 import time
 import logging
@@ -28,123 +29,106 @@ def get_ip_address() -> str:
                 return addr.address
 
 
-def read_h5_data(
-    test_data_dir: Path,
-    key: str = "data"
-):
+def load_h5_as_dict(
+    chosen_signals: Path,
+    source_file: Path
+)-> dict:
+    """Open up a buffer to load in different CCSN wavefroms.
+
+    Args:
+        chosen_signals (Path): A file with names of each wavefrom.
+        source_file (Path): The path that contains reasmpled raw waveform.
+
+    Returns:
+        dict: Time and resampled SQDM of Each waveform
     """
-    test_data_dir: A directory that contains a list of hdf file. 
-    """
-
-    data_files= sorted(test_data_dir.glob("*.h5"))
-
-    data_list = []
-    for file in data_files: 
-
-        with h5py.File(file, "r") as h1:
-            data = h1[key][:]
-
-        data_list.append(data.astype("float32"))
-
-    return data_list
-
-
-def static_infer_process(
-    batcher,
-    num_ifo, 
-    psd_length,
-    kernel_length,
-    fduration,
-    stride_batch_size,
-    sample_rate, 
-    client: InferenceClient=None,
-    client_stream: InferenceClient=None,
-    patient: float=1e-1,  
-    loop_verbose: int=100
-): 
-    """
-    The client need to connect to Triton serve already
-    """
-    results = []
-    if client is not None: 
-        segment_size = int((psd_length + kernel_length + fduration + stride_batch_size - 1) * sample_rate)
-
-        for i, background in enumerate(batcher):
-
-            if i % loop_verbose == 0: 
-                logging.info(f"Producing inference result on {i}th iteration!")
-
-            background = background.reshape(-1, num_ifo, segment_size)
-            client.infer(background,request_id=i)
-
-            # Wait for the Queue to return the result
-            time.sleep(patient)
-            result = client.get()
-            while result is None:
-
-                result = client.get()
-            results.append(result[0])
-
-        return results
+    selected_ccsn = toml.load(chosen_signals)
+    source_file = Path(source_file)
     
-    if client_stream is not None: 
+    grand_dict = {}
+    ccsn_list = []
+    
+    for key in selected_ccsn.keys():
         
-        length = 1
-        np.random.seed(1)
-        background = np.random.normal(0, 1, (2, 2, 2048)).astype("float32")
-        for i in range(length):
+        for name in selected_ccsn[key]:
+            ccsn_list.append(f"{key}/{name}")
 
+    for name in ccsn_list:
+        
+        with h5py.File(source_file/ f'{name}.h5', 'r', locking=False) as h:
+
+            time = np.array(h['time'][:])
+            quad_moment = h['quad_moment'][:] 
             
-            sequence_start = (i == 0)
-            sequence_end = (i == len(sequence) - 1)
+        grand_dict[name] =  [time, quad_moment]
+    
+    return grand_dict
 
-            client_stream.infer(
-                bh_state,
-                request_id=i,
-                sequence_id=8001,
-                sequence_start=sequence_start,
-                sequence_end=sequence_end,
-            )
-                
-            # Wait for the Queue to return the result
-            time.sleep(patient)
-            # breakpoint()
-            result = client.get()
-            while result is None:
 
-                result = client.get()
-                # print(f"RESULT = {result}")
-            results.append(result[0])
-        return results
-    
-    
-    
-def stream_jobs(
-    client,
-    sequence,
-    sequence_id
+def get_hp_hc_from_q2ij( 
+    q2ij, 
+    theta: np.ndarray, 
+    phi: np.ndarray
+):
+
+    '''
+    The orientation of GW emition is given by theta, phi
+    '''
+
+    hp =\
+        q2ij[:,0,0]*(np.cos(theta)**2*np.cos(phi)**2 - np.sin(phi)**2).reshape(-1, 1)\
+        + q2ij[:,1,1]*(np.cos(theta)**2*np.sin(phi)**2 - np.cos(phi)**2).reshape(-1, 1)\
+        + q2ij[:,2,2]*(np.sin(theta)**2).reshape(-1, 1)\
+        + q2ij[:,0,1]*(np.cos(theta)**2*np.sin(2*phi) - np.sin(2*phi)).reshape(-1, 1)\
+        - q2ij[:,1,2]*(np.sin(2*theta)*np.sin(phi)).reshape(-1, 1)\
+        - q2ij[:,2,0]*(np.sin(2*theta)*np.cos(phi)).reshape(-1, 1)
+
+    hc = 2*(
+        - q2ij[:,0,0]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
+        + q2ij[:,1,1]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
+        + q2ij[:,0,1]*(np.cos(theta)*np.cos(2*phi)).reshape(-1, 1)
+        - q2ij[:,1,2]*(np.sin(theta)*np.cos(phi)).reshape(-1, 1)
+        + q2ij[:,2,0]*(np.sin(theta)*np.sin(phi)).reshape(-1, 1)
+    )
+
+    return hp, hc
+
+
+def on_grid_pol_to_sim(quad_moment, sqrtnum):
+
+    CosTheta = np.linspace(-1, 1, sqrtnum)
+    theta = np.arccos(CosTheta)
+    phi = np.linspace(0, 2*np.pi, sqrtnum)
+
+    theta = theta.repeat(sqrtnum)
+    phi = np.tile(phi, sqrtnum)
+
+    hp, hc = get_hp_hc_from_q2ij(quad_moment, theta, phi)
+
+    return hp, hc, theta, phi
+
+# To do add masking window to the function
+def padding(
+    time,
+    hp,
+    hc,
+    distance,
+    sample_kernel = 3,
+    sample_rate = 4096,
+    time_shift = -0.15, # shift zero to distination time
 ):
     
-    results = []
-    with client:
+    # Two polarization
+    signal = np.zeros([hp.shape[0], 2, sample_kernel * sample_rate])
 
-        for i, (bh_state, inj_state) in enumerate(tqdm(sequence)):
+    half_kernel_idx = int(sample_kernel * sample_rate/2)
+    time_shift_idx = int(time_shift * sample_rate)
+    t0_idx = int(time[0] * sample_rate)
 
-            sequence_start = (i == 0)
-            sequence_end = (i == len(sequence) - 1)
-            
-            client.infer(
-                bh_state,
-                request_id=i,
-                sequence_id=sequence_id,
-                sequence_start=sequence_start,
-                sequence_end=sequence_end,
-            )
+    start = half_kernel_idx + t0_idx + time_shift_idx
+    end = half_kernel_idx + t0_idx + time.shape[0] + time_shift_idx
 
-            result = client.get()
-            while result is None:
-                result = client.get()
-
-            results.append(result[0])
-            
-    results = np.stack(results)
+    signal[:, 0, start:end] = hp / distance.reshape(-1, 1)
+    signal[:, 1, start:end] = hc / distance.reshape(-1, 1)
+    
+    return signal
