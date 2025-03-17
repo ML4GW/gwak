@@ -10,14 +10,14 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
-  max_epochs: 10
+  max_epochs: 200
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
 ckpt_path: null
 model:
   class_path: models.Linear
   init_args:
-    n_dims: 10
+    n_dims: 16
 data:
   class_path: dataloader.SignalDataloader
   init_args:
