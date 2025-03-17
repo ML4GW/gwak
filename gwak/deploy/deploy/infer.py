@@ -12,7 +12,7 @@ from pathlib import Path
 from hermes.aeriel.serve import serve
 from hermes.aeriel.client import InferenceClient
 
-from deploy.libs.infer_blocks import get_ip_address 
+from deploy.libs.infer_utils import get_ip_address 
 from deploy.libs import gwak_logger
 from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, condor_submit_with_rate_limit
 from infer_data import get_shifts_meta_data, Sequence
@@ -28,7 +28,8 @@ def infer(
     stride_batch_size: int,
     sample_rate: int,
     fname: Path, 
-    data_foramt: str,
+    ccsn_repo: Path,
+    data_format: str,
     shifts: list[float], 
     project: str,
     model_repo_dir: Path,
@@ -91,10 +92,12 @@ def infer(
                     gwak_streamer=gwak_streamer,
                     sequence_id=sequence_id,
                     strain_file=fname, 
+                    data_format=data_format,
                     shifts=_shifts,
                     batch_size=batch_size,
                     ifos=ifos,
                     kernel_size=kernel_size,
+                    inference_sampling_rate=inference_sampling_rate,
                 )
 
                 submit_file = make_subfile(

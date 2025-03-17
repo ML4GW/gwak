@@ -6,7 +6,7 @@ import numpy as np
 
 from pathlib import Path
 from libs.time_slides import segments_from_paths, get_num_shifts_from_Tb
-from libs.infer_blocks import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim
+from deploy.libs.infer_utils import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
 
 from ml4gw import gw
 from ml4gw.transforms import SnrRescaler
@@ -33,6 +33,7 @@ class Sequence:
     def __init__(
         self,
         fname: Path,
+        data_format: str, 
         shifts: list[float],
         batch_size: int,
         ifos: list,
@@ -62,10 +63,12 @@ class Sequence:
         
         self.strain_dict = {}
         self.fname = fname
-        with h5py.File(self.fname, "r") as h:
+        
+        if data_format in ("h5", "hdf", "hdf5"):
+            with h5py.File(self.fname, "r") as h:
 
-            for ifo in self.ifos:
-                self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
+                for ifo in self.ifos:
+                    self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
 
         self.size = len(self.strain_dict[ifo])
 

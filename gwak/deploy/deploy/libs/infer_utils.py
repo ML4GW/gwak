@@ -1,7 +1,7 @@
 import re
-import toml
 import h5py
 import time
+import yaml
 import logging
 import psutil
 import socket
@@ -42,7 +42,9 @@ def load_h5_as_dict(
     Returns:
         dict: Time and resampled SQDM of Each waveform
     """
-    selected_ccsn = toml.load(chosen_signals)
+    with open(chosen_signals) as f:
+        selected_ccsn = yaml.load(f, Loader=yaml.SafeLoader)
+        
     source_file = Path(source_file)
     
     grand_dict = {}
@@ -106,6 +108,7 @@ def on_grid_pol_to_sim(quad_moment, sqrtnum):
     hp, hc = get_hp_hc_from_q2ij(quad_moment, theta, phi)
 
     return hp, hc, theta, phi
+
 
 # To do add masking window to the function
 def padding(

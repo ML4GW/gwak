@@ -8,9 +8,10 @@ Tb: 86400
 batch_size: 1
 stride_batch_size: 256
 sample_rate: 2048
-fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data
-# fname: /home/katya.govorkova/gwak2_background
-data_foramt: hdf5
+# fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data
+fname: /home/katya.govorkova/gwak2_background
+ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled_2048 # 1 kpc
+data_format: hdf5 # gwf
 shifts: [0, 1]
 project: white_noise_purst
 model_repo_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output/export

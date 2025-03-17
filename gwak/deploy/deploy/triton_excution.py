@@ -18,7 +18,8 @@ def run_infer(
     gwak_streamer: str,
     sequence_id: int,
     strain_file: Union[str, Path],
-    shifts=[0.0, 1.0],
+    data_format: str,
+    shifts: list=[0.0, 1.0],
     batch_size:int=1,
     ifos:list=["H1", "L1"],
     kernel_size:int=2048,
@@ -36,6 +37,7 @@ def run_infer(
 
         sequence = Sequence(
             fname=strain_file,
+            data_format=data_format,
             shifts=shifts,
             batch_size=batch_size,
             ifos=ifos,

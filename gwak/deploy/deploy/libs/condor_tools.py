@@ -49,9 +49,10 @@ def make_subfile(
 def make_infer_config(
     job_dir: Path,
     triton_server_ip,
-    gwak_streamer, # gwak-white_noise_burst-streamer
+    gwak_streamer,
     sequence_id,
-    strain_file: Union[str, Path], # = "/home/hongyin.chen/Data/GWAK_data/gwak_infer_data/background-1240853610-680.hdf5"
+    strain_file: Union[str, Path],
+    data_format: str,
     shifts:list,
     batch_size:int,
     ifos:list,
