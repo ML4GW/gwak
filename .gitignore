@@ -169,3 +169,4 @@ cython_debug/
 *output/
 lightning_logs/
 wandb/
+slurm_logs/

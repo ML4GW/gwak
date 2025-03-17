@@ -10,10 +10,6 @@ def sum_args(a, b):
 
 class GwakMultiSignalCLI(LightningCLI):
     def before_instantiate_classes(self):
-        
-        #for k,v in self.config.items():
-        #    print(k,v)
-        
         sample_rate = self.config["fit.data.init_args.sample_rate"]
         fduration = self.config['fit.data.init_args.fduration']
         kernel_length = self.config['fit.data.init_args.kernel_length']
@@ -26,9 +22,6 @@ class GwakMultiSignalCLI(LightningCLI):
             if "duration" in self.config['fit.data.init_args.waveforms'][i]['init_args'].keys():
                 self.config['fit.data.init_args.waveforms'][i]['init_args']['duration'] = fduration+kernel_length
         
-        #print("new config:")
-        #for k,v in self.config.items():
-        #    print(k,v)
         return
 
 def cli_main(args=None):
@@ -45,3 +38,59 @@ def cli_main(args=None):
 
 if __name__ == '__main__':
     cli_main()
+
+
+from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
+
+signal_classes = [
+    "SineGaussian",
+    "BBH",
+    "Gaussian",
+    "Cusp",
+    "Kink",
+    "KinkKink",
+    "WhiteNoiseBurst"
+]
+priors = [
+    SineGaussianBBC,
+    LAL_BBHPrior,
+    GaussianBBC,
+    CuspBBC,
+    KinkBBC,
+    KinkkinkBBC,
+    WhiteNoiseBurstBBC
+]
+waveforms = [
+    SineGaussian(
+        sample_rate=sample_rate,
+        duration=duration
+    ),
+    IMRPhenomPv2(),
+    Gaussian(
+        sample_rate=sample_rate,
+        duration=duration
+    ),
+    GenerateString(
+        sample_rate=sample_rate
+    ),
+    GenerateString(
+        sample_rate=sample_rate
+    ),
+    GenerateString(
+        sample_rate=sample_rate
+    ),
+    WhiteNoiseBurst(
+        sample_rate=sample_rate,
+        duration=duration
+    )
+]
+extra_kwargs = [
+    None,
+    {"ringdown_duration":0.9},
+    None,
+    None,
+    None,
+    None,
+    None
+]

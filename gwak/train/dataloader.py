@@ -249,9 +249,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 coincident=False,
             )
 
-        pin_memory = isinstance(
-            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        )
+        #pin_memory = isinstance(
+        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
+        #)
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
@@ -267,9 +267,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
             coincident=False,
         )
 
-        pin_memory = isinstance(
-            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        )
+        #pin_memory = isinstance(
+        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
+        #)
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
@@ -285,9 +285,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
             coincident=False,
         )
 
-        pin_memory = isinstance(
-            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        )
+        #pin_memory = isinstance(
+        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
+        #)
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
@@ -396,8 +396,9 @@ class SignalDataloader(GwakBaseDataloader):
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
         class_labels = [i+1 for i in range(self.num_classes)]
-        self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
-        self.data_group["class_label_names"] = self.signal_classes
+        if self.data_saving_file is not None:
+            self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
+            self.data_group["class_label_names"] = self.signal_classes
 
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
         all_responses = []

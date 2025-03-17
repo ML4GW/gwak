@@ -2,7 +2,7 @@ import os
 
 signalclasses = ['bbh', 'sine_gaussian', 'sine_gaussian_lf', 'sine_gaussian_hf', 'kink', 'kinkkink', 'white_noise_burst', 'gaussian', 'cusp']
 backgroundclasses = ['background', 'glitches']
-multiSignals = ['test_multiSignal']
+multiSignals = ['SimCLR_multiSignal_all']
 dataclasses = signalclasses+backgroundclasses+multiSignals
 
 wildcard_constraints:
@@ -20,7 +20,7 @@ CLI = {
     'white_noise_burst': 'train/cli_signal.py',
     'gaussian': 'train/cli_signal.py',
     'cusp': 'train/cli_signal.py',
-    'test_multiSignal': 'train/cli_multiSignal.py'
+    'SimCLR_multiSignal_all': 'train/cli_multiSignal.py'
     }
 
 rule train_gwak1:
@@ -53,9 +53,9 @@ rule train_all:
     input:
         expand(rules.train.log, datatype=['white_noise_burst', 'kinkkink', 'gaussian', 'cusp'])
 
-rule train_multiSig_test:
+rule SimCLR_multiSignal_all:
     input:
-        expand('output/{datatype}',datatype=['test_multiSignal'])
+        expand('output/{datatype}',datatype=['SimCLR_multiSignal_all'])
 
 rule train_linear_metric:
     input:

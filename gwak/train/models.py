@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from einops import rearrange, repeat
 from losses import SupervisedSimCLRLoss
+import h5py
 
 
 class GwakBaseModelClass(pl.LightningModule):
@@ -1114,6 +1115,35 @@ class Tarantula(GwakBaseModelClass):
             sync_dist=True)
 
         return loss
+    
+    @torch.no_grad
+    def test_step(self,batch,batch_idx):
+        x,labels = batch
+        x_embd = self.model(x).detach().cpu().numpy()
+        x_proj = self.projection_head(x_embd).detach().cpu().numpy()
+
+        output = {
+            "embeddings": x_embd,
+            "projections": x_proj,
+            "labels": labels.detach().cpu().numpy()
+        }
+
+        return output
+    
+    def test_epoch_end(self,outputs):
+        output_arrays = {k:[] for k in outputs[0].keys()}
+        for o in outputs:
+            for k,v in o.items():
+                output_arrays[k].append(v)
+        for k in output_arrays.keys():
+            output_arrays[k] = np.concatenate(output_arrays[k],axis=0)
+        
+        outdir = self.trainer.logger.save_dir
+        with h5py.File(f"{outdir}/test_embeddings.h5","w") as fout:
+            for k,v in output_arrays.items():
+                fout.create_dataset(k,data=v)
+        
+
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
         # checkpoint for saving best model
