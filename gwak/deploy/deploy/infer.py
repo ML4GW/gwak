@@ -1,100 +1,117 @@
 import time
 import h5py
 import logging
+import subprocess
 
 import numpy as np
 
+from tqdm import tqdm
+from zlib import adler32
 from pathlib import Path
 
 from hermes.aeriel.serve import serve
 from hermes.aeriel.client import InferenceClient
 
-from libs.infer_blocks import get_ip_address, read_h5_data, static_infer_process
+from deploy.libs.infer_utils import get_ip_address 
 from deploy.libs import gwak_logger
+from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, condor_submit_with_rate_limit
+from infer_data import get_shifts_meta_data, Sequence
+
 
 def infer(
-    num_ifos: int,
-    psd_length: float,
-    fduration: float,
+    ifos: list[str],
+#     psd_length: float,
+#     fduration: float,
     kernel_length: float,
+    Tb: int,
     batch_size: int,
     stride_batch_size: int,
     sample_rate: int,
-    test_data_dir: Path, 
-    project:Path,
+    fname: Path, 
+    ccsn_repo: Path,
+    data_format: str,
+    shifts: list[float], 
+    project: str,
     model_repo_dir: Path,
     image: Path,
     result_dir: Path,
+    rate_limit: int = 20,
     load_model_patients: int=10,
+    inference_sampling_rate: float = 1,
     **kwargs,
 ):
 
     result_dir = result_dir / project
     model_repo_dir = model_repo_dir / project
-    result_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
-    result_file = result_dir / "result.h5"
+    result_dir.mkdir(parents=True, exist_ok=True)
 
     gwak_logger(log_file)
 
     ip = get_ip_address()
-    address=f"{ip}:8001"
-    
-    whiten_model = "preprocessor"
-    gwak_model = f"gwak-{project}"
+    kernel_size = int(kernel_length * sample_rate * stride_batch_size)
+    gwak_streamer = f"gwak-{project}-streamer"
+
+    # Data handler
+    logging.info(f"Loading data files ...")
+    logging.info(f"    Data directory at {fname}")
+
+    num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts)
 
     serve_context = serve(
         model_repo_dir, 
         image, 
         log_file=triton_log, 
         wait=False
-    )
-
-    logging.info(f"Loading data files ...")
-    logging.info(f"    Data directory at {test_data_dir}")
-    data_list = read_h5_data(
-        test_data_dir = test_data_dir, 
-        key="data"
-    )
-    # data_list = [np.random.normal(0, 1, (256, 2, 133320)).astype("float32") for _ in range(2)]
+    )   
 
     with serve_context:
-
-        # Wait for the serve to connect!
+        
         logging.info(f"Waiting {load_model_patients} seconds to load model to triton!")
         time.sleep(load_model_patients)
 
-        client_1 = InferenceClient(address, whiten_model)
-        client_2 = InferenceClient(address, gwak_model)
+        submit_num = 0
+        sub_files = []
 
-        # Produce whiten strain
-        whitened_data = static_infer_process(
-            batcher=data_list,
-            num_ifo=num_ifos, 
-            psd_length=psd_length,
-            fduration=fduration,
-            kernel_length=kernel_length,
-            stride_batch_size=stride_batch_size,
-            sample_rate=sample_rate, 
-            client=client_1,
+        start = time.time()
+        for fname, (seg_start, seg_end) in zip(fnames, segments):
+            for shift in range(num_shifts):
+
+                fingerprint = f"{seg_start}{seg_end}{shift}".encode()
+                sequence_id = adler32(fingerprint)
+
+                _shifts = [s * (shift + 1) for s in shifts]
+                job_dir = result_dir / f"condor/job_{submit_num:03d}"
+
+
+                config_file = make_infer_config(
+                    job_dir=job_dir,
+                    triton_server_ip=ip,
+                    gwak_streamer=gwak_streamer,
+                    sequence_id=sequence_id,
+                    strain_file=fname, 
+                    data_format=data_format,
+                    shifts=_shifts,
+                    batch_size=batch_size,
+                    ifos=ifos,
+                    kernel_size=kernel_size,
+                    inference_sampling_rate=inference_sampling_rate,
+                )
+
+                submit_file = make_subfile(
+                    job_dir=job_dir,
+                    arguments=Path("deploy/triton_excution.py").resolve(),
+                    config=config_file.resolve()
+                )
+
+                sub_files.append(submit_file)
+                submit_num += 1
+
+        condor_submit_with_rate_limit(
+            sub_files=sub_files,
+            rate_limit=rate_limit
         )
 
-        # Produce inference result
-        inference_result = static_infer_process(
-            batcher=whitened_data,
-            num_ifo=num_ifos, 
-            psd_length=0,
-            fduration=0,
-            kernel_length=kernel_length,
-            stride_batch_size=stride_batch_size,
-            sample_rate=sample_rate, 
-            client=client_2
-        )
-    inference_results = np.stack(inference_result)
-
-    logging.info(f"Collecting result to {result_file.resolve()}")
-    with h5py.File(result_file, "w") as h:
-        h.create_dataset(f"{project}", data=inference_results)
-
+        logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")
