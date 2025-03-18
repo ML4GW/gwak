@@ -28,8 +28,9 @@ def infer(
     load_model_patients: int=10,
     **kwargs,
 ):
-
+    
     result_dir = result_dir / project
+    print('RESULTSDIR', result_dir)
     model_repo_dir = model_repo_dir / project
     result_dir.mkdir(parents=True, exist_ok=True)
 
@@ -64,7 +65,7 @@ def infer(
     #     test_data_dir = test_data_dir, 
     # )
 
-    # data_list = [np.random.normal(0, 1, (256, 2, 133320)).astype("float32") for _ in range(2)]
+    # data_list = [np.random.normal(0, 1, (256, 2, 200)).astype("float32") for _ in range(2)]
 
     with serve_context:
 

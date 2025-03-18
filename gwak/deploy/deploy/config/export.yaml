@@ -1,8 +1,6 @@
-project: gwak1
+project: bbh
 model_dir: /home/eric.moreno/gwak2/gwak/output/
-output_dir: /home/eric.moreno/gwak2/gwak/output/export
-model_files: ['background/model_JIT.pt', 'glitches/model_JIT.pt', 'sine_gaussian_hf/model_JIT.pt', 'sine_gaussian_lf/model_JIT.pt', 'bbh/model_JIT.pt']
-combiner_model_file: /home/eric.moreno/QUAK/real_katya/gw-anomaly/gwak/scripts/combiner_model_jit.pt
+output_dir: /home/eric.moreno/gwak2/gwak/output/export/
 
 clean: True
 background_batch_size: 256

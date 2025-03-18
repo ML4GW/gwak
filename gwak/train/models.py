@@ -43,6 +43,13 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         # X = torch.randn(1, 200, 2) # GWAK 1
         X = torch.randn(1, 2, 200) # GWAK 2
 
+        with torch.no_grad():
+            A = module.model(X)
+            B = module.model(X)
+            print(A)
+            print(B)
+
+        sys.exit()
         trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir

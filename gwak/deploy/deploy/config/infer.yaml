@@ -8,7 +8,7 @@ sample_rate: 2048
 test_data_dir: /scratch/burst.benchmark/o4b-2/
 project: white_noise_purst
 model_repo_dir: /home/eric.moreno//gwak2/gwak/output/export
-image: hermes/tritonserver:23.01
+image: hermes/tritonserver:24.01
 result_dir: /home/eric.moreno/gwak2/gwak/output/infer
-load_data_patients: 40
+load_model_patients: 400
 
