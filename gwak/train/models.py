@@ -20,7 +20,15 @@ import torch
 import torch.nn as nn
 from einops import rearrange, repeat
 from losses import SupervisedSimCLRLoss
+from schedulers import WarmupCosineAnnealingLR
 import h5py
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+import wandb
+from PIL import Image
+from io import BytesIO
 
 
 class GwakBaseModelClass(pl.LightningModule):
@@ -696,7 +704,7 @@ class S4Model(nn.Module):
         prenorm: bool = False,
         dt_min: float = 0.001,
         dt_max: float = 0.1,
-        lr: Optional[float] = None,
+        lr: Optional[float] = None
     ):
         super().__init__()
 
@@ -806,6 +814,8 @@ class Crayon(GwakBaseModelClass):
         d_contrastive_space: int = 20,
         temperature: float = 0.1,
         supervised_simclr: bool = False,
+        lr_opt: float = 1e-4,
+        s4_kwargs: Optional[dict] = {}
         ):
 
         super().__init__()
@@ -815,19 +825,23 @@ class Crayon(GwakBaseModelClass):
         self.d_contrastive_space = d_contrastive_space
         self.temperature = temperature
         self.supervised_simclr = supervised_simclr
+        self.lr_opt = lr_opt
 
         self.model = S4Model(d_input=self.num_ifos,
                     length=self.num_timesteps,
-                    d_output = self.d_output)
+                    d_output = self.d_output,
+                    **s4_kwargs)
 
-        self.projection_head = MLP(d_input = self.d_output, hidden_dims=[], d_output = self.d_contrastive_space)
+        self.projection_head = MLP(d_input = self.d_output, hidden_dims=[self.d_output], d_output = self.d_contrastive_space)
         
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
                                                   contrast_mode='all', 
                                                   base_temperature=self.temperature)
 
+        self.val_outputs = []
+
     def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(),lr=1e-4)
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr_opt)
         return optimizer
 
     def training_step(self, batch, batch_idx):
@@ -835,6 +849,7 @@ class Crayon(GwakBaseModelClass):
             x,labels = batch
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
             loss = self.loss_function(z_embd,labels=labels)
         else:
             batch, labels = batch
@@ -843,6 +858,8 @@ class Crayon(GwakBaseModelClass):
             z1 = self.model(aug_1)
             embd_0 = self.projection_head(z0).unsqueeze(1)
             embd_1 = self.projection_head(z1).unsqueeze(1)
+            embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
+            embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
             loss = self.loss_function(embds,labels=None)
 
@@ -861,6 +878,7 @@ class Crayon(GwakBaseModelClass):
             x,labels = batch
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
             loss = self.loss_function(z_embd,labels=labels)
         else:
             batch, labels = batch
@@ -869,6 +887,8 @@ class Crayon(GwakBaseModelClass):
             z1 = self.model(aug_1)
             embd_0 = self.projection_head(z0).unsqueeze(1)
             embd_1 = self.projection_head(z1).unsqueeze(1)
+            embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
+            embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
             loss = self.loss_function(embds,labels=None)
 
@@ -877,7 +897,58 @@ class Crayon(GwakBaseModelClass):
             loss,
             sync_dist=True)
 
-        return loss
+        if self.supervised_simclr:
+            self.val_outputs.append((loss, x_embd.cpu().numpy(), labels.cpu().numpy()))
+        else:
+            return loss
+    
+    def on_validation_epoch_end(self):
+        if self.supervised_simclr:
+            preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
+            labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
+            N = preds.shape[1]
+            labs_uniq = sorted(list(set(labels)))
+            fig,axes = plt.subplots(N,N,figsize=(20,20))
+
+            for i in range(preds.shape[1]):
+                for j in range(i+1,preds.shape[1]):
+                    plt.sca(axes[i,j])
+                    plt.axis('off')
+
+            for i in range(preds.shape[1]):
+                plt.sca(axes[i,i])
+                plt.xticks([])
+                plt.yticks([])
+                bins = 30
+                for j,lab in enumerate(labs_uniq):
+                    h,bins,_ = plt.hist(preds[labels==lab][:,i],bins=bins,histtype='step',color=f"C{j}")
+                    
+            for i in range(1,preds.shape[1]):
+                for j in range(i):
+                    plt.sca(axes[i,j])
+                    plt.xticks([])
+                    plt.yticks([])
+                    for k,lab in enumerate(labs_uniq):
+                        ysel = preds[labels==lab]
+                        plt.scatter(ysel[:,j],ysel[:,i],s=2,color=f"C{k}")
+                        
+            plt.sca(axes[0,2])
+            patches = []
+            for k,lab in enumerate(labs_uniq):
+                patches.append(Patch(color=f"C{k}",label=f"Class {k+1}"))
+            plt.legend(handles=patches,ncol=2,fontsize=12)
+
+            buf = BytesIO()
+            plt.savefig(buf,format='png')
+            buf.seek(0)
+            self.logger.log_image(
+                'val/space',
+                [Image.open(buf)],
+            )
+
+            plt.close(fig)
+
+            self.val_outputs.clear()
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
         # checkpoint for saving best model
@@ -1050,11 +1121,16 @@ class Tarantula(GwakBaseModelClass):
         fc_output_dims:list[int] = [],
         d_output:int = 16,
         d_contrastive_space: int = 16,
+        normalize: bool = True,
         dropout: float = 0.1,
         cls_dropout: float = 0.0,
         feedforward_factor:int = 4,
         temperature: float = 0.1,
-        supervised_simclr: bool = False
+        supervised_simclr: bool = False,
+        lr: float = 1e-4,
+        min_lr: float = 1e-6,
+        total_steps: int = None,
+        warmup_fraction: float = 0.1,
         ):
 
         super().__init__()
@@ -1069,11 +1145,16 @@ class Tarantula(GwakBaseModelClass):
         self.fc_output_dims = fc_output_dims
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
+        self.normalize = normalize
         self.dropout = dropout
         self.cls_dropout = cls_dropout
         self.feedforward_factor = feedforward_factor
         self.temperature = temperature
         self.supervised_simclr = supervised_simclr
+        self.lr = lr
+        self.min_lr = min_lr
+        self.total_steps = total_steps
+        self.warmup_fraction = warmup_fraction
 
         # define the self attention blocks
         self.self_attn = EncoderTransformer(
@@ -1115,17 +1196,12 @@ class Tarantula(GwakBaseModelClass):
                                                   contrast_mode='all',
                                                   base_temperature=self.temperature)
 
-    def configure_optimizers(self):
-        #lr = self.hparams.optimizer.learning_rate
-        #optimizer = optim.AdamW(self.parameters(),lr=lr)
-        #return optimizer
-        pass
-
     def training_step(self, batch, batch_idx):
         if self.supervised_simclr:
             x,labels = batch
             x_embd = self.model(x) # shape (B,1,d_embd)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd)
+            z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
             self.metric = self.loss_function(z_embd,labels=labels)
         else:
             batch, labels = batch
@@ -1134,6 +1210,8 @@ class Tarantula(GwakBaseModelClass):
             z1 = self.model(aug_1)
             embd_0 = self.projection_head(z0).unsqueeze(1)
             embd_1 = self.projection_head(z1).unsqueeze(1)
+            embd_0 = F.normalize(embd_0,dim=-1)
+            embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
             self.metric = self.loss_function(embds,labels=None)
 
@@ -1150,6 +1228,7 @@ class Tarantula(GwakBaseModelClass):
             x,labels = batch
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
             loss = self.loss_function(z_embd,labels=labels)
         else:
             batch, labels = batch
@@ -1158,6 +1237,8 @@ class Tarantula(GwakBaseModelClass):
             z1 = self.model(aug_1)
             embd_0 = self.projection_head(z0).unsqueeze(1)
             embd_1 = self.projection_head(z1).unsqueeze(1)
+            embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
+            embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
             loss = self.loss_function(embds,labels=None)
 
@@ -1194,6 +1275,18 @@ class Tarantula(GwakBaseModelClass):
         with h5py.File(f"{outdir}/test_embeddings.h5","w") as fout:
             for k,v in output_arrays.items():
                 fout.create_dataset(k,data=v)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
+        scheduler = WarmupCosineAnnealingLR(optimizer,self.total_steps,self.lr,self.min_lr,self.warmup_fraction)
+        return {
+            "optimizer":optimizer,
+            "lr_scheduler": {
+                "scheduler":scheduler,
+                "interval":"step",
+                "frequency":1
+            }
+        }
         
 
 

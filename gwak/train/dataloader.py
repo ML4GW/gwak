@@ -139,7 +139,8 @@ class GwakFileDataloader(pl.LightningDataModule):
             self.sample_rate,
             self.fftlength,
             average = 'median'
-        ).to('cuda')
+        )
+        spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
         # calculate psds
         psds = spectral_density(psd_data.double())
@@ -149,7 +150,8 @@ class GwakFileDataloader(pl.LightningDataModule):
             self.fduration,
             self.sample_rate,
             highpass = 30,
-        ).to('cuda')
+        )
+        whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(batch.double(), psds.double())
 
@@ -312,7 +314,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
             self.sample_rate,
             self.fftlength,
             average = 'median'
-        ).to('cuda')
+        )
+        spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
         # calculate psds
         psds = spectral_density(psd_data.double())
@@ -322,7 +325,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
             self.fduration,
             self.sample_rate,
             highpass = 30,
-        ).to('cuda')
+        )
+        whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(batch.double(), psds.double())
 
@@ -363,8 +367,8 @@ class SignalDataloader(GwakBaseDataloader):
     def __init__(
         self,
         signal_classes: list[str] | str, # string names of signal class(es) desired
-        priors: list[data.BasePrior] | data.BasePrior, # priors for each class
-        waveforms: list[torch.nn.Module] | torch.nn.Module, # waveforms for each class
+        priors: list[Optional[data.BasePrior]] | Optional[data.BasePrior], # priors for each class
+        waveforms: list[Optional[torch.nn.Module]] | Optional[torch.nn.Module], # waveforms for each class
         extra_kwargs: list[Optional[dict]] | Optional[dict], # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         *args,
         **kwargs
@@ -418,6 +422,8 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
+            elif signal_class == "Background":
+                responses, params, ra, dec, phic = None, None, None, None, None
             else:
                 responses, params, ra, dec, phic = generate_waveforms_standard(
                     self.num_per_class[i],
@@ -429,6 +435,12 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
+
+            # Fix for cusp, kink, and kinkkink where outputs need to be multiplied by sample_rate
+            # TODO: get to the bottom of this!
+            if signal_class in ["Cusp", "Kink", "KinkKink"]:
+                responses = responses * self.sample_rate
+            
             all_responses.append(responses)
             if parameters is None:
                 output_params.append(params)
@@ -453,33 +465,56 @@ class SignalDataloader(GwakBaseDataloader):
             self.sample_rate,
             self.fftlength,
             average = 'median'
-        ).to('cuda')
+        )
+        spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
         # calculate psds
         psds = spectral_density(psd_data.double())
 
         # Waveform padding
-        inj_len = waveforms.shape[-1]
-        window_len = splits[1]
-        half = int((window_len - inj_len)/2)
+        if waveforms is not None:
+            inj_len = waveforms.shape[-1]
+            window_len = splits[1]
+            half = int((window_len - inj_len)/2)
+            first_half, second_half = half, window_len - half - inj_len
 
-        first_half, second_half = half, window_len - half - inj_len
+            # old implementation - pad with zeros if inj_len < window_len
+            # otherwise take the center chunk of waveform with length window_len
+            #waveforms = F.pad(
+            #    input=waveforms,
+            #    pad=(first_half, second_half),
+            #    mode='constant',
+            #    value=0
+            #)
 
-        waveforms = F.pad(
-            input=waveforms,
-            pad=(first_half, second_half),
-            mode='constant',
-            value=0
-        )
+            # new implementation: center the window of length window_len
+            # about the max amplitude point in the signal waveform
+            max_channel = torch.max(torch.abs(waveforms),dim=1)[0] # get largest of [H1,L1] for every timestep
+            imax = torch.argmax(max_channel,dim=1).cpu().numpy() # get index of largest time value
+            waveforms = list(torch.unbind(waveforms,dim=0))
+            left = window_len//2
+            right = window_len - left
+            for i in range(len(waveforms)):
+                left_idx = imax[i] - left
+                right_idx = imax[i] + right - 1
+                left_pad = max(0,-left_idx)
+                right_pad = max(0, -((inj_len-1)-right_idx))
+                new_left_idx = max(0,left_idx)
+                new_right_idx = left_pad + right_idx
+                waveforms[i] = F.pad(waveforms[i], (left_pad, right_pad), mode='constant', value=0)[..., new_left_idx:new_right_idx+1].unsqueeze(0)
+            waveforms = torch.cat(waveforms,dim=0)
 
-        injected = batch + waveforms * 100
+            injected = batch + waveforms
+        else:
+            injected = batch
 
         # create whitener
         whitener = Whiten(
             self.fduration,
             self.sample_rate,
             highpass = 30,
-        ).to('cuda')
+        )
+        whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(injected.double(), psds.double())
 
@@ -510,6 +545,11 @@ class SignalDataloader(GwakBaseDataloader):
             # inject waveforms; maybe also whiten data preprocess etc..    
             batch = self.multiInject(waveforms, batch)
             labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
+            labels = labels.to('cuda') if torch.cuda.is_available() else labels
+
+            perm = torch.randperm(batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
+            batch = batch[perm]
+            labels = labels[perm]
 
             if self.trainer.training and (self.data_saving_file is not None):
                 # Set a warning that when the global_step exceed 1e6,
@@ -593,7 +633,8 @@ class AugmentationSignalDataloader(SignalDataloader):
             batch_aug0 = self.multiInject(batch, waveforms_aug0)
             batch_aug1 = self.multiInject(batch, waveforms_aug1)
             batch = torch.stack([batch_aug0, batch_aug1])
-            labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
+            labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)])
+            labels = labels.to('cuda') if torch.cuda.is_available() else labels
 
             if self.trainer.training and (self.data_saving_file is not None):
 
@@ -646,7 +687,8 @@ def generate_waveforms_standard(batch_size, prior, waveform, loader, config, par
             config['sample_rate'],
             cross=cross.float(),
             plus=plus.float()
-        ).to('cuda')
+        )
+        responses = responses.to('cuda') if torch.cuda.is_available() else responses
 
         return responses, parameters, ra, dec, phic
 
@@ -687,6 +729,7 @@ def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, paramete
             config['sample_rate'],
             cross=cross.float(),
             plus=plus.float()
-        ).to('cuda')
+        )
+        responses = responses.to('cuda') if torch.cuda.is_available() else responses
 
         return responses, parameters, ra, dec, parameters['phic']
