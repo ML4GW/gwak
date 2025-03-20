@@ -1,5 +1,6 @@
 import os
 import time
+import yaml
 import logging
 import h5py
 from typing import Sequence
@@ -21,7 +22,6 @@ import torch.nn as nn
 from einops import rearrange, repeat
 from losses import SupervisedSimCLRLoss
 from schedulers import WarmupCosineAnnealingLR
-import h5py
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -77,37 +77,49 @@ class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
         # to acess the input shape.
         X = torch.randn(1, 2, 200) # GWAK 2
         # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        X = graph(X)
+        with open(self.cfg_path,"r") as fin:
+            cfg = yaml.load(fin,yaml.FullLoader)
+        graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        graph = graph.eval()
+        X = graph.model(X)
 
         trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
 
-        with open(os.path.join(save_dir, "model_JIT.pt"), "wb") as f:
+        with open(os.path.join(save_dir, "linear_model_JIT.pt"), "wb") as f:
             torch.jit.save(trace, f)
 
 
 class Linear(GwakBaseModelClass):
     def __init__(
             self,
-            backgrounds='/home/hongyin.chen/whiten_timeslide.h5',
-            new_shape=512,
+            backgrounds: str = '/home/hongyin.chen/whiten_timeslide.h5', # timeslides to train against
+            ckpt: str = "../output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/27-1400.ckpt",
+            cfg_path: str = "../output/test_S4_fixedSignals_0p5sec_v2/config.yaml", # pre-trained embedding model
+            new_shape=128,
             n_dims=16,
             learning_rate=1e-3):
         super().__init__()
         self.model = nn.Linear(n_dims, 1)
 
-        # Open the HDF5 file
         with h5py.File(backgrounds, "r") as h:
-            # Load the dataset
-            data = h["data"][:]  # Convert HDF5 dataset to NumPy array
+            # Load data as a NumPy array first
+            data = h["data"][:128*10*20, :, :1024]  # Ensuring it's a NumPy array
 
         # Splitting into train and validation sets (80% train, 20% validation)
         self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
+        self.backgrounds = torch.from_numpy(self.backgrounds).to("cpu")
+        self.val_backgrounds = torch.from_numpy(self.val_backgrounds).to("cpu")
+
+        self.ckpt = ckpt
+        self.cfg_path = cfg_path
+        # Load first model (frozen for inference)
+        with open(self.cfg_path,"r") as fin:
+            cfg = yaml.load(fin,yaml.FullLoader)
+        self.graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        self.graph.eval()
+        self.graph.to(device=self.device)
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
@@ -122,18 +134,11 @@ class Linear(GwakBaseModelClass):
 
     def training_step(self, batch, batch_idx):
         i = batch_idx  # Each batch corresponds to a background chunk
-        small_bkgs = torch.from_numpy(
-            self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape]
-        ).float().to(self.device)
+        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
 
         # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        graph.to(device=self.device)
-        batch = graph(batch[0])
-        small_bkgs = graph(small_bkgs)
+        batch = self.graph.model(batch[0])
+        small_bkgs = self.graph.model(small_bkgs)
 
         background_MV = self.model(small_bkgs)
         signal_MV = self.model(batch)
@@ -159,16 +164,11 @@ class Linear(GwakBaseModelClass):
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         """Validation step processes all validation data at once."""
-        small_bkgs = torch.from_numpy(self.val_backgrounds).float().to(self.device)
+        small_bkgs = self.val_backgrounds.to(self.device)
 
         # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        graph.to(device=self.device)
-        batch = graph(batch[0])
-        small_bkgs = graph(small_bkgs)
+        batch = self.graph.model(batch[0])
+        small_bkgs = self.graph.model(small_bkgs)
 
         background_MV = self.model(small_bkgs)
         signal_MV = self.model(batch)
