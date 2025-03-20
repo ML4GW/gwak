@@ -75,14 +75,7 @@ class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         # Modifiy these to read the last training/valdation data
         # to acess the input shape.
-        X = torch.randn(1, 2, 200) # GWAK 2
-        # Load first model (frozen for inference)
-        with open(self.cfg_path,"r") as fin:
-            cfg = yaml.load(fin,yaml.FullLoader)
-        graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
-        graph = graph.eval()
-        X = graph.model(X)
-
+        X = torch.randn(1, 8).to(module.device) # GWAK 2
         trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
