@@ -80,7 +80,7 @@ class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
 
-        with open(os.path.join(save_dir, "linear_model_JIT.pt"), "wb") as f:
+        with open(os.path.join(save_dir, "mlp_model_JIT.pt"), "wb") as f:
             torch.jit.save(trace, f)
 
 
@@ -199,6 +199,115 @@ class Linear(GwakBaseModelClass):
 
         callbacks.append(checkpoint)
 
+        return callbacks
+
+class MLPModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim=32):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)  # Hidden layer
+        self.fc2 = nn.Linear(hidden_dim, 1)  # Output layer
+        self.activation = nn.ReLU()  # Non-linearity
+
+    def forward(self, x):
+        x = self.activation(self.fc1(x))  # Apply activation
+        x = self.fc2(x)  # Output score (no sigmoid)
+        return x
+
+class NonLinearClassifier(GwakBaseModelClass):
+    def __init__(
+            self,
+            backgrounds: str = '/home/hongyin.chen/whiten_timeslide.h5', # timeslides to train against
+            ckpt: str = "../output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/27-1400.ckpt",
+            cfg_path: str = "../output/test_S4_fixedSignals_0p5sec_v2/config.yaml", # pre-trained embedding model
+            new_shape=128,
+            n_dims=16,
+            learning_rate=1e-3,
+            hidden_dim=32):
+        super().__init__()
+        self.model = MLPModel(n_dims, hidden_dim)
+
+        with h5py.File(backgrounds, "r") as h:
+            data = h["data"][:128*10*20, :, :1024]
+
+        # Splitting into train and validation sets (80% train, 20% validation)
+        self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
+        self.backgrounds = torch.tensor(self.backgrounds, dtype=torch.float32).to("cpu")
+        self.val_backgrounds = torch.tensor(self.val_backgrounds, dtype=torch.float32).to("cpu")
+
+        self.ckpt = ckpt
+        self.cfg_path = cfg_path
+        # Load first model (frozen for inference)
+        with open(self.cfg_path, "r") as fin:
+            cfg = yaml.load(fin, yaml.FullLoader)
+        self.graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        self.graph.eval()
+        self.graph.to(device=self.device)
+
+        self.new_shape = new_shape
+        self.learning_rate = learning_rate
+
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        return self.model(x)
+
+    def configure_optimizers(self):
+        return optim.Adam(self.model.parameters(), lr=self.learning_rate)
+
+    def training_step(self, batch, batch_idx):
+        i = batch_idx
+        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
+
+        # Extract features from frozen model
+        batch = self.graph.model(batch[0])
+        small_bkgs = self.graph.model(small_bkgs)
+
+        # Pass through MLP model
+        background_MV = self.model(small_bkgs)
+        signal_MV = self.model(batch)
+
+        # Define target labels (+1 for background, -1 for signal)
+        target_background = torch.ones_like(background_MV)
+        target_signal = -torch.ones_like(signal_MV)
+
+        # Mean Squared Error loss (forces background→+1, signal→-1)
+        loss = F.mse_loss(background_MV, target_background) + F.mse_loss(signal_MV, target_signal)
+
+        self.log("train_loss", loss, on_epoch=True, sync_dist=True)
+
+        return loss
+
+    @torch.no_grad()
+    def validation_step(self, batch, batch_idx):
+        small_bkgs = self.val_backgrounds.to(self.device)
+
+        # Extract features from frozen model
+        batch = self.graph.model(batch[0])
+        small_bkgs = self.graph.model(small_bkgs)
+
+        # Pass through MLP model
+        background_MV = self.model(small_bkgs)
+        signal_MV = self.model(batch)
+
+        # Define target labels (+1 for background, -1 for signal)
+        target_background = torch.ones_like(background_MV)
+        target_signal = -torch.ones_like(signal_MV)
+
+        # Compute validation loss
+        loss = F.mse_loss(background_MV, target_background) + F.mse_loss(signal_MV, target_signal)
+
+        self.log("val/loss", loss, sync_dist=True)
+
+        return loss
+
+    def configure_callbacks(self) -> Sequence[pl.Callback]:
+        callbacks = []
+        checkpoint = LinearModelCheckpoint(
+            monitor='val/loss',
+            save_last=True,
+            auto_insert_metric_name=False
+        )
+        callbacks.append(checkpoint)
         return callbacks
 
 class Encoder(nn.Module):
