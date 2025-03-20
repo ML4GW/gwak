@@ -1,14 +1,13 @@
-project: bbh
-model_dir: /home/eric.moreno/gwak2/gwak/output/
-output_dir: /home/eric.moreno/gwak2/gwak/output/export/
-
+project: combination
+model_dir: /home/eric.moreno/gwak2/gwak/output
+output_dir: /home/eric.moreno/gwak2/gwak/output/export
 clean: True
-background_batch_size: 256
-stride_batch_size: 1
+background_batch_size: 1
+stride_batch_size: 256
 num_ifos: 2
-gwak_instances: 6
+gwak_instances: 100
 platform: TORCHSCRIPT
-
+# platform: ONNX
 psd_length: 64
 kernel_length: 0.09765625
 fduration: 1

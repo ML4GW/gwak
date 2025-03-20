@@ -1,8 +1,7 @@
-import logging
-
 from deploy.infer import infer
 
 from jsonargparse import ArgumentParser, ActionConfigFile
+
 
 def build_parser():
     

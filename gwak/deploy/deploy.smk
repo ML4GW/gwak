@@ -1,13 +1,13 @@
-models = ['gwak1','white_noise_burst', 'gaussian', 'sine_gaussian', 'cusp', 'kink', 'combination', 'bbh'] 
+models = ['white_noise_burst', 'gaussian', 'sine_gaussian', 'cusp', 'kink', 'kinkkink', 'bbh', 'combination'] 
 
 wildcard_constraints:
     deploymodels = '|'.join(models)
 
 DEPLOY_CLI = {
     'white_noise_burst': 'white_noise_burst',
-    'bbh': 'bbh',
-    'combination': 'combination',
-    'sine_gaussian': 'sine_gaussian',
+    'gaussian': 'gaussian',
+    'bbh': 'bbh', 
+    'combination': 'combination'
 }
 
 rule export: 
@@ -29,7 +29,7 @@ rule infer:
     output:
         artefact = directory('output/infer/{deploymodels}')
     shell:
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0,1 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0,1,2,3 poetry run python \
         ../deploy/deploy/cli_infer.py --config ../{input.config} --project {params.cli}'
 
 rule export_all:
