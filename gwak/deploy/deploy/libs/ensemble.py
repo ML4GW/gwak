@@ -44,7 +44,8 @@ def add_streaming_input_preprocessor(
 
     # _, _, *kernel_size = input.shape # batch_size, num_ifos, *kernel_size
     # # batch_size, *kernel_size, num_ifos  = input.shape # Apply for gwak1
-    background_batch_size * stride_batch_size
+    background_batch_size
+    # * stride_batch_size
     snapshotter = BackgroundSnapshotter(
         psd_length=psd_length,
         kernel_length=kernel_length,
@@ -57,8 +58,10 @@ def add_streaming_input_preprocessor(
     state_shape = (background_batch_size, num_ifos, snapshotter.state_size)
     input_shape = (background_batch_size, num_ifos, stride_batch_size * stride)
     logging.info(f"Snappshot kerenl shape: ")
-    logging.info(f"    Batch size: {state_shape[0]}")
+    logging.info(f"    Batch Size: {state_shape[0]}")
     logging.info(f"    Nums Ifo: {state_shape[1]}")
+    logging.info(f"    Input Update: {input_shape[-1]}")
+    logging.info(f"    State Size: {state_shape[-1]}")
     logging.info(f"    Sample Kernel: {state_shape[-1] + input_shape[-1]}")
     # state_shape = (background_batch_size, snapshotter.state_size, num_ifos) # Apply for gwak1
 

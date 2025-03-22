@@ -5,6 +5,7 @@ import torch
 import numpy as np
 
 from pathlib import Path
+from ratelimiter import RateLimiter
 from libs.time_slides import segments_from_paths, get_num_shifts_from_Tb
 from deploy.libs.infer_utils import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
 
@@ -52,7 +53,7 @@ class Sequence:
         self.n_ifos = len(ifos)
         self.kernel_size = kernel_size
 
-        self.state_shape = (batch_size, self.n_ifos, kernel_size)
+        self.state_shape = (self.n_ifos, kernel_size)
 
         self.inj_type = inj_type
         self.precision = precision
@@ -90,7 +91,8 @@ class Sequence:
     def __iter__(self):
 
         # Check if this line will hide potential implmetation error! 
-        bh_state = np.empty(self.state_shape, dtype=self.precision) 
+        limiter = RateLimiter(max_calls=1, period=0.5)
+        bg_state = np.empty(self.state_shape, dtype=self.precision) 
         inj_state = None
 
         for i in range(len(self)):
@@ -113,31 +115,26 @@ class Sequence:
                     data = np.pad(data, (0, self.num_pad), "constant")
 
 
-                bh_state[:, ifo_idx, :] = data
-                
-                # if end == self.rate_limit:
-                #     break
+                bg_state[ifo_idx, :] = data
+
+            
+            inj_state = bg_state
+            
+            with limiter:
+                yield bg_state, inj_state
 
 
-            if self.inj_type is not None:
-                inj_state = self.bh_state + "signal"
-                        
-            yield bh_state, inj_state
 
 
-class Waveform_Projector: 
+
+    
+class CCSN_Waveform_Projector: 
 
     def __init__(
         self,
         ifos,
         sample_rate,
-        background_file,
-        seg,
-        highpass,
-        fftlength,
-        overlap,
         sample_duration,
-        test_psd_seg=None,
         buffer_duration=3,
         time_shift=0,
         off_set=0,
@@ -147,11 +144,6 @@ class Waveform_Projector:
         Args:
             ifos (_type_): _description_
             sample_rate (_type_): _description_
-            background_file (_type_): For the psd.
-            seg (_type_): _description_
-            highpass (_type_): _description_
-            fftlength (_type_): _description_
-            overlap (_type_): _description_
             sample_duration (_type_): _description_
             buffer_duration (int, optional): _description_. Defaults to 3.
             time_shift (int, optional): Shifts Core-bounce to "Time Shift". Defaults to 0.
@@ -194,7 +186,7 @@ class Waveform_Projector:
             theta=ori_theta,
             phi=ori_phi
         )
-        
+
         hp_hc = padding(
             time,
             hp,
@@ -216,16 +208,16 @@ class Waveform_Projector:
             )
 
         ht = gw.compute_observed_strain(
-            dec,
-            psi,
-            phi,
+            torch.tensor(dec).float(),
+            torch.tensor(psi).float(),
+            torch.tensor(phi).float(),
             detector_tensors=self.tensors,
             detector_vertices=self.vertices,
             sample_rate=self.sample_rate,
             plus=hp_hc[:,0,:],
             cross=hp_hc[:,1,:]
         )
-        
-        if default_snr is None:
 
-            return scaled_ht
+        return ht.detach().numpy()
+        
+        

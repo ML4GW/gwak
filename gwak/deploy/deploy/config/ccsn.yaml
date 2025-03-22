@@ -1,7 +1,7 @@
 Andresen_2016 :
     [
         # "s11", 
-        "s20", # Burst
+        # "s20", # Burst
         "s20s", # Burst 
         # "s27", 
     ]
@@ -10,7 +10,7 @@ Andresen_2019 :
     [ 
         # "s15nr", 
         # "s15sr", 
-        "s15fr", # Burst
+        # "s15fr", # Burst
     ]
 
 OConnor_2018: 
@@ -19,7 +19,7 @@ OConnor_2018:
         # "mesa20_pert", 
         # "mesa20_LR", 
         # "mesa20_v_LR", 
-        "mesa20_pert_LR" # Burst 
+        # "mesa20_pert_LR" # Burst 
     ]
 
 Pan_2021: 
