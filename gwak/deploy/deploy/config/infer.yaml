@@ -3,20 +3,21 @@ ifos: ["H1", "L1"]
 # fduration: 1
 # kernel_length: 0.09765625
 kernel_length: 1
-Tb: 86400
+Tb: 1800
 # Tb: 31536000
 batch_size: 1
 stride_batch_size: 256
 sample_rate: 2048
-# fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data
-fname: /home/katya.govorkova/gwak2_background
+fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data
+# fname: /home/katya.govorkova/gwak2_background
 ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled_2048 # 1 kpc
 data_format: hdf5 # gwf
 shifts: [0, 1]
 project: white_noise_purst
 model_repo_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output/export
-image: hermes/tritonserver:23.01
+image: hermes/tritonserver:24.01
 result_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output/infer
-rate_limit: 40
+rate_limit: 1
 load_model_patients: 5
 inference_sampling_rate: 1
+# inj_type: None

@@ -55,6 +55,7 @@ def make_infer_config(
     data_format: str,
     shifts:list,
     batch_size:int,
+    stride_batch_size:int,
     ifos:list,
     kernel_size:int,
     sample_rate=2048,

@@ -35,9 +35,10 @@ def infer(
     model_repo_dir: Path,
     image: Path,
     result_dir: Path,
-    rate_limit: int = 20,
+    rate_limit: int=20,
     load_model_patients: int=10,
     inference_sampling_rate: float = 1,
+    # inj_type=None,
     **kwargs,
 ):
 
@@ -59,6 +60,7 @@ def infer(
     logging.info(f"    Data directory at {fname}")
 
     num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts)
+    arguments=Path("deploy/triton_excution.py").resolve()
 
     serve_context = serve(
         model_repo_dir, 
@@ -95,14 +97,17 @@ def infer(
                     data_format=data_format,
                     shifts=_shifts,
                     batch_size=batch_size,
+                    stride_batch_size=stride_batch_size,
                     ifos=ifos,
                     kernel_size=kernel_size,
                     inference_sampling_rate=inference_sampling_rate,
+                    # inj_type=inj_type,
                 )
+
 
                 submit_file = make_subfile(
                     job_dir=job_dir,
-                    arguments=Path("deploy/triton_excution.py").resolve(),
+                    arguments=arguments,
                     config=config_file.resolve()
                 )
 
