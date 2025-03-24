@@ -5,7 +5,7 @@ clean: True
 background_batch_size: 1
 stride_batch_size: 512
 num_ifos: 2
-gwak_instances: 100
+gwak_instances: 20
 platform: TORCHSCRIPT
 # platform: ONNX
 psd_length: 64
