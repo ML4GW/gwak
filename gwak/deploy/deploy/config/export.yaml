@@ -3,13 +3,13 @@ model_dir: /home/eric.moreno/gwak2/gwak/output
 output_dir: /home/eric.moreno/gwak2/gwak/output/export
 clean: True
 background_batch_size: 1
-stride_batch_size: 256
+stride_batch_size: 512
 num_ifos: 2
 gwak_instances: 100
 platform: TORCHSCRIPT
 # platform: ONNX
 psd_length: 64
-kernel_length: 0.09765625
+kernel_length: 0.5
 fduration: 1
 fftlength: 2
 sample_rate: 2048

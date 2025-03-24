@@ -23,7 +23,7 @@ def export(
     kernel_length: float,
     fduration: float,
     fftlength: int,
-    inference_sampling_rate: float,
+    inference_sampling_rate: int,
     sample_rate: int,
     preproc_instances: int,
     # highpass: Optional[float] = None,
