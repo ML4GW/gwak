@@ -5,7 +5,7 @@ import logging
 import h5py
 from typing import Sequence
 from collections import OrderedDict
-from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import train_test_split
 
 import torch
 import torch.nn as nn

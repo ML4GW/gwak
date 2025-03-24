@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 from pathlib import Path
 from typing import Callable, List, Optional, Union
+import os 
 
 import wandb
 import torch
@@ -214,7 +215,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        
+        print(os.listdir(data_dir))
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
             self.data_group = h5py.File(self.data_saving_file, "w")
@@ -438,8 +439,8 @@ class SignalDataloader(GwakBaseDataloader):
 
             # Fix for cusp, kink, and kinkkink where outputs need to be multiplied by sample_rate
             # TODO: get to the bottom of this!
-            if signal_class in ["Cusp", "Kink", "KinkKink"]:
-                responses = responses * self.sample_rate
+            #if signal_class in ["Cusp", "Kink", "KinkKink"]:
+            #    responses = responses * self.sample_rate
             
             all_responses.append(responses)
             if parameters is None:
