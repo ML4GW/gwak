@@ -114,7 +114,7 @@ def condor_submit_with_rate_limit(
 
         # Check if we need to submit new jobs
         if len(job_status["Running"]) < rate_limit:
-            
+            # time.sleep(15)
             try: 
                 logging.info(f"Submitting {job_status['Waiting'][0]}")
                 job_id = submit_condor_job(sub_file=job_status["Waiting"][0])
@@ -125,7 +125,7 @@ def condor_submit_with_rate_limit(
                 continue
             except IndexError:
                 pass
-                
+
         time.sleep(10)
         # Check if any job is done
         result = subprocess.run("condor_q", capture_output=True, text=True)

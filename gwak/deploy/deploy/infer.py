@@ -1,3 +1,4 @@
+import os
 import time
 import h5py
 import logging
@@ -11,12 +12,18 @@ from pathlib import Path
 
 from hermes.aeriel.serve import serve
 from hermes.aeriel.client import InferenceClient
+from hermes.aeriel.monitor import ServerMonitor
 
 from deploy.libs.infer_utils import get_ip_address 
 from deploy.libs import gwak_logger
 from deploy.libs.condor_tools import make_infer_config, make_subfile, submit_condor_job, condor_submit_with_rate_limit
-from infer_data import get_shifts_meta_data, Sequence
+from infer_data import get_shifts_meta_data, Sequence, CCSN_Waveform_Projector, load_h5_as_dict
+# from infer_data import Sequence, CCSN_Waveform_Projector, load_h5_as_dict
 
+EXTREME_CCSN = [
+    "Pan_2021/FR",
+    "Powell_2020/y20"
+]
 
 def infer(
     ifos: list[str],
@@ -52,7 +59,8 @@ def infer(
     gwak_logger(log_file)
 
     ip = get_ip_address()
-    kernel_size = int(kernel_length * sample_rate * stride_batch_size)
+    # kernel_size = int(kernel_length * sample_rate * stride_batch_size)
+    kernel_size = int(1 * sample_rate * stride_batch_size)
     gwak_streamer = f"gwak-{project}-streamer"
 
     # Data handler
@@ -61,13 +69,16 @@ def infer(
 
     num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts)
     arguments=Path("deploy/triton_excution.py").resolve()
+    # if inj_test is not None:
+    os.environ["CCSN_FILE"] = str(Path("deploy/config/ccsn.yaml").resolve())
+    arguments=Path("deploy/triton_inj_excution.py").resolve()
 
     serve_context = serve(
         model_repo_dir, 
         image, 
         log_file=triton_log, 
         wait=False
-    )   
+    )
 
     with serve_context:
         
@@ -80,13 +91,12 @@ def infer(
         start = time.time()
         for fname, (seg_start, seg_end) in zip(fnames, segments):
             for shift in range(num_shifts):
-
+                print(fname, shift)
                 fingerprint = f"{seg_start}{seg_end}{shift}".encode()
                 sequence_id = adler32(fingerprint)
 
                 _shifts = [s * (shift + 1) for s in shifts]
                 job_dir = result_dir / f"condor/job_{submit_num:03d}"
-
 
                 config_file = make_infer_config(
                     job_dir=job_dir,

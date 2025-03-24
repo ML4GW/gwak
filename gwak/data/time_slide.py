@@ -13,11 +13,11 @@ def generate_timeslide(
     sample_rate = 2048,
     highpass = 30,
     fftlength = 2,
-    kernel_length = 0.09765625,  # 0.09765625
+    kernel_length = 1,  # 0.09765625
     psd_length = 64,
-    data_dir = Path("/home/katya.govorkova/gwak2_background"),
-    whitened_dir = Path("/home/hongyin.chen/whiten_timeslide_short.h5"),
-    data_format = "hdf5",
+    data_dir = Path("/home/hongyin.chen/anti_gravity/gwak/gwak/output/O4_MDC_background_short"),
+    whitened_dir = Path("/home/hongyin.chen/whiten_timeslide_one_sec.h5"),
+    data_format = "h5",
     shifts = 2,
     ifos = ["H1", "L1"],
     device="cuda"
@@ -32,7 +32,6 @@ def generate_timeslide(
     splits = [psd_length * sample_rate, split_size]
 
     whitened_data = []
-    
     for shift in range(1, shifts + 1):
         for strain_file in data_dir.glob(f"*.{data_format}"):
             
@@ -47,7 +46,7 @@ def generate_timeslide(
                 # inference_sampling_rate=inference_sampling_rate,
                 inj_type=None,
             )
-            print(shift)
+            print(f"{shift = }")
             for idx, (bh_state, _) in enumerate(sequence):
                 if idx == (len(sequence) - 1):
                     continue
@@ -59,7 +58,7 @@ def generate_timeslide(
                 whitened = whitener(batch.double(), psds.double())
 
                 whitened_data.append(whitened)
-
+            print(whitened_data)
     whitened_data = torch.vstack(whitened_data)
     whitened_data = whitened_data.cpu().detach().numpy()
     with h5py.File(whitened_dir, "w") as g:

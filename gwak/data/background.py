@@ -64,41 +64,41 @@ def gwak_background(
                 g.create_dataset(ifo, data=strains[ifo])
 
 
-        bash_files = [] # List of omicron commands to excute in background.  
-        if omi_paras is not None:
+        # bash_files = [] # List of omicron commands to excute in background.  
+        # if omi_paras is not None:
             
-            for ifo, frametype in zip(ifos, frame_type):
+        #     for ifo, frametype in zip(ifos, frame_type):
 
-                create_lcs(
-                    ifo=ifo,
-                    frametype=f"{ifo}_{frametype}",
-                    start_time=seg_start,
-                    end_time=seg_end,
-                    output_dir= Path(omi_paras["out_dir"]) / f"Segs_{seg_num:05d}", 
-                    urltype="file"
-                )
+        #         create_lcs(
+        #             ifo=ifo,
+        #             frametype=f"{ifo}_{frametype}",
+        #             start_time=seg_start,
+        #             end_time=seg_end,
+        #             output_dir= Path(omi_paras["out_dir"]) / f"Segs_{seg_num:05d}", 
+        #             urltype="file"
+        #         )
 
-            bash_scripts = omicron_bashes(
-                ifos= ifos,
-                start_time=seg_start,
-                end_time=seg_end,
-                project_dir= Path(omi_paras["out_dir"]) / f"Segs_{seg_num:05d}",
-                # INI
-                q_range= omi_paras["q_range"],
-                frequency_range= omi_paras["frequency_range"],
-                frame_type= frame_type,
-                channels= channels,
-                cluster_dt= omi_paras["cluster_dt"],
-                sample_rate= sample_rate,
-                chunk_duration= omi_paras["chunk_duration"],
-                segment_duration= omi_paras["segment_duration"],
-                overlap_duration= omi_paras["overlap_duration"],
-                mismatch_max= omi_paras["mismatch_max"],
-                snr_threshold= omi_paras["snr_threshold"],
-            )
+        #     bash_scripts = omicron_bashes(
+        #         ifos= ifos,
+        #         start_time=seg_start,
+        #         end_time=seg_end,
+        #         project_dir= Path(omi_paras["out_dir"]) / f"Segs_{seg_num:05d}",
+        #         # INI
+        #         q_range= omi_paras["q_range"],
+        #         frequency_range= omi_paras["frequency_range"],
+        #         frame_type= frame_type,
+        #         channels= channels,
+        #         cluster_dt= omi_paras["cluster_dt"],
+        #         sample_rate= sample_rate,
+        #         chunk_duration= omi_paras["chunk_duration"],
+        #         segment_duration= omi_paras["segment_duration"],
+        #         overlap_duration= omi_paras["overlap_duration"],
+        #         mismatch_max= omi_paras["mismatch_max"],
+        #         snr_threshold= omi_paras["snr_threshold"],
+        #     )
 
-            for bash_script in bash_scripts:
-                bash_files.append(bash_script)
+        #     for bash_script in bash_scripts:
+        #         bash_files.append(bash_script)
 
 
             # with ThreadPoolExecutor(max_workers=8) as e: # 8 workers

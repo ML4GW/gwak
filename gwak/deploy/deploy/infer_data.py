@@ -91,7 +91,7 @@ class Sequence:
     def __iter__(self):
 
         # Check if this line will hide potential implmetation error! 
-        limiter = RateLimiter(max_calls=1, period=0.5)
+        limiter = RateLimiter(max_calls=1, period=0.1)
         bg_state = np.empty(self.state_shape, dtype=self.precision) 
         inj_state = None
 

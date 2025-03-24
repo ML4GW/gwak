@@ -15,6 +15,11 @@ from hermes.aeriel.client import InferenceClient
 
 
 
+EXTREME_CCSN = [
+    "Pan_2021/FR",
+    "Powell_2020/y20"
+]
+
 def get_ip_address() -> str:
     """
     Get the local nodes cluster-internal IP address
