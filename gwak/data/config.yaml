@@ -1,11 +1,18 @@
 ifos: ["H1", "L1"]
-state_flag: ["DCS-ANALYSIS_READY_C01:1", "DCS-ANALYSIS_READY_C01:1"] 
-channels: ["DCS-CALIB_STRAIN_CLEAN_C01", "DCS-CALIB_STRAIN_CLEAN_C01"]
-frame_type: ["HOFT_C01", "HOFT_C01"] # H & L (O3)>>> HOFT_C01
-ana_start: 1238166018
-ana_end: 1238170289 
+# state_flag: ["DCS-ANALYSIS_READY_C01:1", "DCS-ANALYSIS_READY_C01:1"] 
+# channels: ["DCS-CALIB_STRAIN_CLEAN_C01", "DCS-CALIB_STRAIN_CLEAN_C01"]
+# frame_type: ["HOFT_C01", "HOFT_C01"] # H & L (O3)>>> HOFT_C01
+# ana_start: 1238166018
+# ana_end: 1238170289 
+
+state_flag: ["DMT-ANALYSIS_READY:1", "DMT-ANALYSIS_READY:1"]
+channels: ["GDS-CALIB_STRAIN_CLEAN", "GDS-CALIB_STRAIN_CLEAN"]
+frame_type: ["HOFT_C00", "HOFT_C00"]
+ana_start: 1403964034
+ana_end: 1406556034
+
 sample_rate: 4096 
-save_dir:  ../output # Will have to implemt with class function that use enviroment variables. 
+save_dir:  ../output/O4_month_after_MDC_background/ # Will have to implemt with class function that use enviroment variables. 
 omi_paras:
   out_dir: "../output/omicron"
   q_range: [3.3166, 108.0]

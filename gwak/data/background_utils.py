@@ -1,3 +1,6 @@
+import torch
+from torch.nn import functional as F 
+import math
 import h5py
 import logging
 import configparser
@@ -292,3 +295,93 @@ class Pathfinder:
 #########################
 ### Strain data utils ###
 #########################
+
+class Sequence:
+
+    def __init__(
+        self,
+        fname: Path,
+        data_format: str, 
+        shifts: list[float],
+        # batch_size: int,
+        ifos: list,
+        kernel_size: int,
+        sample_rate: int,
+        # inference_sampling_rate: float,
+        inj_type=None,
+        precision: str="float32",
+        device: str = "cuda"
+        # state_shape: tuple,
+    ):
+
+        # self.fname = fname
+        self.shifts = shifts
+        # self.batch_size = batch_size
+        self.ifos = ifos
+        self.n_ifos = len(ifos)
+        self.kernel_size = kernel_size
+
+        self.state_shape = (self.n_ifos, kernel_size)
+
+        self.inj_type = inj_type
+        self.precision = precision
+
+        self.sample_rate = sample_rate
+        self.stride = int(sample_rate)
+        self.step_size = self.stride * (kernel_size / sample_rate)
+        
+        self.strain_dict = {}
+        self.fname = fname
+        
+        if data_format in ("h5", "hdf", "hdf5"):
+            with h5py.File(self.fname, "r") as h:
+
+                for ifo in self.ifos:
+                    self.strain_dict[ifo] = torch.Tensor(h[ifo][:]).to(device)
+
+        self.size = len(self.strain_dict[ifo])
+
+    @property
+    def remainder(self):
+        # the number of remaining data points not filling a full batch
+        return (self.size - max(self.shifts)) % self.step_size
+
+    @property
+    def num_pad(self):
+        # the number of zeros we need to pad the last batch
+        # to make it a full batch
+        return int((self.step_size - self.remainder) % self.step_size)
+    
+    def __len__(self):
+
+        return math.ceil((self.size - max(self.shifts)) / self.step_size)
+
+    def __iter__(self):
+
+        # Check if this line will hide potential implmetation error! 
+        bh_state = torch.empty(self.state_shape) 
+        inj_state = None
+
+        for i in range(len(self)):
+
+            last = i == len(self) - 1
+            for ifo_idx, (ifo, shift) in enumerate(zip(self.ifos, self.shifts)): 
+
+                start = int(shift + i * self.step_size)
+                end = int(start + self.kernel_size)
+
+
+                if last and self.remainder:
+                    end = start + int(self.remainder)
+
+                data = self.strain_dict[ifo][start:end]
+                # if this is the last batch
+                # possibly pad it to make it a full batch
+                if last:
+
+                    data = F.pad(data, (0, self.num_pad), "constant", 0)
+
+                bh_state[ifo_idx, :] = data
+
+                        
+            yield bh_state, inj_state
