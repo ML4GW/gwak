@@ -1,5 +1,6 @@
 import os
 import time
+import yaml
 import logging
 import h5py
 from typing import Sequence
@@ -21,7 +22,6 @@ import torch.nn as nn
 from einops import rearrange, repeat
 from losses import SupervisedSimCLRLoss
 from schedulers import WarmupCosineAnnealingLR
-import h5py
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -75,39 +75,44 @@ class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         # Modifiy these to read the last training/valdation data
         # to acess the input shape.
-        X = torch.randn(1, 2, 200) # GWAK 2
-        # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        X = graph(X)
-
+        X = torch.randn(1, 8).to(module.device) # GWAK 2
         trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
 
-        with open(os.path.join(save_dir, "model_JIT.pt"), "wb") as f:
+        with open(os.path.join(save_dir, "mlp_model_JIT.pt"), "wb") as f:
             torch.jit.save(trace, f)
 
 
 class Linear(GwakBaseModelClass):
     def __init__(
             self,
-            backgrounds='/home/hongyin.chen/whiten_timeslide.h5',
-            new_shape=512,
+            backgrounds: str = '/home/hongyin.chen/whiten_timeslide.h5', # timeslides to train against
+            ckpt: str = "../output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/27-1400.ckpt",
+            cfg_path: str = "../output/test_S4_fixedSignals_0p5sec_v2/config.yaml", # pre-trained embedding model
+            new_shape=128,
             n_dims=16,
             learning_rate=1e-3):
         super().__init__()
         self.model = nn.Linear(n_dims, 1)
 
-        # Open the HDF5 file
         with h5py.File(backgrounds, "r") as h:
-            # Load the dataset
-            data = h["data"][:]  # Convert HDF5 dataset to NumPy array
+            # Load data as a NumPy array first
+            data = h["data"][:128*10*20, :, :1024]  # Ensuring it's a NumPy array
 
         # Splitting into train and validation sets (80% train, 20% validation)
         self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
+        self.backgrounds = torch.from_numpy(self.backgrounds).to("cpu")
+        self.val_backgrounds = torch.from_numpy(self.val_backgrounds).to("cpu")
+
+        self.ckpt = ckpt
+        self.cfg_path = cfg_path
+        # Load first model (frozen for inference)
+        with open(self.cfg_path,"r") as fin:
+            cfg = yaml.load(fin,yaml.FullLoader)
+        self.graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        self.graph.eval()
+        self.graph.to(device=self.device)
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
@@ -122,18 +127,11 @@ class Linear(GwakBaseModelClass):
 
     def training_step(self, batch, batch_idx):
         i = batch_idx  # Each batch corresponds to a background chunk
-        small_bkgs = torch.from_numpy(
-            self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape]
-        ).float().to(self.device)
+        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
 
         # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        graph.to(device=self.device)
-        batch = graph(batch[0])
-        small_bkgs = graph(small_bkgs)
+        batch = self.graph.model(batch[0])
+        small_bkgs = self.graph.model(small_bkgs)
 
         background_MV = self.model(small_bkgs)
         signal_MV = self.model(batch)
@@ -159,16 +157,11 @@ class Linear(GwakBaseModelClass):
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         """Validation step processes all validation data at once."""
-        small_bkgs = torch.from_numpy(self.val_backgrounds).float().to(self.device)
+        small_bkgs = self.val_backgrounds.to(self.device)
 
         # Load first model (frozen for inference)
-        weights = "output/test_multiSignal/model_JIT.pt"
-        with open(weights, "rb") as f:
-            graph = torch.jit.load(f)
-        graph.eval() # Set to evaluation mode
-        graph.to(device=self.device)
-        batch = graph(batch[0])
-        small_bkgs = graph(small_bkgs)
+        batch = self.graph.model(batch[0])
+        small_bkgs = self.graph.model(small_bkgs)
 
         background_MV = self.model(small_bkgs)
         signal_MV = self.model(batch)
@@ -207,6 +200,112 @@ class Linear(GwakBaseModelClass):
         callbacks.append(checkpoint)
 
         return callbacks
+
+class MLPModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim=32):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)  # Hidden layer
+        self.fc2 = nn.Linear(hidden_dim, 1)  # Output layer
+        self.activation = nn.ReLU()  # Non-linearity
+        self.sigmaboy = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.activation(self.fc1(x))  # Apply activation
+        x = self.sigmaboy(self.fc2(x))  # Output score (no sigmoid)
+        return x
+
+class NonLinearClassifier(GwakBaseModelClass):
+    def __init__(
+            self,
+            backgrounds: str = '/home/hongyin.chen/whiten_timeslide.h5',
+            ckpt: str = "../output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/27-1400.ckpt",
+            cfg_path: str = "../output/test_S4_fixedSignals_0p5sec_v2/config.yaml",
+            new_shape=128,
+            n_dims=16,
+            learning_rate=1e-3,
+            hidden_dim=32):
+        super().__init__()
+        self.model = MLPModel(n_dims, hidden_dim)
+
+        with h5py.File(backgrounds, "r") as h:
+            data = h["data"][:128*10*20, :, :1024]
+
+        self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
+        self.backgrounds = torch.tensor(self.backgrounds, dtype=torch.float32).to("cpu")
+        self.val_backgrounds = torch.tensor(self.val_backgrounds, dtype=torch.float32).to("cpu")
+
+        self.ckpt = ckpt
+        self.cfg_path = cfg_path
+
+        with open(self.cfg_path, "r") as fin:
+            cfg = yaml.load(fin, yaml.FullLoader)
+        self.graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        self.graph.eval()
+        self.graph.to(device=self.device)
+
+        self.new_shape = new_shape
+        self.learning_rate = learning_rate
+
+        self.save_hyperparameters()
+
+    def forward(self, x):
+        return self.model(x)
+
+    def configure_optimizers(self):
+        return optim.Adam(self.model.parameters(), lr=self.learning_rate)
+
+    def training_step(self, batch, batch_idx):
+        i = batch_idx
+        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
+
+        # Feature extraction
+        signal_feats = self.graph.model(batch[0])
+        background_feats = self.graph.model(small_bkgs)
+
+        # Predictions
+        signal_preds = self.forward(signal_feats)
+        background_preds = self.forward(background_feats)
+
+        # BCE targets: 1 = signal, 0 = background
+        target_signal = torch.ones_like(signal_preds)
+        target_background = torch.zeros_like(background_preds)
+
+        # Compute BCE loss
+        loss_signal = F.binary_cross_entropy(signal_preds, target_signal)
+        loss_background = F.binary_cross_entropy(background_preds, target_background)
+        loss = loss_signal + loss_background
+
+        self.log("train_loss", loss, on_epoch=True, sync_dist=True)
+
+        return loss
+
+    @torch.no_grad()
+    def validation_step(self, batch, batch_idx):
+        small_bkgs = self.val_backgrounds.to(self.device)
+
+        signal_feats = self.graph.model(batch[0])
+        background_feats = self.graph.model(small_bkgs)
+
+        signal_preds = self.forward(signal_feats)
+        background_preds = self.forward(background_feats)
+
+        target_signal = torch.ones_like(signal_preds)
+        target_background = torch.zeros_like(background_preds)
+
+        loss_signal = F.binary_cross_entropy(signal_preds, target_signal)
+        loss_background = F.binary_cross_entropy(background_preds, target_background)
+        loss = loss_signal + loss_background
+
+        self.log("val/loss", loss, sync_dist=True)
+
+        return loss
+
+    def configure_callbacks(self) -> Sequence[pl.Callback]:
+        return [LinearModelCheckpoint(
+            monitor='val/loss',
+            save_last=True,
+            auto_insert_metric_name=False
+        )]
 
 class Encoder(nn.Module):
 
