@@ -435,11 +435,6 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
-
-            # Fix for cusp, kink, and kinkkink where outputs need to be multiplied by sample_rate
-            # TODO: get to the bottom of this!
-            if signal_class in ["Cusp", "Kink", "KinkKink"]:
-                responses = responses * self.sample_rate
             
             all_responses.append(responses)
             if parameters is None:
