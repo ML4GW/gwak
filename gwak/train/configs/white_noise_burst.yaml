@@ -10,7 +10,7 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
-  max_epochs: 10
+  max_epochs: 2
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
 ckpt_path: null
@@ -41,8 +41,8 @@ data:
         psd_length: 64
         fduration: 1
         fftlength: 2
-        batch_size: 8
-        batches_per_epoch: 8
+        batch_size: 4
+        batches_per_epoch: 4
         num_workers: 5
         prior: gwak.data.prior.WhiteNoiseBurstBBC
         waveform:

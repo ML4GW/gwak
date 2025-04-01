@@ -49,4 +49,4 @@ rule train:
 
 rule train_all:
     input:
-        expand(rules.train.log, datatype=['white_noise_burst', 'kinkkink', 'gaussian', 'cusp'])
+        expand(rules.train.log, datatype=['white_noise_burst'])
