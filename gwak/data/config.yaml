@@ -1,4 +1,5 @@
 ifos: ["H1", "L1"]
+
 # state_flag: ["DCS-ANALYSIS_READY_C01:1", "DCS-ANALYSIS_READY_C01:1"] 
 # channels: ["DCS-CALIB_STRAIN_CLEAN_C01", "DCS-CALIB_STRAIN_CLEAN_C01"]
 # frame_type: ["HOFT_C01", "HOFT_C01"] # H & L (O3)>>> HOFT_C01

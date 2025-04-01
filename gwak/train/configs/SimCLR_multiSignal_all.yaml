@@ -1,0 +1,97 @@
+# lightning.pytorch==2.3.2
+seed_everything: 0
+trainer:
+  callbacks:
+    - class_path: callback.ValidationCallback
+  accelerator: gpu
+  devices: [0]
+  # accelerator: auto
+  # devices: auto
+  strategy: ddp_find_unused_parameters_true
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+  log_every_n_steps: 10
+  max_epochs: 100
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 1
+ckpt_path: null
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 1e-4
+model:
+  class_path: models.Tarantula
+  init_args:
+    num_ifos: 2
+    num_timesteps: 200
+    latent_dim: 64
+    num_layers: 4
+    num_head: 2
+    num_cls_layers: 2
+    fc_output_dims: [64,32]
+    dropout: 0.1
+    d_output: 8
+    d_contrastive_space: 8
+    temperature: 0.1
+    supervised_simclr: true
+data:
+  class_path: dataloader.SignalDataloader
+  init_args:
+    signal_classes:
+      - "SineGaussian"
+      - "BBH"
+      - "Gaussian"
+      - "Cusp"
+      - "Kink"
+      - "KinkKink"
+      - "WhiteNoiseBurst"
+    priors:
+      - class_path: gwak.data.prior.SineGaussianBBC
+      - class_path: gwak.data.prior.LAL_BBHPrior
+      - class_path: gwak.data.prior.GaussianBBC
+      - class_path: gwak.data.prior.CuspBBC
+      - class_path: gwak.data.prior.KinkBBC
+      - class_path: gwak.data.prior.KinkkinkBBC
+      - class_path: gwak.data.prior.WhiteNoiseBurstBBC
+    waveforms:
+      - class_path: ml4gw.waveforms.SineGaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.IMRPhenomPv2
+        init_args: {}
+      - class_path: ml4gw.waveforms.Gaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.GenerateString
+        init_args:
+          sample_rate: 0
+      - class_path: ml4gw.waveforms.GenerateString
+        init_args:
+          sample_rate: 0
+      - class_path: ml4gw.waveforms.GenerateString
+        init_args:
+          sample_rate: 0
+      - class_path: ml4gw.waveforms.WhiteNoiseBurst
+        init_args:
+          sample_rate: 0
+          duration: 0
+    extra_kwargs:
+      - null
+      - ringdown_duration: 0.9
+      - null
+      - null
+      - null
+      - null
+      - null
+    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak2_background
+    sample_rate: 2048
+    kernel_length: 1
+    psd_length: 64
+    fduration: 1
+    fftlength: 2
+    batch_size: 512
+    batches_per_epoch: 50
+    num_workers: 2
+    data_saving_file: null
