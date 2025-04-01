@@ -71,3 +71,4 @@ rule train_linear_metric:
 rule train_linear_all:
     input:
         expand(rules.train_linear_metric.log, datatype=['SimCLR_multiSignal_all'])
+

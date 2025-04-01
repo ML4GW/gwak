@@ -672,6 +672,7 @@ def generate_waveforms_standard(batch_size, prior, waveform, loader, config, par
 
         cross, plus = waveform(**parameters)
 
+
         # compute detector responses
         responses = compute_observed_strain(
             dec,

@@ -23,7 +23,7 @@ def export(
     kernel_length: float,
     fduration: float,
     fftlength: int,
-    inference_sampling_rate: int,
+    inference_sampling_rate: float,
     sample_rate: int,
     preproc_instances: int,
     # highpass: Optional[float] = None,
@@ -34,7 +34,6 @@ def export(
     
     weights = model_dir / project / "model_JIT.pt"
     output_dir = output_dir / project
-    batch_size = background_batch_size * stride_batch_size
     kernel_size = int(kernel_length * sample_rate)
 
     with open(weights, "rb") as f:
@@ -55,7 +54,7 @@ def export(
         scale_model(gwak, gwak_instances)
 
     # input_shape = (batch_size, kernel_size, num_ifos) # Apply this for gwak_1
-    input_shape = (batch_size, num_ifos, kernel_size) 
+    input_shape = (stride_batch_size, num_ifos, kernel_size) 
     kwargs = {}
     if platform == qv.Platform.ONNX:
         kwargs["opset_version"] = 13
