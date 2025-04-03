@@ -11,7 +11,7 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
   log_every_n_steps: 10
-  max_epochs: 2
+  max_epochs: 50
   limit_val_batches: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -89,7 +89,7 @@ data:
       - null
       - null
       - null
-    data_dir: /home/katya.govorkova/gwak2_background
+    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak2_background
     sample_rate: 2048
     kernel_length: 0.5
     psd_length: 64
