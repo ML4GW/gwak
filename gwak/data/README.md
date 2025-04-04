@@ -1,5 +1,5 @@
-To generate strain data run the following commands.
+To download strain data run the following commands from `gwak/gwak` folder!
 ```
 conda activate gwak 
-python cli.py --config config.yaml
+snakemake pull_data
 ```
