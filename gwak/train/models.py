@@ -940,6 +940,8 @@ class Crayon(GwakBaseModelClass):
 
         self.val_outputs = []
 
+        self.save_hyperparameters()
+
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr_opt)
         return optimizer
