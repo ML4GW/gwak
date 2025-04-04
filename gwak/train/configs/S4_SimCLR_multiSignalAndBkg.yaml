@@ -20,7 +20,7 @@ model:
   class_path: models.Crayon
   init_args:
     num_ifos: 2
-    num_timesteps: 1024
+    num_timesteps: 2048
     d_output: 8
     d_contrastive_space: 8
     temperature: 0.1
@@ -90,7 +90,7 @@ data:
       - null
       - null
     data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak2_background
-    sample_rate: 2048
+    sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64
     fduration: 1

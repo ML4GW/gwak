@@ -58,7 +58,7 @@ class GwakFileDataloader(pl.LightningDataModule):
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
 
-        all_files = list(Path(data_dir).glob('*.hdf5'))
+        all_files = list(Path(data_dir).glob('*.h5'))
         n_all_files = len(all_files)
         n_train_files = int(n_all_files * (1 - val_split - test_split))
         n_val_files = int(n_all_files * val_split)
@@ -233,7 +233,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
 
-        all_files = list(Path(data_dir).glob('*.hdf5'))
+        all_files = list(Path(data_dir).glob('*.h5'))
         n_all_files = len(all_files)
         n_train_files = int(n_all_files * (1 - val_split - test_split))
         n_val_files = int(n_all_files * val_split)
