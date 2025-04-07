@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.distributions.uniform import Uniform
+import torch.distributions as torchdist
 from tqdm import tqdm
 import lal
 from astropy import units as u
@@ -15,7 +16,6 @@ from ml4gw.waveforms.conversion import (
     bilby_spins_to_lalsim, 
     chirp_mass_and_mass_ratio_to_components
 )
-
 
 class Constant:
 
@@ -53,6 +53,10 @@ class BasePrior:
 
         return self.sampled_params
 
+class LogUniform(torchdist.TransformedDistribution):
+    def __init__(self, lb, ub):
+        super(LogUniform, self).__init__(torchdist.Uniform(lb.log(), ub.log()),
+                                         torchdist.ExpTransform())
 
 class SineGaussianHighFrequency(BasePrior):
 
@@ -90,7 +94,7 @@ class SineGaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = Uniform(1e-24, 5e-20), 
+            hrss = LogUniform(1e-24, 5e-20), 
             quality = Uniform(3, 700),
             frequency = Uniform(14, 3067),
             phase = Uniform(0, torch.pi),
@@ -103,7 +107,7 @@ class GaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = Uniform(1e-24, 1e-16), 
+            hrss = LogUniform(1e-24, 1e-16), 
             polarization = Uniform(0, torch.pi),
             eccentricity = Uniform(0, 1)
         )
@@ -117,7 +121,7 @@ class WhiteNoiseBurstBBC(BasePrior):
             bandwidth = Uniform(32, 2048),
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
-            int_hdot_squared = Uniform(0, 1)
+            int_hdot_squared = LogUniform(7.3e-41, 1.6e-35)
         )
 
 class CuspBBC(BasePrior):
