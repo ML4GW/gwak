@@ -1,0 +1,184 @@
+# lightning.pytorch==2.3.2
+seed_everything: 0
+trainer:
+  accelerator: gpu
+  strategy: ddp_find_unused_parameters_true
+  devices:
+  - 0
+  num_nodes: 1
+  precision: null
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      name: null
+      save_dir: output/SimCLR_multiSignal_all
+      version: null
+      offline: false
+      dir: null
+      id: null
+      anonymous: null
+      project: null
+      log_model: false
+      experiment: null
+      prefix: ''
+      checkpoint_name: null
+      job_type: null
+      config: null
+      entity: null
+      reinit: null
+      tags: null
+      group: null
+      notes: null
+      magic: null
+      config_exclude_keys: null
+      config_include_keys: null
+      mode: null
+      allow_val_change: null
+      resume: null
+      force: null
+      tensorboard: null
+      sync_tensorboard: null
+      monitor_gym: null
+      save_code: null
+      fork_from: null
+      resume_from: null
+      settings: null
+  callbacks:
+  - class_path: callback.ValidationCallback
+  fast_dev_run: false
+  max_epochs: 50
+  min_epochs: null
+  max_steps: -1
+  min_steps: null
+  max_time: null
+  limit_train_batches: null
+  limit_val_batches: null
+  limit_test_batches: null
+  limit_predict_batches: null
+  overfit_batches: 0.0
+  val_check_interval: null
+  check_val_every_n_epoch: 1
+  num_sanity_val_steps: null
+  log_every_n_steps: 10
+  enable_checkpointing: null
+  enable_progress_bar: null
+  enable_model_summary: null
+  accumulate_grad_batches: 1
+  gradient_clip_val: null
+  gradient_clip_algorithm: null
+  deterministic: null
+  benchmark: null
+  inference_mode: true
+  use_distributed_sampler: true
+  profiler: null
+  detect_anomaly: false
+  barebones: false
+  plugins: null
+  sync_batchnorm: false
+  reload_dataloaders_every_n_epochs: 0
+  default_root_dir: null
+ckpt_path: null
+optimizer:
+  class_path: torch.optim.AdamW
+  init_args:
+    lr: 0.0001
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0.01
+    amsgrad: false
+    maximize: false
+    foreach: null
+    capturable: false
+    differentiable: false
+    fused: null
+model:
+  class_path: models.Tarantula
+  init_args:
+    num_ifos: 2
+    num_timesteps: 200
+    latent_dim: 64
+    num_layers: 4
+    num_head: 2
+    num_cls_layers: 2
+    fc_output_dims:
+    - 64
+    - 32
+    d_output: 8
+    d_contrastive_space: 8
+    dropout: 0.1
+    cls_dropout: 0.0
+    feedforward_factor: 4
+    temperature: 0.1
+    supervised_simclr: true
+data:
+  class_path: dataloader.SignalDataloader
+  init_args:
+    signal_classes:
+    - SineGaussian
+    - BBH
+    - Gaussian
+    - Cusp
+    - Kink
+    - KinkKink
+    - WhiteNoiseBurst
+    priors:
+    - class_path: gwak.data.prior.SineGaussianBBC
+    - class_path: gwak.data.prior.LAL_BBHPrior
+      init_args:
+        f_min: 30
+        f_max: 2048
+        duration: 2
+        f_ref: 20.0
+    - class_path: gwak.data.prior.GaussianBBC
+    - class_path: gwak.data.prior.CuspBBC
+    - class_path: gwak.data.prior.KinkBBC
+    - class_path: gwak.data.prior.KinkkinkBBC
+    - class_path: gwak.data.prior.WhiteNoiseBurstBBC
+    waveforms:
+    - class_path: ml4gw.waveforms.SineGaussian
+      init_args:
+        sample_rate: 2048.0
+        duration: 1.09765625
+    - class_path: ml4gw.waveforms.IMRPhenomPv2
+      init_args: {}
+    - class_path: ml4gw.waveforms.Gaussian
+      init_args:
+        sample_rate: 2048.0
+        duration: 1.09765625
+    - class_path: ml4gw.waveforms.GenerateString
+      init_args:
+        sample_rate: 2048.0
+        device: cpu
+    - class_path: ml4gw.waveforms.GenerateString
+      init_args:
+        sample_rate: 2048.0
+        device: cpu
+    - class_path: ml4gw.waveforms.GenerateString
+      init_args:
+        sample_rate: 2048.0
+        device: cpu
+    - class_path: ml4gw.waveforms.WhiteNoiseBurst
+      init_args:
+        sample_rate: 2048.0
+        duration: 1.09765625
+        device: cpu
+    extra_kwargs:
+    - null
+    - ringdown_duration: 0.9
+    - null
+    - null
+    - null
+    - null
+    - null
+    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak2_background
+    sample_rate: 2048
+    kernel_length: 0.09765625
+    psd_length: 64
+    fduration: 1
+    fftlength: 2
+    batch_size: 256
+    batches_per_epoch: 10
+    num_workers: 2
+    data_saving_file: output/mixed_SG_BBH.h5

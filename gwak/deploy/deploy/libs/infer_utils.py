@@ -15,6 +15,11 @@ from hermes.aeriel.client import InferenceClient
 
 
 
+EXTREME_CCSN = [
+    "Pan_2021/FR",
+    "Powell_2020/y20"
+]
+
 def get_ip_address() -> str:
     """
     Get the local nodes cluster-internal IP address
@@ -96,7 +101,7 @@ def get_hp_hc_from_q2ij(
     return hp, hc
 
 
-def on_grid_pol_to_sim(quad_moment, sqrtnum):
+def on_grid_pol_to_sim(quad_moment, sqrtnum=16):
 
     CosTheta = np.linspace(-1, 1, sqrtnum)
     theta = np.arccos(CosTheta)

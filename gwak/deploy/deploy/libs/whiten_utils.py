@@ -93,7 +93,6 @@ class PsdEstimator(torch.nn.Module):
             X = X[-1] # Strain data is at axis=-1
 
         psds = self.spectral_density(background.double())
-        # psds = psds.transpose(0,1)
         return X, psds
 
 
@@ -151,14 +150,17 @@ class BatchWhitener(torch.nn.Module):
             )
         x, psd = self.psd_estimator(x)
         whitened = self.whitener(x.double(), psd)
+
         # unfold x and then put it into the expected shape.
         # Note that if x has both signal and background
         # batch elements, they will be interleaved along
         # the batch dimension after unfolding
-        x = unfold_windows(whitened, self.kernel_size, self.stride_size) # (batch, num_ifo, kernel_size)
-        x = x.reshape(-1, num_channels, self.kernel_size) # Apply this for gwak_1
+        # x = unfold_windows(whitened, self.kernel_size, self.stride_size) # (batch, num_ifo, kernel_size)
+        # x = x.reshape(-1, num_channels, self.kernel_size) # Apply this for gwak_1
         # x = x.reshape(-1, self.kernel_size, num_channels) # Apply this for gwak_1
         # whitened = whitened.transpose(1, 2) # Apply this for gwak_1
+        x = unfold_windows(whitened, self.kernel_size, self.stride_size)
+        x = x.reshape(-1, num_channels, self.kernel_size)
         if self.augmentor is not None:
             x = self.augmentor(x)
         if self.return_whitened:
