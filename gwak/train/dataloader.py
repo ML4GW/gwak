@@ -22,9 +22,9 @@ from ml4gw.distributions import Cosine
 from gwak import data
 from abc import ABC
 import copy
-import sys
 
-class GwakFileDataloader(pl.LightningDataModule):
+
+class TimeSlidesDataloader(pl.LightningDataModule):
 
     def __init__(
         self,
@@ -59,6 +59,8 @@ class GwakFileDataloader(pl.LightningDataModule):
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5'))
+
+        all_files = list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
         # adding handling for the case where data_dir has subdirs for train/test/val
         if n_all_files == 0:
@@ -192,7 +194,14 @@ class GwakFileDataloader(pl.LightningDataModule):
         if self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             # unpack the batch
             [batch] = batch
-            # inject waveforms; maybe also whiten data preprocess etc..
+
+            # Time-slide L1 relative to H1 before whitening
+            max_shift = batch.shape[-1] // 10  # 10% of signal length
+            shifts = torch.randint(-max_shift, max_shift + 1, (batch.shape[0],), device=batch.device)
+            for i, shift in enumerate(shifts):
+                batch[i, 1] = torch.roll(batch[i, 1], shifts=shift.item(), dims=0)  # roll L1
+
+            # whiten
             batch = self.whiten(batch)
 
             if self.trainer.training and (self.data_saving_file is not None):
@@ -259,7 +268,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
 
-        all_files = list(Path(data_dir).glob('*.h5'))
+        all_files = list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
         n_train_files = int(n_all_files * (1 - val_split - test_split))
         n_val_files = int(n_all_files * val_split)

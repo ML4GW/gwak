@@ -1,6 +1,6 @@
-project: white_noise_burst
-model_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output
-output_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output/export
+project: combination
+model_dir: /home/eric.moreno/gwak2/gwak/output
+output_dir: /home/eric.moreno/gwak2/gwak/output/export
 clean: True
 background_batch_size: 2 # Fixed setting Channel 1 PSD estimeter Channel 2 Processing strain data 
 stride_batch_size: 256
