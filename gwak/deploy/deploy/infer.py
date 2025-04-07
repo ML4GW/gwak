@@ -58,8 +58,8 @@ def infer(
 
     gwak_logger(log_file)
 
-    #ip = get_ip_address()
-    ip = '10.14.0.121'
+    ip = get_ip_address()
+    #ip = '10.14.0.121'
     kernel_size = int(kernel_length * sample_rate * stride_batch_size)
     gwak_streamer = f"gwak-{project}-streamer"
 
