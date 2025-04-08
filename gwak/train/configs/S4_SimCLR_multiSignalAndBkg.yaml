@@ -89,7 +89,7 @@ data:
       - null
       - null
       - null
-    data_dir: /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/train
+    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background
     sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64
