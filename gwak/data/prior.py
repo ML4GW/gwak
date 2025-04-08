@@ -16,6 +16,7 @@ from ml4gw.waveforms.conversion import (
     bilby_spins_to_lalsim, 
     chirp_mass_and_mass_ratio_to_components
 )
+import math
 
 class Constant:
 
@@ -55,7 +56,7 @@ class BasePrior:
 
 class LogUniform(torchdist.TransformedDistribution):
     def __init__(self, lb, ub):
-        super(LogUniform, self).__init__(torchdist.Uniform(lb.log(), ub.log()),
+        super(LogUniform, self).__init__(torchdist.Uniform(math.log(lb), math.log(ub)),
                                          torchdist.ExpTransform())
 
 class SineGaussianHighFrequency(BasePrior):

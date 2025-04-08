@@ -22,6 +22,7 @@ from ml4gw.distributions import Cosine
 from gwak import data
 from abc import ABC
 import copy
+import sys
 
 
 class TimeSlidesDataloader(pl.LightningDataModule):
@@ -58,16 +59,14 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
-        all_files = list(Path(data_dir).glob('*.h5'))
-
-        all_files = list(Path(data_dir).glob('*.hdf5'))
+        all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5')) 
         n_all_files = len(all_files)
         # adding handling for the case where data_dir has subdirs for train/test/val
         if n_all_files == 0:
             subdirs = list(Path(data_dir).glob('*'))
             train, test, val = None, None, None
             for subdir in subdirs:
-                subdir_files = list(Path(data_dir).glob(f'{subdir}/*.h5'))
+                subdir_files = list(subdir.glob('*.h5')) + list(subdir.glob('*.hdf5'))
                 if subdir.stem == 'train':
                     train = subdir_files
                 elif subdir.stem == 'test':
@@ -87,11 +86,10 @@ class TimeSlidesDataloader(pl.LightningDataModule):
                 print("You passed a directory with a test/ directory but no val/, setting val set = test set")
                 val = test
             return train, val, test
-        
-        n_train_files = int(n_all_files * (1 - val_split - test_split))
-        n_val_files = int(n_all_files * val_split)
-
-        return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
+        else:
+            n_train_files = int(n_all_files * (1 - val_split - test_split))
+            n_val_files = int(n_all_files * val_split)
+            return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
     def train_dataloader(self):
 
@@ -267,13 +265,37 @@ class GwakBaseDataloader(pl.LightningDataModule):
         }
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
-
-        all_files = list(Path(data_dir).glob('*.hdf5'))
+        all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
-        n_train_files = int(n_all_files * (1 - val_split - test_split))
-        n_val_files = int(n_all_files * val_split)
-
-        return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
+        # adding handling for the case where data_dir has subdirs for train/test/val
+        if n_all_files == 0:
+            subdirs = list(Path(data_dir).glob('*'))
+            train, test, val = None, None, None
+            for subdir in subdirs:
+                subdir_files = list(subdir.glob('*.h5')) + list(subdir.glob('*.hdf5'))
+                if subdir.stem == 'train':
+                    train = subdir_files
+                elif subdir.stem == 'test':
+                    test = subdir_files
+                elif subdir.stem == 'val':
+                    val = subdir_files
+            if train is None:
+                print("You passed a directory with no h5 files and no train/ subdir!")
+                sys.exit(1)
+            elif test is None and val is None:
+                print("You passed a directory with no test/ or val/ subdir!")
+                sys.exit(1)
+            elif test is None and val is not None:
+                print("You passed a directory with a val/ directory but no test/, setting test set = val set")
+                test = val
+            elif test is not None and val is None:
+                print("You passed a directory with a test/ directory but no val/, setting val set = test set")
+                val = test
+            return train, val, test
+        else:
+            n_train_files = int(n_all_files * (1 - val_split - test_split))
+            n_val_files = int(n_all_files * val_split)
+            return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
     def train_dataloader(self):
 
