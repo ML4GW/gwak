@@ -439,7 +439,6 @@ class SignalDataloader(GwakBaseDataloader):
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
-            print(extra_kwargs[i],extra_kwargs[i] is None)
             if extra_kwargs[i] is not None:
                 signal_config.update(extra_kwargs[i])
             self.signal_configs.append(signal_config)

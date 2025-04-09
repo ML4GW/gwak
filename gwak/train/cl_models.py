@@ -776,7 +776,7 @@ class Crayon(GwakBaseModelClass):
             plt.legend(handles=patches,ncol=2,fontsize=12)
 
             buf = BytesIO()
-            plt.savefig(buf,format='png')
+            plt.savefig(buf,format='jpg',dpi=200)
             buf.seek(0)
             self.logger.log_image(
                 'val/space',
