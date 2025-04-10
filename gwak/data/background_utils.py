@@ -239,12 +239,13 @@ def omicron_bashes(
             config.write(config_file)
             
         omicron_args = [
-            f"omicron-process {section}",
+            # f"omicron-process {section}", # Env pyomicron method
+            f"python -m omicron.cli.process {section}", # Pyomicron submodule method
             f"--gps {start_time} {end_time}",
             f"--ifo {ifo}",
-            f"--config-file {str(config_file_path)}",
-            f"--output-dir {str(output_dir)}",
-            f"--cache-file {cache_file}",
+            f"--config-file {str(config_file_path.resolve())}",
+            f"--output-dir {str(output_dir.resolve())}",
+            f"--cache-file {cache_file.resolve()}",
             # f"--log-file {str(project_dir/ifo)}",
             "--verbose"
             # "request_disk=100M",
