@@ -37,8 +37,8 @@ def run_infer(
 
     inj_type=None # Set injection type manully
     client = InferenceClient(f"{triton_server_ip}:8001", gwak_streamer)
-    print(os.environ["CCSN_FILE"])
-    # results = [""]
+    #print(os.environ["CCSN_FILE"])
+    results = []
     with client:
 
         sequence = Sequence(
@@ -65,7 +65,7 @@ def run_infer(
                 sequence_id=sequence_id,
                 sequence_start=sequence_start,
                 sequence_end=sequence_end,
-            )
+             )
 
             # Retrieve response from the triton server. 
             result = client.get()
