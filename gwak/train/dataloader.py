@@ -455,7 +455,7 @@ class SignalDataloader(GwakBaseDataloader):
         
         return all_responses, output_params, output_ras, output_decs, output_phics
 
-    def inject(self, batch, waveforms):
+    def inject(self, batch, waveforms, output_snrs = False):
 
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
@@ -522,7 +522,7 @@ class SignalDataloader(GwakBaseDataloader):
         whitened = whitener(injected.double(), psds.double())
 
         psds_resampled = F.interpolate(psds.double(), size=1537, mode='linear', align_corners=False)
-        snrs = compute_ifo_snr(injected.double(), psds_resampled, 2048)
+        snrs = compute_ifo_snr(injected.double(), psds_resampled, self.sample_rate)
 
         # compute network SNR 
         snrs = snrs**2
@@ -531,8 +531,11 @@ class SignalDataloader(GwakBaseDataloader):
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
         whitened = whitened / stds
-
-        return whitened
+        
+        if output_snrs:
+            return whitened, snrs
+        else:
+            return whitened
     
     def multiInject(self,waveforms,batch):
         sub_batches = []
@@ -549,7 +552,7 @@ class SignalDataloader(GwakBaseDataloader):
         idx_lo = 0
         for i in range(self.num_classes):
             print(i)
-            whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i])
+            whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i], output_snrs=True)
             sub_batches.append(whitened)
             sub_batches_snr.append(snrs)
             #sub_batches.append(self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
