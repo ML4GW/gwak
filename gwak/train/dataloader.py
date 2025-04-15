@@ -14,7 +14,7 @@ from lightning.pytorch.loggers import WandbLogger
 import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
 from ml4gw.transforms import SpectralDensity, Whiten
-from ml4gw.gw import compute_observed_strain, get_ifo_geometry
+from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_ifo_snr
 
 from torch.distributions.uniform import Uniform
 from ml4gw.distributions import Cosine
@@ -521,6 +521,13 @@ class SignalDataloader(GwakBaseDataloader):
 
         whitened = whitener(injected.double(), psds.double())
 
+        psds_resampled = F.interpolate(psds.double(), size=1537, mode='linear', align_corners=False)
+        snrs = compute_ifo_snr(injected.double(), psds_resampled, 2048)
+
+        # compute network SNR 
+        snrs = snrs**2
+        snrs = torch.sum(snrs, dim=-1)  ** 0.5
+
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
         whitened = whitened / stds
@@ -535,6 +542,21 @@ class SignalDataloader(GwakBaseDataloader):
             idx_lo += self.num_per_class[i]
         batch = torch.cat(sub_batches)
         return batch
+    
+    def multiInject_SNR(self,waveforms,batch):
+        sub_batches = []
+        sub_batches_snr = []
+        idx_lo = 0
+        for i in range(self.num_classes):
+            print(i)
+            whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i])
+            sub_batches.append(whitened)
+            sub_batches_snr.append(snrs)
+            #sub_batches.append(self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
+            idx_lo += self.num_per_class[i]
+        batch = torch.cat(sub_batches)
+        snrs = torch.cat(sub_batches_snr)
+        return batch, snrs
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
 
