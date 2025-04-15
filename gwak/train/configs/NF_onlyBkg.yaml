@@ -4,7 +4,7 @@ trainer:
   callbacks:
     - class_path: callback.ValidationCallback
   accelerator: gpu
-  devices: [1]
+  devices: [0,1,2,3]
   # accelerator: auto
   # devices: auto
   strategy: ddp_find_unused_parameters_true
@@ -20,8 +20,8 @@ model:
 data:
   class_path: dataloader.TimeSlidesDataloader
   init_args:
-    data_dir: /home/katya.govorkova/gwak2_background/train
-    sample_rate: 2048
+    data_dir: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/train
+    sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64
     fduration: 1
