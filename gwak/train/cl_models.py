@@ -735,7 +735,7 @@ class Crayon(GwakBaseModelClass):
             sync_dist=True)
 
         if self.supervised_simclr:
-            self.val_outputs.append((loss, x_embd.cpu().numpy(), labels.cpu().numpy()))
+            self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
         else:
             return loss
     
