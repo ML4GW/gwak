@@ -11,7 +11,7 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
   log_every_n_steps: 10
-  max_epochs: 50
+  max_epochs: 4
   limit_val_batches: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -46,6 +46,7 @@ data:
       - "KinkKink"
       - "WhiteNoiseBurst"
       - "Background"
+      # - "Glitch"
     priors:
       - class_path: gwak.data.prior.SineGaussianBBC
       - class_path: gwak.data.prior.LAL_BBHPrior
@@ -55,6 +56,7 @@ data:
       - class_path: gwak.data.prior.KinkkinkBBC
       - class_path: gwak.data.prior.WhiteNoiseBurstBBC
       - null
+      # - null [0, 0.25, 0.25, 0.5]
     waveforms:
       - class_path: ml4gw.waveforms.SineGaussian
         init_args:
@@ -89,13 +91,14 @@ data:
       - null
       - null
       - null
-    data_dir: /n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background
+    # data_dir: /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/train
+    data_dir: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/train
     sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64
     fduration: 1
     fftlength: 2
-    batch_size: 512
-    batches_per_epoch: 50
+    batch_size: 16
+    batches_per_epoch: 16
     num_workers: 4
     data_saving_file: null

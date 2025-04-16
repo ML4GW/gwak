@@ -118,7 +118,7 @@ def gwak_background(
                     e.submit(run_bash, bash_file)
 
                 # Generate a glitch_info.h5 file that stores omicron informations 
-                glitch_merger = glitch_merger(
+                glitch_merger(
                     ifos=ifos,
                     omicron_path=omi_paras["out_dir"],
                     channels=channels

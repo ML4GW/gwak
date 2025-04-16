@@ -307,35 +307,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 batches_per_epoch=self.batches_per_epoch,
                 coincident=False,
             )
-
-        #pin_memory = isinstance(
-        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        #)
         dataloader = torch.utils.data.DataLoader(
-            dataset, num_workers=self.num_workers, pin_memory=False
-        )
-        return dataloader
-
-    def val_dataloader(self):
-        dataset = Hdf5TimeSeriesDataset(
-            self.val_fnames,
-            channels=['H1', 'L1'],
-            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
-        )
-
-        #pin_memory = isinstance(
-        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        #)
-        dataloader = torch.utils.data.DataLoader(
-            dataset, num_workers=self.num_workers, pin_memory=False
-        )
-        return dataloader
-    
-    def test_dataloader(self):
-        dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
             channels=['H1', 'L1'],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
@@ -477,26 +449,12 @@ class SignalDataloader(GwakBaseDataloader):
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
-                )
-            elif signal_class == "Background":
-                responses, params, ra, dec, phic = None, None, None, None, None
-            else:
-                responses, params, ra, dec, phic = generate_waveforms_standard(
-                    self.num_per_class[i],
                     self.priors[i],
                     self.waveforms[i],
                     self,
                     self.signal_configs[i],
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
-                    dec=decs[i] if decs is not None else None
-                )
-            
-            all_responses.append(responses)
-            if parameters is None:
-                output_params.append(params)
-            if ras is None:
-                output_ras.append(ra)
             if decs is None:
                 output_decs.append(dec)
             output_phics.append(phic)
@@ -508,35 +466,16 @@ class SignalDataloader(GwakBaseDataloader):
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
         splits = [batch.size(-1) - split_size, split_size]
-        psd_data, batch = torch.split(batch, splits, dim=-1)
-
-        # psd estimator
-        # takes tensor of shape (batch_size, num_ifos, psd_length)
-        spectral_density = SpectralDensity(
-            self.sample_rate,
             self.fftlength,
             average = 'median'
         )
         spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
         # calculate psds
-        psds = spectral_density(psd_data.double())
-
-        # Waveform padding
-        if waveforms is not None:
-            inj_len = waveforms.shape[-1]
-            window_len = splits[1]
-            half = int((window_len - inj_len)/2)
-            first_half, second_half = half, window_len - half - inj_len
 
             # old implementation - pad with zeros if inj_len < window_len
             # otherwise take the center chunk of waveform with length window_len
-            #waveforms = F.pad(
-            #    input=waveforms,
-            #    pad=(first_half, second_half),
-            #    mode='constant',
-            #    value=0
-            #)
+        
 
             # new implementation: center the window of length window_len
             # about the max amplitude point in the signal waveform
@@ -643,20 +582,10 @@ class SignalDataloader(GwakBaseDataloader):
                     self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
                     self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
 
-            if self.trainer.validating and (self.data_saving_file is not None):
-                idx_curr = 0
-                for i,cls in enumerate(self.signal_classes):
-                    bk_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_BK{cls}"
-                    inj_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_INJ{cls}"
                     label_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_LAB{cls}"
                     data_range = slice(idx_curr,idx_curr+self.num_per_class[i])
                     idx_curr += self.num_per_class[i]
 
-                    self.data_group.create_dataset(bk_step, data = batch[data_range].cpu())
-                    self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
-                    self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
-
-            return batch, labels
 
 class AugmentationSignalDataloader(SignalDataloader):
     def __init__(
@@ -689,20 +618,10 @@ class AugmentationSignalDataloader(SignalDataloader):
 
             # generate waveforms with one set of parameters
             waveforms_aug0, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
-
-            # resample various parameters depending on augmentation settings
-            if self.sky_location_augmentation:
-                for i in range(self.num_classes):
-                    ras[i] = self.ra_prior.sample((self.num_per_class[i],))
                     decs[i] = self.dec_prior.sample((self.num_per_class[i],))
             if self.distance_augmentation:
                 for i in range(self.num_classes):
                     params[i]['distance'] = self.priors[i].sample(self.num_per_class[i])['distance']
-            if self.tc_augmentation:
-                pass # not sure what this one is meant to be, but it wasn't implemented yet
-
-            # generate another set of waveforms with augmented parameters
-            waveforms_aug1, _, _, _, _ = self.generate_waveforms(batch.shape[0], parameters=params, ras=ras, decs=decs)
             
             # inject waveforms; maybe also whiten data preprocess etc..
 
@@ -736,19 +655,10 @@ class AugmentationSignalDataloader(SignalDataloader):
                 self.data_group.create_dataset(label_step, data = labels.cpu())
 
             return batch, labels
-        
-def generate_waveforms_standard(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
-        # get detector orientations
-        ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
         # sample from prior and generate waveforms
         if parameters is None:
-            parameters = prior.sample(batch_size) # dict[str, torch.tensor]
-        if ra is None:
-            ra = loader.ra_prior.sample((batch_size,))
-        if dec is None:
-            dec = loader.dec_prior.sample((batch_size,))
         phic = loader.phic_prior.sample((batch_size,))
 
         cross, plus = waveform(**parameters)
@@ -783,16 +693,7 @@ def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, paramete
             dec = loader.dec_prior.sample((batch_size,))
 
         cross, plus = waveform(**parameters)
-        cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)
-        # Normalization
-        cross *= config['sample_rate']
-        plus *= config['sample_rate']
-
-        # roll the waveforms to join
-        # the coalescence and ringdown
-        ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
-        cross = torch.roll(cross, -ringdown_size, dims=-1)
-        plus = torch.roll(plus, -ringdown_size, dims=-1)
+def generate_waveforms_standard(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
 
         # compute detector responses
         responses = compute_observed_strain(
@@ -809,4 +710,6 @@ def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, paramete
         )
         responses = responses.to('cuda') if torch.cuda.is_available() else responses
 
-        return responses, parameters, ra, dec, parameters['phic']
+        return responses, parameters, ra, dec, parameters['phic']def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
+def generate_waveforms_standard(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
+        return responses, parameters, ra, dec, parameters['phic']def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):

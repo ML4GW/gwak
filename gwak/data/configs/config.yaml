@@ -4,7 +4,8 @@ state_flag: ["DMT-ANALYSIS_READY:1", "DMT-ANALYSIS_READY:1"]
 channels: ["GDS-CALIB_STRAIN_CLEAN", "GDS-CALIB_STRAIN_CLEAN"]
 frame_type: ["HOFT_C00", "HOFT_C00"]
 ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_2/O4b-2
-ana_end: 1403964034
+# ana_end: 1403964034
+ana_end: 1402069900
 sample_rate: 4096
 save_dir: output/O4_MDC_background/
 omi_paras:

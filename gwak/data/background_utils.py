@@ -52,7 +52,7 @@ def get_conincident_segs(
     segs = []
 
     for contents in flags.intersection().active.to_table():
-
+        print(f"Preparing segment data between {contents['start']} and {contents['end']}")
         segs.append((contents["start"], contents["end"]))
 
     return segs
@@ -140,7 +140,7 @@ def glitch_merger(
     for i, ifo in enumerate(ifos):
 
         glitch_dir = \
-            omicron_path / f"{ifo}/trigger_output/merge/{ifo}:{channels[i]}"
+            Path(omicron_path) / f"{ifo}/trigger_output/merge/{ifo}:{channels[i]}"
 
         h5_name = {}
         for key in glitch_keys:
@@ -156,6 +156,7 @@ def glitch_merger(
                     h5_name[key].append(h["triggers"][key])
                     
         for key in glitch_keys:
+            print(key, h5_name[key])
             h5_name[key] = np.concatenate(h5_name[key])
             
         if output_file is None:

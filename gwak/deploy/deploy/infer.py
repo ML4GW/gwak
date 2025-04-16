@@ -80,13 +80,13 @@ def infer(
         model_repo_dir, 
         image, 
         log_file=triton_log, 
-        wait=False
+        wait=True
     )
 
     with serve_context:
         
         logging.info(f"Waiting {load_model_patients} seconds to load model to triton!")
-        time.sleep(load_model_patients)
+        # time.sleep(load_model_patients)
 
         submit_num = 0
         sub_files = []

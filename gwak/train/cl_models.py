@@ -292,8 +292,7 @@ class Autoencoder(GwakBaseModelClass):
                     d_output = 10)
 
     def training_step(self, batch, batch_idx):
-        #print(271, batch.shape)
-        #assert 0
+
         x = batch
 
         x = x.transpose(1, 2)

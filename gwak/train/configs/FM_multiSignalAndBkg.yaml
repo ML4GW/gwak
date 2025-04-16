@@ -72,7 +72,8 @@ data:
       - null
       - null
       - null
-    data_dir: /home/katya.govorkova/gwak2_background/train
+    # data_dir: /home/katya.govorkova/gwak2_background/train
+    data_dir: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/train
     sample_rate: 2048
     kernel_length: 0.5
     psd_length: 64
