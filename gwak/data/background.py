@@ -57,22 +57,22 @@ def gwak_background(
 
         print(f'Downloading segment from {seg_start} to {seg_end}')
 
-    #     strains = get_background(
-    #         seg_start=seg_start,
-    #         seg_end=seg_end,
-    #         ifos=ifos,
-    #         channels=channels,
-    #         frame_type=frame_type,
-    #         sample_rate=sample_rate,
-    #     )
+        strains = get_background(
+            seg_start=seg_start,
+            seg_end=seg_end,
+            ifos=ifos,
+            channels=channels,
+            frame_type=frame_type,
+            sample_rate=sample_rate,
+        )
 
-    #     seg_dur = seg_end-seg_start
-    #     file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
+        seg_dur = seg_end-seg_start
+        file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
 
-    #     with h5py.File(save_dir / file_name, "w") as g:
+        with h5py.File(save_dir / file_name, "w") as g:
 
-    #         for ifo in ifos:
-    #             g.create_dataset(ifo, data=strains[ifo])
+            for ifo in ifos:
+                g.create_dataset(ifo, data=strains[ifo])
 
         bash_files = [] # List of omicron commands to excute in background.  
         if omi_paras is not None:

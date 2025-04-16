@@ -334,7 +334,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
-        breakpoint()
+
         return dataloader
     
     def test_dataloader(self):
@@ -603,7 +603,6 @@ class SignalDataloader(GwakBaseDataloader):
         sub_batches_snr = []
         idx_lo = 0
         for i in range(self.num_classes):
-            print(i)
             whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i], output_snrs=True)
             sub_batches.append(whitened)
             sub_batches_snr.append(snrs)
@@ -647,9 +646,20 @@ class SignalDataloader(GwakBaseDataloader):
                     self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
                     self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
 
+            if self.trainer.validating and (self.data_saving_file is not None):
+                idx_curr = 0
+                for i,cls in enumerate(self.signal_classes):
+                    bk_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_BK{cls}"
+                    inj_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_INJ{cls}"
                     label_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_LAB{cls}"
                     data_range = slice(idx_curr,idx_curr+self.num_per_class[i])
                     idx_curr += self.num_per_class[i]
+
+                    self.data_group.create_dataset(bk_step, data = batch[data_range].cpu())
+                    self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
+                    self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
+
+            return batch, labels
 
 
 class AugmentationSignalDataloader(SignalDataloader):
