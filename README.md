@@ -74,7 +74,6 @@ $ snakemake -c1 train_all
 - if you want to modify any of the submodules, first do the changes localy and then re-install `gwak` to pick up the changes:
 ```
 $ pip install -e .
-$ pip install -U 'jsonargparse[signatures]>=4.27.7'
 ```
 
 - Installation for deployment

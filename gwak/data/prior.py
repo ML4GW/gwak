@@ -16,6 +16,7 @@ from ml4gw.waveforms.conversion import (
     bilby_spins_to_lalsim, 
     chirp_mass_and_mass_ratio_to_components
 )
+import math
 
 class Constant:
 

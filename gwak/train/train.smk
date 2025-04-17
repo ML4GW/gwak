@@ -22,4 +22,4 @@ rule train_cl:
 
 rule train:
     input:
-        expand('output/{train_config}', train_config=['S4_SimCLR_multiSignalAndBkg'])
+        expand('output/{train_config}', train_config=['NF_onlyBkg'])

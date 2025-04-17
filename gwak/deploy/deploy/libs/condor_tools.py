@@ -34,7 +34,7 @@ def make_subfile(
     
     
     condor_config["request_cpus"] = 1
-    condor_config["request_memory"] = "1G"
+    condor_config["request_memory"] = "2.5G"
     condor_config["request_disk"] = "2G"
     condor_config["accounting_group"] = "ligo.dev.o4.cbc.explore.test"
     

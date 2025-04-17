@@ -67,23 +67,26 @@ def infer(
     logging.info(f"Loading data files ...")
     logging.info(f"    Data directory at {fname}")
 
-    num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts)
+    num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts, data_format)
     arguments=Path("deploy/triton_excution.py").resolve()
     # if inj_test is not None:
     os.environ["CCSN_FILE"] = str(Path("deploy/config/ccsn.yaml").resolve())
-    arguments=Path("deploy/triton_inj_excution.py").resolve()
-
+    
+    # choose injections or just background timeslides
+    #arguments=Path("deploy/triton_inj_excution.py").resolve()
+    arguments=Path("deploy/triton_excution.py").resolve()
+    
     serve_context = serve(
         model_repo_dir, 
         image, 
         log_file=triton_log, 
-        wait=False
+        wait=True
     )
 
     with serve_context:
         
         logging.info(f"Waiting {load_model_patients} seconds to load model to triton!")
-        time.sleep(load_model_patients)
+        # time.sleep(load_model_patients)
 
         submit_num = 0
         sub_files = []

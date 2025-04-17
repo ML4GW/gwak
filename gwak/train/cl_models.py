@@ -292,8 +292,7 @@ class Autoencoder(GwakBaseModelClass):
                     d_output = 10)
 
     def training_step(self, batch, batch_idx):
-        #print(271, batch.shape)
-        #assert 0
+
         x = batch
 
         x = x.transpose(1, 2)
@@ -735,7 +734,7 @@ class Crayon(GwakBaseModelClass):
             sync_dist=True)
 
         if self.supervised_simclr:
-            self.val_outputs.append((loss, x_embd.cpu().numpy(), labels.cpu().numpy()))
+            self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
         else:
             return loss
     
@@ -776,7 +775,7 @@ class Crayon(GwakBaseModelClass):
             plt.legend(handles=patches,ncol=2,fontsize=12)
 
             buf = BytesIO()
-            plt.savefig(buf,format='png')
+            plt.savefig(buf,format='jpg',dpi=200)
             buf.seek(0)
             self.logger.log_image(
                 'val/space',

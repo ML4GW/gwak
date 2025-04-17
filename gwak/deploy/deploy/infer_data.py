@@ -16,12 +16,13 @@ from ml4gw.utils.slicing import sample_kernels
 def get_shifts_meta_data(
     background_fnames,
     Tb,
-    shifts
+    shifts,
+    data_foramt
 ):
     # calculate the number of shifts required
     # to accumulate the requested background,
     # given the duration of the background segments
-    files, segments = segments_from_paths(background_fnames)
+    files, segments = segments_from_paths(background_fnames, data_foramt=data_foramt)
     num_shifts = get_num_shifts_from_Tb(
         segments, Tb, max(shifts)
     )

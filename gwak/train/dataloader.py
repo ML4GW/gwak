@@ -14,7 +14,7 @@ from lightning.pytorch.loggers import WandbLogger
 import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
 from ml4gw.transforms import SpectralDensity, Whiten
-from ml4gw.gw import compute_observed_strain, get_ifo_geometry
+from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_ifo_snr
 
 from torch.distributions.uniform import Uniform
 from ml4gw.distributions import Cosine
@@ -22,6 +22,7 @@ from ml4gw.distributions import Cosine
 from gwak import data
 from abc import ABC
 import copy
+import sys
 
 
 class TimeSlidesDataloader(pl.LightningDataModule):
@@ -58,13 +59,37 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
-
-        all_files = list(Path(data_dir).glob('*.hdf5'))
+        all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5')) 
         n_all_files = len(all_files)
-        n_train_files = int(n_all_files * (1 - val_split - test_split))
-        n_val_files = int(n_all_files * val_split)
-
-        return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
+        # adding handling for the case where data_dir has subdirs for train/test/val
+        if n_all_files == 0:
+            subdirs = list(Path(data_dir).glob('*'))
+            train, test, val = None, None, None
+            for subdir in subdirs:
+                subdir_files = list(subdir.glob('*.h5')) + list(subdir.glob('*.hdf5'))
+                if subdir.stem == 'train':
+                    train = subdir_files
+                elif subdir.stem == 'test':
+                    test = subdir_files
+                elif subdir.stem == 'val':
+                    val = subdir_files
+            if train is None:
+                print("You passed a directory with no h5 files and no train/ subdir!")
+                sys.exit(1)
+            elif test is None and val is None:
+                print("You passed a directory with no test/ or val/ subdir!")
+                sys.exit(1)
+            elif test is None and val is not None:
+                print("You passed a directory with a val/ directory but no test/, setting test set = val set")
+                test = val
+            elif test is not None and val is None:
+                print("You passed a directory with a test/ directory but no val/, setting val set = test set")
+                val = test
+            return train, val, test
+        else:
+            n_train_files = int(n_all_files * (1 - val_split - test_split))
+            n_val_files = int(n_all_files * val_split)
+            return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
     def train_dataloader(self):
 
@@ -240,13 +265,38 @@ class GwakBaseDataloader(pl.LightningDataModule):
         }
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
-
-        all_files = list(Path(data_dir).glob('*.hdf5'))
+        all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
-        n_train_files = int(n_all_files * (1 - val_split - test_split))
-        n_val_files = int(n_all_files * val_split)
+        # adding handling for the case where data_dir has subdirs for train/test/val
+        if n_all_files == 0:
+            subdirs = list(Path(data_dir).glob('*'))
+            train, test, val = None, None, None
+            for subdir in subdirs:
+                subdir_files = list(subdir.glob('*.h5')) + list(subdir.glob('*.hdf5'))
+                if subdir.stem == 'train':
+                    train = subdir_files
+                elif subdir.stem == 'test':
+                    test = subdir_files
+                elif subdir.stem == 'val':
+                    val = subdir_files
+            if train is None:
+                print("You passed a directory with no h5 files and no train/ subdir!")
+                sys.exit(1)
+            elif test is None and val is None:
+                print("You passed a directory with no test/ or val/ subdir!")
+                sys.exit(1)
+            elif test is None and val is not None:
+                print("You passed a directory with a val/ directory but no test/, setting test set = val set")
+                test = val
+            elif test is not None and val is None:
+                print("You passed a directory with a test/ directory but no val/, setting val set = test set")
+                val = test
+            return train, val, test
+        else:
+            n_train_files = int(n_all_files * (1 - val_split - test_split))
+            n_val_files = int(n_all_files * val_split)
+            return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
-        return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
     def train_dataloader(self):
 
@@ -268,6 +318,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         return dataloader
 
     def val_dataloader(self):
+
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
             channels=['H1', 'L1'],
@@ -283,6 +334,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
+
         return dataloader
     
     def test_dataloader(self):
@@ -390,7 +442,6 @@ class SignalDataloader(GwakBaseDataloader):
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
-            print(extra_kwargs[i],extra_kwargs[i] is None)
             if extra_kwargs[i] is not None:
                 signal_config.update(extra_kwargs[i])
             self.signal_configs.append(signal_config)
@@ -455,7 +506,7 @@ class SignalDataloader(GwakBaseDataloader):
         
         return all_responses, output_params, output_ras, output_decs, output_phics
 
-    def inject(self, batch, waveforms):
+    def inject(self, batch, waveforms, output_snrs = False):
 
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
@@ -521,11 +572,22 @@ class SignalDataloader(GwakBaseDataloader):
 
         whitened = whitener(injected.double(), psds.double())
 
+        psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
+        psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
+        snrs = compute_ifo_snr(injected.double(), psds_resampled, self.sample_rate)
+
+        # compute network SNR 
+        snrs = snrs**2
+        snrs = torch.sum(snrs, dim=-1)  ** 0.5
+
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
         whitened = whitened / stds
-
-        return whitened
+        
+        if output_snrs:
+            return whitened, snrs
+        else:
+            return whitened
     
     def multiInject(self,waveforms,batch):
         sub_batches = []
@@ -535,6 +597,20 @@ class SignalDataloader(GwakBaseDataloader):
             idx_lo += self.num_per_class[i]
         batch = torch.cat(sub_batches)
         return batch
+    
+    def multiInject_SNR(self,waveforms,batch):
+        sub_batches = []
+        sub_batches_snr = []
+        idx_lo = 0
+        for i in range(self.num_classes):
+            whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i], output_snrs=True)
+            sub_batches.append(whitened)
+            sub_batches_snr.append(snrs)
+            #sub_batches.append(self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
+            idx_lo += self.num_per_class[i]
+        batch = torch.cat(sub_batches)
+        snrs = torch.cat(sub_batches_snr)
+        return batch, snrs
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
 
@@ -584,6 +660,7 @@ class SignalDataloader(GwakBaseDataloader):
                     self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
 
             return batch, labels
+
 
 class AugmentationSignalDataloader(SignalDataloader):
     def __init__(
@@ -663,7 +740,9 @@ class AugmentationSignalDataloader(SignalDataloader):
                 self.data_group.create_dataset(label_step, data = labels.cpu())
 
             return batch, labels
-        
+
+
+
 def generate_waveforms_standard(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
         # get detector orientations
         ifos = ['H1', 'L1']

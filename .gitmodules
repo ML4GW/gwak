@@ -4,3 +4,6 @@
 [submodule "hermes"]
 	path = hermes
 	url = git@github.com:ML4GW/hermes.git
+[submodule "pyomicron"]
+	path = pyomicron
+	url = git@github.com:AndyC80297/pyomicron.git

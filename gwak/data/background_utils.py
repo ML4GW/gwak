@@ -52,7 +52,7 @@ def get_conincident_segs(
     segs = []
 
     for contents in flags.intersection().active.to_table():
-
+        print(f"Preparing segment data between {contents['start']} and {contents['end']}")
         segs.append((contents["start"], contents["end"]))
 
     return segs
@@ -140,7 +140,7 @@ def glitch_merger(
     for i, ifo in enumerate(ifos):
 
         glitch_dir = \
-            omicron_path / f"{ifo}/trigger_output/merge/{ifo}:{channels[i]}"
+            Path(omicron_path) / f"{ifo}/trigger_output/merge/{ifo}:{channels[i]}"
 
         h5_name = {}
         for key in glitch_keys:
@@ -156,6 +156,7 @@ def glitch_merger(
                     h5_name[key].append(h["triggers"][key])
                     
         for key in glitch_keys:
+            print(key, h5_name[key])
             h5_name[key] = np.concatenate(h5_name[key])
             
         if output_file is None:
@@ -239,12 +240,13 @@ def omicron_bashes(
             config.write(config_file)
             
         omicron_args = [
-            f"omicron-process {section}",
+            # f"omicron-process {section}", # Env pyomicron method
+            f"python -m omicron.cli.process {section}", # Pyomicron submodule method
             f"--gps {start_time} {end_time}",
             f"--ifo {ifo}",
-            f"--config-file {str(config_file_path)}",
-            f"--output-dir {str(output_dir)}",
-            f"--cache-file {cache_file}",
+            f"--config-file {str(config_file_path.resolve())}",
+            f"--output-dir {str(output_dir.resolve())}",
+            f"--cache-file {cache_file.resolve()}",
             # f"--log-file {str(project_dir/ifo)}",
             "--verbose"
             # "request_disk=100M",
