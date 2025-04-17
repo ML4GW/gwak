@@ -361,8 +361,8 @@ import torch.nn as nn
 class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
-            ckpt: str = "output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/33-1700.ckpt",
-            cfg_path: str = "output/test_S4_fixedSignals_0p5sec_v2/config.yaml",
+            ckpt: str = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt",
+            cfg_path: str = "output/S4_SimCLR_multiSignalAndBkg/config.yaml",
             new_shape=128,
             n_dims=8,
             n_flow_steps=4,
