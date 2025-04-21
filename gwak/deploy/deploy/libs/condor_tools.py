@@ -54,13 +54,13 @@ def make_infer_config(
     strain_file: Union[str, Path],
     data_format: str,
     shifts:list,
-    batch_size:int,
+    psd_length:float,
+    # batch_size:int,
     stride_batch_size:int,
     ifos:list,
     kernel_size:int,
     sample_rate=2048,
     inference_sampling_rate=1,
-    # inj_type=None,
 ): 
 
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -68,7 +68,7 @@ def make_infer_config(
 
     with open(config_file, "w") as f:
         for key, value in locals().items():  # Loop through all function arguments
-            if key in ("job_dir", "config_file", "f"):
+            if key in ("config_file", "f"):
                 continue
 
             f.write(f"{key}: {value}\n")  # Write each key-value pair

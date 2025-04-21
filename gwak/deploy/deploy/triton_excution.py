@@ -12,7 +12,6 @@ from hermes.aeriel.client import InferenceClient
 from infer_data import Sequence, CCSN_Waveform_Projector, load_h5_as_dict
 from deploy.libs import gwak_logger
 
-gwak_logger("log.log")
 
 EXTREME_CCSN = [
     "Pan_2021/FR",
@@ -20,13 +19,15 @@ EXTREME_CCSN = [
 ]
 
 def run_infer(
+    job_dir: Path,
     triton_server_ip: str,
     gwak_streamer: str,
     sequence_id: int,
     strain_file: Union[str, Path],
     data_format: str,
     shifts: list=[0.0, 1.0],
-    batch_size:int=1,
+    psd_length: float=64,
+    # batch_size:int=1,
     stride_batch_size:int=256,
     ifos:list=["H1", "L1"],
     kernel_size:int=2048,
@@ -35,9 +36,16 @@ def run_infer(
     **kwargs
 ):
 
-    inj_type=None # Set injection type manully
+    # File and Path management
+    
+    # result_dir = gwak_loc / f"gwak/output/infer/{arch_name}/{job_id}"
+    gwak_logger(job_dir / "log.log")
+    result_dir = job_dir.resolve().parents[1]
+    saving_dir =  result_dir / "inference_result"
+    saving_dir.mkdir(parents=True, exist_ok=True)
+
+    # Triton setup
     client = InferenceClient(f"{triton_server_ip}:8001", gwak_streamer)
-    #print(os.environ["CCSN_FILE"])
     results = []
     with client:
 
@@ -45,7 +53,9 @@ def run_infer(
             fname=strain_file,
             data_format=data_format,
             shifts=shifts,
-            batch_size=batch_size,
+            psd_length=psd_length,
+            # batch_size=batch_size,
+            stride_batch_size=stride_batch_size,
             ifos=ifos,
             kernel_size=kernel_size,
             sample_rate=sample_rate,
@@ -77,8 +87,6 @@ def run_infer(
             # Job Done leaving client 
 
     results = np.stack(results)
-    saving_dir = Path("../../inference_result")
-    saving_dir.mkdir(parents=True, exist_ok=True)
     result_file = saving_dir / f"sequence_{sequence_id}.h5"
     logging.info(f"Collecting result to {result_file.resolve()}")
 

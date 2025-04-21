@@ -37,7 +37,9 @@ class Sequence:
         fname: Path,
         data_format: str, 
         shifts: list[float],
-        batch_size: int,
+        psd_length:float,
+        # batch_size: int,
+        stride_batch_size: int, 
         ifos: list,
         kernel_size: int,
         sample_rate: int,
@@ -49,7 +51,8 @@ class Sequence:
 
         # self.fname = fname
         self.shifts = shifts
-        self.batch_size = batch_size
+        self.psd_length = psd_length
+        # self.batch_size = batch_size
         self.ifos = ifos
         self.n_ifos = len(ifos)
         self.kernel_size = kernel_size
@@ -62,7 +65,7 @@ class Sequence:
         self.sample_rate = sample_rate
         self.stride = int(sample_rate / inference_sampling_rate)
         self.step_size = self.stride * (kernel_size / sample_rate)
-        
+        # self.step_size = (kernel_size * stride_batch_size) / (sample_rate * inference_sampling_rate)        
         self.strain_dict = {}
         self.fname = fname
         
@@ -73,26 +76,28 @@ class Sequence:
                     self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
 
         self.size = len(self.strain_dict[ifo])
-
+        # breakpoint()
     @property
     def remainder(self):
         # the number of remaining data points not filling a full batch
-        return (self.size - max(self.shifts)) % self.step_size
+        return (self.size - max(self.shifts) * self.sample_rate - self.psd_length * self.sample_rate) % self.step_size
 
     @property
     def num_pad(self):
         # the number of zeros we need to pad the last batch
         # to make it a full batch
-        return int((self.step_size - self.remainder) % self.step_size)
+        # return int((self.step_size - self.remainder) % self.step_size)
+        return int(self.kernel_size - self.remainder)
     
     def __len__(self):
 
-        return math.ceil((self.size - max(self.shifts)) / self.step_size)
+        # return math.ceil((self.size - max(self.shifts)) / self.step_size)
+        return math.ceil((self.size - max(self.shifts) * self.sample_rate - self.psd_length * self.sample_rate) / self.step_size)
 
     def __iter__(self):
 
         # Check if this line will hide potential implmetation error! 
-        limiter = RateLimiter(max_calls=1, period=0.1)
+        limiter = RateLimiter(max_calls=2, period=0.1)
         bg_state = np.empty(self.state_shape, dtype=self.precision) 
         inj_state = None
 
@@ -121,8 +126,8 @@ class Sequence:
             
             inj_state = bg_state
             
-            with limiter:
-                yield bg_state, inj_state
+            # with limiter:
+            yield bg_state, inj_state
 
 
 

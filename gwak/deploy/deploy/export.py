@@ -12,8 +12,6 @@ from deploy.libs import scale_model, add_streaming_input_preprocessor
 
 def export(
     project: Path,
-    model_dir: Path,
-    output_dir: Path,
     clean: bool,
     background_batch_size: int, 
     stride_batch_size: int, 
@@ -28,10 +26,18 @@ def export(
     preproc_instances: int,
     # highpass: Optional[float] = None,
     # streams_per_gpu: int,
+    model_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
     platform: qv.Platform = qv.Platform.ONNX,
     **kwargs,
 ):
     
+    file_path = Path(__file__).resolve()
+    if model_dir is None: 
+        model_dir = file_path.parents[2] / "output"
+    if output_dir is None: 
+        output_dir = file_path.parents[2] / "output/export"
+
     weights = model_dir / project / "model_JIT.pt"
     output_dir = output_dir / project
     kernel_size = int(kernel_length * sample_rate)
