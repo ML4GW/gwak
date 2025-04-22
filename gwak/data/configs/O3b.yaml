@@ -1,0 +1,9 @@
+ifos: ["H1", "L1"]
+
+state_flag: ["DMT-ANALYSIS_READY:1", "DMT-ANALYSIS_READY:1"]
+channels: ["GDS-CALIB_STRAIN_CLEAN", "GDS-CALIB_STRAIN_CLEAN"]
+frame_type: ["HOFT_C00", "HOFT_C00"]
+ana_start: 1401544825
+ana_end: 1402069900
+sample_rate: 4096
+save_dir: output/O3b/
