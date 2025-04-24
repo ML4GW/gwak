@@ -62,7 +62,7 @@ def run_infer(
     client = InferenceClient(
         address=f"{triton_server_ip}:8001", 
         model_name=gwak_streamer,
-        # callback=sequence,
+        callback=sequence,
     )
     results = []
     with client:
@@ -81,15 +81,15 @@ def run_infer(
                 sequence_end=sequence_end,
              )
              
-            # if not i:
-            #     while not sequence.started:
-            #         client.get()
-            #         time.sleep(1e-2)
-            # Retrieve response from the triton server. 
+            if not i:
+                while not sequence.started:
+                    client.get()
+                    time.sleep(1e-2)
+        # Retrieve response from the triton server. 
+        result = client.get()
+        while result is None:
             result = client.get()
-            while result is None:
-                result = client.get()
-            results.append(result[0])
+        results.append(result[0])
 
     # Job Done leaving client         
     results = np.stack(results)

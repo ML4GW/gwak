@@ -93,7 +93,7 @@ class Sequence:
     @property
     def remainder(self):
         # the number of remaining data points not filling a full batch
-        return (self.size - max(self.shifts) * self.sample_rate) % self.step_size
+        return (self.size - max(self.shifts) * self.sample_rate) % self.kernel_size
 
     @property
     def num_pad(self):
@@ -116,11 +116,6 @@ class Sequence:
         # if num_pad is 0 don't slice anything
         num_slice = self.num_pad // self.stride
         end = -num_slice if num_slice else None
-        print(end)
-        print(end)
-        print(end)
-        print(end)
-        print(end)
         return slice(end)
 
     def __len__(self):
@@ -140,7 +135,7 @@ class Sequence:
             last = i == len(self) - 1
             for ifo_idx, (ifo, shift) in enumerate(zip(self.ifos, self.shifts)): 
 
-                start = int(shift * self.sample_rate + i * self.step_size)
+                start = int(shift * self.sample_rate + i * self.kernel_size)
                 end = int(start + self.kernel_size)
 
 
@@ -167,7 +162,7 @@ class Sequence:
         # spot in the corresponding output array
         start = request_id * self.stride_batch_size
         stop = (request_id + 1) * self.stride_batch_size
-        self._sequences["result"][start:stop] = y[:, 0]
+        self._sequences["result"][start:stop] = y
 
         # indicate that the first response for
         # this sequence has returned, and possibly

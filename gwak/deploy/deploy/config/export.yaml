@@ -15,4 +15,4 @@ fftlength: 2
 sample_rate: 4096
 preproc_instances: 1
 inference_sampling_rate: 4
-device: cpu # cuda:0
+device: cuda:0 # cuda:0
