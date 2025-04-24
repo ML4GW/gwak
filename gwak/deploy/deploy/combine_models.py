@@ -26,12 +26,17 @@ def main(embedder_model_file,
 
     # Load the embedder model (assumed to be a TorchScript module).
     embedder_model = torch.jit.load(embedder_model_file, map_location="cpu")
+    embedder_model = embedder_model.to("cuda:0")
     embedder_model.eval()
 
     # Load the metric model (also in TorchScript format).
     metric_model = torch.jit.load(metric_model_file, map_location="cpu")
+    metric_model = metric_model.to("cuda:0")
     metric_model.eval()
-
+    # breakpoint()
+    # dummy_input = torch.randn(1, 8).to("cuda")
+    # metric_model = metric_model.to("cuda")
+    # metric_model(dummy_input)
     # Create the combined model.
     combined_model = CombinedModel(embedder_model, metric_model)
     combined_model.eval()
@@ -42,7 +47,7 @@ def main(embedder_model_file,
     scripted_model.save(output_path)
     print(f"Combined model saved to {output_path}")
 
-    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cpu')
+    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
     output = combined_model(dummy_input)
     print("Test inference complete.")
     print(f"Output shape: {output.shape}")

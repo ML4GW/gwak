@@ -52,7 +52,7 @@ class Sequence:
         # self.fname = fname
         self.shifts = shifts
         self.psd_length = psd_length
-        # self.batch_size = batch_size
+        self.stride_batch_size = stride_batch_size
         self.ifos = ifos
         self.n_ifos = len(ifos)
         self.kernel_size = kernel_size
@@ -76,23 +76,57 @@ class Sequence:
                     self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
 
         self.size = len(self.strain_dict[ifo])
-        # breakpoint()
+
+        self._started = {"state": False}
+        self._done = {"state": False}
+        result_size = len(self) * self.stride_batch_size
+        self._sequences = {"result": np.zeros(result_size) + 30}
+
+    @property
+    def started(self):
+        return all(self._started.values())
+
+    @property
+    def done(self):
+        return all(self._done.values())
+
     @property
     def remainder(self):
         # the number of remaining data points not filling a full batch
-        return (self.size - max(self.shifts) * self.sample_rate - self.psd_length * self.sample_rate) % self.step_size
+        return (self.size - max(self.shifts) * self.sample_rate) % self.step_size
 
     @property
     def num_pad(self):
         # the number of zeros we need to pad the last batch
         # to make it a full batch
         # return int((self.step_size - self.remainder) % self.step_size)
+
+        if self.remainder == 0: 
+            return 0 
         return int(self.kernel_size - self.remainder)
     
+    @property
+    def slice(self) -> slice:
+        """
+        The number of inference requests we need to slice
+        off the end of the sequences to remove
+        the dummy data from the last batch
+        """
+
+        # if num_pad is 0 don't slice anything
+        num_slice = self.num_pad // self.stride
+        end = -num_slice if num_slice else None
+        print(end)
+        print(end)
+        print(end)
+        print(end)
+        print(end)
+        return slice(end)
+
     def __len__(self):
 
         # return math.ceil((self.size - max(self.shifts)) / self.step_size)
-        return math.ceil((self.size - max(self.shifts) * self.sample_rate - self.psd_length * self.sample_rate) / self.step_size)
+        return math.ceil((self.size - (max(self.shifts)) * self.sample_rate) / self.kernel_size)
 
     def __iter__(self):
 
@@ -106,7 +140,7 @@ class Sequence:
             last = i == len(self) - 1
             for ifo_idx, (ifo, shift) in enumerate(zip(self.ifos, self.shifts)): 
 
-                start = int(shift + i * self.step_size)
+                start = int(shift * self.sample_rate + i * self.step_size)
                 end = int(start + self.kernel_size)
 
 
@@ -118,22 +152,41 @@ class Sequence:
                 # possibly pad it to make it a full batch
                 if last:
 
-                    data = np.pad(data, (0, self.num_pad), "constant")
-
+                    data = np.pad(data, (0, self.num_pad), "constant", constant_values=0)
 
                 bg_state[ifo_idx, :] = data
 
-            
             inj_state = bg_state
             
             # with limiter:
             yield bg_state, inj_state
 
 
+    def __call__(self, y, request_id, sequence_id):
+        # insert the response at the appropriate
+        # spot in the corresponding output array
+        start = request_id * self.stride_batch_size
+        stop = (request_id + 1) * self.stride_batch_size
+        self._sequences["result"][start:stop] = y[:, 0]
+
+        # indicate that the first response for
+        # this sequence has returned, and possibly
+        # that the last one has returned as well
+        self._started["state"] = True
+        if request_id == len(self) - 1:
+            self._done["state"] = True
+
+        # if both the background and foreground
+        # sequences have completed, return them both,
+        # slicing off the dummy data from the last batch
+        if self.done:
+            background = self._sequences["result"][self.slice]
+            foreground = None
+            # if self.injection_set is not None:
+            #     foreground = None # self._sequences[self.id + 1][self.slice]
+            return background, foreground
 
 
-
-    
 class CCSN_Waveform_Projector: 
 
     def __init__(

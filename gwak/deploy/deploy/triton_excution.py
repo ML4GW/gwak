@@ -44,27 +44,31 @@ def run_infer(
     saving_dir =  result_dir / "inference_result"
     saving_dir.mkdir(parents=True, exist_ok=True)
 
+    logging.info(f"Applying shifts = {shifts} to {strain_file}")
+    sequence = Sequence(
+        fname=strain_file,
+        data_format=data_format,
+        shifts=shifts,
+        psd_length=psd_length,
+        stride_batch_size=stride_batch_size,
+        ifos=ifos,
+        kernel_size=kernel_size,
+        sample_rate=sample_rate,
+        inference_sampling_rate=inference_sampling_rate,
+        inj_type=None,
+    )
+
     # Triton setup
-    client = InferenceClient(f"{triton_server_ip}:8001", gwak_streamer)
+    client = InferenceClient(
+        address=f"{triton_server_ip}:8001", 
+        model_name=gwak_streamer,
+        # callback=sequence,
+    )
     results = []
     with client:
 
-        sequence = Sequence(
-            fname=strain_file,
-            data_format=data_format,
-            shifts=shifts,
-            psd_length=psd_length,
-            # batch_size=batch_size,
-            stride_batch_size=stride_batch_size,
-            ifos=ifos,
-            kernel_size=kernel_size,
-            sample_rate=sample_rate,
-            inference_sampling_rate=inference_sampling_rate,
-            inj_type=None,
-        )
-
         for i, (bh_state, _) in enumerate(sequence):
-
+            
             sequence_start = (i == 0)
             sequence_end = (i == (len(sequence) - 1))
 
@@ -76,16 +80,18 @@ def run_infer(
                 sequence_start=sequence_start,
                 sequence_end=sequence_end,
              )
-
+             
+            # if not i:
+            #     while not sequence.started:
+            #         client.get()
+            #         time.sleep(1e-2)
             # Retrieve response from the triton server. 
             result = client.get()
             while result is None:
                 result = client.get()
-
-
             results.append(result[0])
-            # Job Done leaving client 
 
+    # Job Done leaving client         
     results = np.stack(results)
     result_file = saving_dir / f"sequence_{sequence_id}.h5"
     logging.info(f"Collecting result to {result_file.resolve()}")

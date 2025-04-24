@@ -39,6 +39,7 @@ def add_streaming_input_preprocessor(
     highpass: Optional[float] = None,
     preproc_instances: Optional[int] = None,
     streams_per_gpu: int = 1,
+    device: int = "cpu"
 ) -> "ExposedTensor":
     """Create a snapshotter model and add it to the repository"""
 
@@ -52,7 +53,7 @@ def add_streaming_input_preprocessor(
         fduration=fduration,
         sample_rate=sample_rate,
         inference_sampling_rate=inference_sampling_rate,
-    )
+    ).to(device)
 
     stride = int(sample_rate / inference_sampling_rate)
     state_shape = (background_batch_size, num_ifos, snapshotter.state_size)
@@ -87,7 +88,7 @@ def add_streaming_input_preprocessor(
         fduration=fduration,
         fftlength=fftlength,
         highpass=highpass,
-    )
+    ).to(device)
     preproc_model = ensemble.repository.add(
         "preprocessor", platform=Platform.TORCHSCRIPT
     )

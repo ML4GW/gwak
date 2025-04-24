@@ -1,9 +1,8 @@
 ifos: ["H1", "L1"]
 psd_length: 64
-Tb: 10
-# Tb: 86400
-# Tb: 2592000
-# Tb: 31536000
+Tb: 15552000
+# Tb: 2592000 # 30 Days
+# Tb: 31536000 # One Year
 stride_batch_size: 256
 sample_rate: 4096
 # fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data_4K
@@ -14,9 +13,9 @@ data_format: h5 # gwf
 shifts: [0, 1]
 project: white_noise_purst
 image: hermes/tritonserver:23.01
-model_repo_dir: null    # Automatic resolve to gwak/gwak/output/export...
-result_dir: null    # Automatic resolve to gwak/gwak/output/infer...
-job_rate_limit: 8    # Very limited to the process to allowed for the user at one node ($ulimit -u)
+model_repo_dir: null 
+result_dir: null  
+job_rate_limit: 4
 monitor_patients: 1
-inference_sampling_rate: 2
+inference_sampling_rate: 4
 inj_type: null
