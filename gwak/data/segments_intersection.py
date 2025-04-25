@@ -16,13 +16,15 @@ def intersect(seg1, seg2):
 
 def find_intersections():
 
-    hanford = np.loadtxt(f'data/configs/segments.o4b-2.h1', dtype=int)
-    livingston = np.loadtxt(f'data/configs/segments.o4b-2.l1', dtype=int)
+    print(f'Loading segments from data/configs/segments.o4b-2.{snakemake.wildcards.ifos[0]}1 and data/configs/segments.o4b-2.{snakemake.wildcards.ifos[1]}1...')
+
+    ifo1 = np.loadtxt(f'data/configs/segments.o4b-2.{snakemake.wildcards.ifos[0]}1', dtype=int)
+    ifo2 = np.loadtxt(f'data/configs/segments.o4b-2.{snakemake.wildcards.ifos[1]}1', dtype=int)
 
     # there aren't that many segments, so N^2 isn't so bad
     valid_segments = []
-    for h_elem in hanford:
-        for l_elem in livingston:
+    for h_elem in ifo1:
+        for l_elem in ifo2:
             intersection = intersect(h_elem, l_elem)
             if intersection is not None:
                 valid_segments.append(intersection)

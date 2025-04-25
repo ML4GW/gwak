@@ -1,6 +1,6 @@
 rule find_valid_segments:
     output:
-        save_path = 'output/data/segments.o4b-2.npy'
+        save_path = 'output/data/segments.o4b-2-{ifos}.npy'
     script:
         'segments_intersection.py'
 
@@ -22,8 +22,23 @@ rule pull_O3b_data:
 
 rule pull_data:
     input:
-        config = 'data/configs/O4b-2.yaml',
-        segments = rules.find_valid_segments.output
+        config = 'data/configs/O4b-2-{ifos}.yaml',
+        segments = expand(rules.find_valid_segments.output, ifos='{ifos}')
+    output:
+        'tmp/{ifos}.log'
     shell:
         'python data/cli.py --config {input.config} \
-            --segments {input.segments} '
+            --segments {input.segments} \
+            | tee {output}'
+
+rule pull_hl:
+    input:
+        expand(rules.pull_data.output, ifos='hl')
+
+rule pull_hv:
+    input:
+        expand(rules.pull_data.output, ifos='hv')
+
+rule pull_lv:
+    input:
+        expand(rules.pull_data.output, ifos='lv')
