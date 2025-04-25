@@ -1,6 +1,6 @@
 rule find_valid_segments:
     output:
-        save_path = 'output/data/segments.o4b-2-{ifos}.npy'
+        save_path = 'output/data/segments.original.o4b-2-{ifos}.npy'
     script:
         'segments_intersection.py'
 

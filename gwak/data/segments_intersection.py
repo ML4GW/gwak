@@ -16,10 +16,10 @@ def intersect(seg1, seg2):
 
 def find_intersections():
 
-    print(f'Loading segments from data/configs/segments.o4b-2.{snakemake.wildcards.ifos[0]}1 and data/configs/segments.o4b-2.{snakemake.wildcards.ifos[1]}1...')
+    print(f'Loading segments from data/configs/segments.original.o4b-2.{snakemake.wildcards.ifos[0]}1 and data/configs/segments.original.o4b-2.{snakemake.wildcards.ifos[1]}1...')
 
-    ifo1 = np.loadtxt(f'data/configs/segments.o4b-2.{snakemake.wildcards.ifos[0]}1', dtype=int)
-    ifo2 = np.loadtxt(f'data/configs/segments.o4b-2.{snakemake.wildcards.ifos[1]}1', dtype=int)
+    ifo1 = np.loadtxt(f'data/configs/segments.original.o4b-2.{snakemake.wildcards.ifos[0]}1', dtype=int)
+    ifo2 = np.loadtxt(f'data/configs/segments.original.o4b-2.{snakemake.wildcards.ifos[1]}1', dtype=int)
 
     # there aren't that many segments, so N^2 isn't so bad
     valid_segments = []
