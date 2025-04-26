@@ -31,7 +31,7 @@ def run_infer(
     stride_batch_size:int=256,
     ifos:list=["H1", "L1"],
     kernel_size:int=2048,
-    sample_rate:int=2048,
+    sample_rate:int=4096,
     inference_sampling_rate:float=1,
     **kwargs
 ):

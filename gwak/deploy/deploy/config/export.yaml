@@ -8,6 +8,7 @@ num_ifos: 2
 gwak_instances: 8
 platform: TORCHSCRIPT
 # platform: TENSORRT
+highpass: 30
 psd_length: 64
 kernel_length: 0.5
 fduration: 1

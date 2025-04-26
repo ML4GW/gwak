@@ -119,7 +119,7 @@ def infer(
     if inj_type is not None:
         arguments=Path("deploy/triton_inj_excution.py").resolve()
         os.environ["CCSN_FILE"] = str(Path("deploy/config/ccsn.yaml").resolve())
-
+    # arguments=Path("deploy/triton_inj_excution.py").resolve()
     with serve_context:
         
         # logging.info(f"Waiting {monitor_patients} seconds to recieve connetion to port 8002!")

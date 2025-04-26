@@ -161,6 +161,8 @@ class BatchWhitener(torch.nn.Module):
         # whitened = whitened.transpose(1, 2) # Apply this for gwak_1
         x = unfold_windows(whitened, self.kernel_size, self.stride_size)
         x = x.reshape(-1, num_channels, self.kernel_size)
+        stds = torch.std(x, dim=-1, keepdim=True)
+        x = x / stds
         if self.augmentor is not None:
             x = self.augmentor(x)
         if self.return_whitened:
