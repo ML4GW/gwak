@@ -1,9 +1,16 @@
 import os
+import wandb
+import math
 import time
 import yaml
 import logging
 import h5py
-from typing import Sequence
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
+from io import BytesIO
+from matplotlib.patches import Patch
+from typing import Sequence, Optional
 from collections import OrderedDict
 from sklearn.model_selection import train_test_split
 
@@ -11,26 +18,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-
 import lightning.pytorch as pl
-
-import math
-from typing import Optional
-
-import torch
-import torch.nn as nn
+from pytorch_lightning.callbacks import EarlyStopping
 from einops import rearrange, repeat
-from losses import SupervisedSimCLRLoss
-from schedulers import WarmupCosineAnnealingLR
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.patches import Patch
-import wandb
-from PIL import Image
-from io import BytesIO
+from nflows.flows.base import Flow
+from nflows.distributions.normal import StandardNormal
+from nflows.transforms.base import CompositeTransform
+from nflows.transforms.permutations import ReversePermutation
+from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform
 
-from cl_models import Crayon
+from gwak.train.losses import SupervisedSimCLRLoss
+from gwak.train.schedulers import WarmupCosineAnnealingLR
+from gwak.train.cl_models import Crayon
+
 
 class GwakBaseModelClass(pl.LightningModule):
 
@@ -91,12 +92,15 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         module.model.eval()
 
         # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model).cpu()
+        wrapper = FlowWrapper(module.model).to("cuda:0")
         wrapper.eval()
 
         # Dummy input: must match the expected shape of flow input
         # For example, if input to flow is (batch_size, 8):
-        example_input = torch.randn(1, module.model._transform._transforms[0].features)
+        # if module.use_freq_correlation:
+        #     example_input = torch.randn(1, module.model._transform._transforms[0].features+1)
+        # else:
+        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
 
         # Trace the wrapped model
         traced = torch.jit.trace(wrapper, example_input)
@@ -352,63 +356,92 @@ class NonLinearClassifier(GwakBaseModelClass):
         )]
 
 
-from nflows.flows.base import Flow
-from nflows.distributions.normal import StandardNormal
-from nflows.transforms.base import CompositeTransform
-from nflows.transforms.permutations import ReversePermutation
-from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform
-import torch.nn as nn
 class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
+            embedding_model: str = None,
             ckpt: str = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt",
             cfg_path: str = "output/S4_SimCLR_multiSignalAndBkg/config.yaml",
             new_shape=128,
             n_dims=8,
             n_flow_steps=4,
             hidden_dim=64,
-            learning_rate=1e-3
+            learning_rate=1e-3,
+            use_freq_correlation=False
     ):
         super().__init__()
 
         # Load feature extractor
-        with open(cfg_path, "r") as fin:
-            cfg = yaml.load(fin, yaml.FullLoader)
-        self.graph = Crayon.load_from_checkpoint(ckpt, **cfg['model']['init_args'])
-        self.graph.eval()
-        self.graph.to(device=self.device)
+        if embedding_model:
+            self.graph = torch.jit.load(embedding_model)
+            self.graph.eval()
+            self.graph.to(device=self.device)
+        else:
+            with open(cfg_path, "r") as fin:
+                cfg = yaml.load(fin, yaml.FullLoader)
+            self.graph = Crayon.load_from_checkpoint(ckpt, **cfg['model']['init_args']).model
+            self.graph.eval()
+            self.graph.to(device=self.device)
+
+        self.n_dims = n_dims +1 if use_freq_correlation else n_dims
 
         # MAF Flow (instead of RealNVP)
         transforms = []
         for _ in range(n_flow_steps):
             maf = MaskedAffineAutoregressiveTransform(
-                features=n_dims,
+                features=self.n_dims,
                 hidden_features=hidden_dim,
                 num_blocks=2,
                 use_residual_blocks=True,
                 activation=nn.ReLU()
             )
             transforms.append(maf)
-            transforms.append(ReversePermutation(features=n_dims))  # adds variety
+            transforms.append(ReversePermutation(features=self.n_dims))  # adds variety
 
         self.model = Flow(
             transform=CompositeTransform(transforms),
-            distribution=StandardNormal([n_dims])
+            distribution=StandardNormal([self.n_dims])
         )
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
+        self.use_freq_correlation = use_freq_correlation
 
         self.save_hyperparameters()
 
+    def frequency_cos_similarity(self, batch):
+        # batch: (batch_size, 2, time_series_length)
+
+        # FFT along the last axis
+        H = torch.fft.rfft(batch[:, 0, :], dim=-1)  # Hanford
+        L = torch.fft.rfft(batch[:, 1, :], dim=-1)  # Livingston
+
+        # Complex dot product over frequency bins
+        numerator = torch.sum(H * torch.conj(L), dim=-1)
+
+        # Compute norms
+        norm_H = torch.linalg.norm(H, dim=-1)
+        norm_L = torch.linalg.norm(L, dim=-1)
+
+        # Normalize
+        rho_complex = numerator / (norm_H * norm_L + 1e-8)  # avoid division by zero
+
+        # Return real part (cosine similarity in freq domain)
+        rho_real = torch.real(rho_complex).unsqueeze(-1)
+        return rho_real
+
     def forward(self, x):
-        return self.model.log_prob(x)
+        c = self.frequency_cos_similarity(x)
+        return self.model(c).log_prob(x)
 
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def training_step(self, batch, batch_idx):
-        feats = self.graph.model(batch)
+        feats = self.graph(batch)
+        if self.use_freq_correlation:
+            freq_correlation = self.frequency_cos_similarity(batch)
+            feats = torch.cat((feats, freq_correlation), dim=1)
         log_prob = self.model.log_prob(feats)
         loss = -log_prob.mean()
         self.log("train/loss", loss, on_epoch=True, sync_dist=True)
@@ -416,7 +449,10 @@ class BackgroundFlowModel(GwakBaseModelClass):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        feats = self.graph.model(batch)
+        feats = self.graph(batch)
+        if self.use_freq_correlation:
+            freq_correlation = self.frequency_cos_similarity(batch)
+            feats = torch.cat((feats, freq_correlation), dim=1)
         log_prob = self.model.log_prob(feats)
         loss = -log_prob.mean()
         self.log("val/loss", loss, sync_dist=True)
@@ -427,4 +463,10 @@ class BackgroundFlowModel(GwakBaseModelClass):
             monitor='val/loss',
             save_last=True,
             auto_insert_metric_name=False
+            ),
+            EarlyStopping(
+                monitor='val/loss',
+                patience=10,
+                mode='min',
+                verbose=True
         )]
