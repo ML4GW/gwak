@@ -1,26 +1,21 @@
 ifos: ["H1", "L1"]
-# psd_length: 64
-# fduration: 1
-# kernel_length: 0.09765625
-kernel_length: 1
-Tb: 1800
-# Tb: 86400
-# Tb: 2592000
-# Tb: 31536000
-batch_size: 1
+psd_length: 64
+# Tb: 10000
+# Tb: 2592000 # 30 Days
+Tb: 31536000 # One Year
 stride_batch_size: 256
-sample_rate: 2048
-fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data
-fname: /home/hongyin.chen/anti_gravity/gwak/gwak/output/O4_month_after_MDC_background
+sample_rate: 4096
+# fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data_4K
+fname: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/test
 # fname: /home/katya.govorkova/gwak2_background
-ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled_2048 # 1 kpc
-data_format: hdf5 # gwf
+ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled # 1 kpc
+data_format: h5 # gwf
 shifts: [0, 1]
 project: white_noise_purst
-model_repo_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output/export
 image: hermes/tritonserver:23.01
-result_dir: /home/hongyin.chen/anti_gravity/gwak/gwak/output/infer
-rate_limit: 4
-load_model_patients: 5
-inference_sampling_rate: 1
-# inj_type: None
+model_repo_dir: null 
+result_dir: null  
+job_rate_limit: 4
+monitor_patients: 1
+inference_sampling_rate: 4
+inj_type: null

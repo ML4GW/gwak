@@ -39,6 +39,7 @@ def add_streaming_input_preprocessor(
     highpass: Optional[float] = None,
     preproc_instances: Optional[int] = None,
     streams_per_gpu: int = 1,
+    device: int = "cpu"
 ) -> "ExposedTensor":
     """Create a snapshotter model and add it to the repository"""
 
@@ -52,7 +53,7 @@ def add_streaming_input_preprocessor(
         fduration=fduration,
         sample_rate=sample_rate,
         inference_sampling_rate=inference_sampling_rate,
-    )
+    ).to(device)
 
     stride = int(sample_rate / inference_sampling_rate)
     state_shape = (background_batch_size, num_ifos, snapshotter.state_size)
@@ -60,9 +61,10 @@ def add_streaming_input_preprocessor(
     logging.info(f"Snappshot kerenl shape: ")
     logging.info(f"    Batch Size: {state_shape[0]}")
     logging.info(f"    Nums Ifo: {state_shape[1]}")
-    logging.info(f"    Input Update: {input_shape[-1]}")
-    logging.info(f"    State Size: {state_shape[-1]}")
-    logging.info(f"    Sample Kernel: {state_shape[-1] + input_shape[-1]}")
+    logging.info(f"    Input Update: {input_shape[-1]}: ({input_shape[-1]/sample_rate} Sec)")
+    logging.info(f"    State Size: {state_shape[-1]}: ({state_shape[-1]/sample_rate} Sec)")
+    kernel_value = state_shape[-1] + input_shape[-1]
+    logging.info(f"    Sample Kernel: {kernel_value}: ({kernel_value/sample_rate} Sec)")
     # state_shape = (background_batch_size, snapshotter.state_size, num_ifos) # Apply for gwak1
 
     streaming_model = streaming_utils.add_streaming_model(
@@ -86,7 +88,7 @@ def add_streaming_input_preprocessor(
         fduration=fduration,
         fftlength=fftlength,
         highpass=highpass,
-    )
+    ).to(device)
     preproc_model = ensemble.repository.add(
         "preprocessor", platform=Platform.TORCHSCRIPT
     )

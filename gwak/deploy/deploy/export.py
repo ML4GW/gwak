@@ -12,8 +12,6 @@ from deploy.libs import scale_model, add_streaming_input_preprocessor
 
 def export(
     project: Path,
-    model_dir: Path,
-    output_dir: Path,
     clean: bool,
     background_batch_size: int, 
     stride_batch_size: int, 
@@ -28,23 +26,42 @@ def export(
     preproc_instances: int,
     # highpass: Optional[float] = None,
     # streams_per_gpu: int,
+    model_dir: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
     platform: qv.Platform = qv.Platform.ONNX,
+    device: str = "cpu",
     **kwargs,
 ):
     
+    file_path = Path(__file__).resolve()
+    if model_dir is None: 
+        model_dir = file_path.parents[2] / "output"
+    if output_dir is None: 
+        output_dir = file_path.parents[2] / "output/export"
+
     weights = model_dir / project / "model_JIT.pt"
     output_dir = output_dir / project
-    kernel_size = int(kernel_length * sample_rate)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    repo = qv.ModelRepository(output_dir, clean=clean)
 
     with open(weights, "rb") as f:
         graph = torch.jit.load(f)
-
     graph.eval()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    repo = qv.ModelRepository(output_dir, clean=clean)
 
     gwak_logger(output_dir / "export.log")
+    
+    if device != "cpu":
+        logging.warning(
+            f"Forcing model to load on {device} "
+            "will prevent model to inference on other devices."
+        )
+        logging.warning(
+            f"Hermes: hermes/hermes/quiver/exporters "
+            "may prevent from passing non cpu tensor to model. "
+            "Need to manually adjustment tensor device."
+        )
+    graph = graph.to(device)
+
     try:
         gwak = repo.models[f"gwak-{project}"]
     except KeyError:
@@ -53,6 +70,7 @@ def export(
     if gwak_instances is not None:
         scale_model(gwak, gwak_instances)
 
+    kernel_size = int(kernel_length * sample_rate)
     # input_shape = (batch_size, kernel_size, num_ifos) # Apply this for gwak_1
     input_shape = (stride_batch_size, num_ifos, kernel_size) 
     kwargs = {}
@@ -102,6 +120,7 @@ def export(
             fduration=fduration,
             fftlength=fftlength,
             preproc_instances=preproc_instances,
+            device=device
         )
 
         logging.info(f"Ensemble model.")
@@ -130,3 +149,7 @@ def export(
         6e10
     )
     snapshotter.config.write()
+
+    # Todo:
+    # Add max_sequence_idle_microseconds for trasformer or larger model that 
+    # may took longer time during inference. 
