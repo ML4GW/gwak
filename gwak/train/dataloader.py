@@ -575,7 +575,7 @@ class SignalDataloader(GwakBaseDataloader):
         psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
         psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
 
-        snrs = None
+        snrs = torch.zeros(len(whitened)).to('cuda')
         if waveforms is not None: 
             
             snrs = compute_ifo_snr(waveforms, psds_resampled, self.sample_rate)
