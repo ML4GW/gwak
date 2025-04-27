@@ -71,15 +71,31 @@ def get_background(
     strains = {}
     logging.info(f"Collecting strain data from {seg_start} to {seg_end} at {channels}")
     for num, ifo in enumerate(ifos):
-    
-        files = find_urls(
-            site=f"{ifo[0]}",
-            frametype=f"{ifo}_{frame_type[num]}",
-            gpsstart=seg_start,
-            gpsend=seg_end,
-            urltype="file",
-        )
         
+        if 'V' in ifo:  ### VIRGO uses frametype WITHOUT the IFO name
+            files = find_urls(
+                site=f"{ifo[0]}",
+                frametype=f"{frame_type[num]}",
+                gpsstart=seg_start,
+                gpsend=seg_end,
+                urltype="file",
+            )
+
+        else: ### LIGO uses frametype WITH the IFO name
+
+            files = find_urls(
+                site=f"{ifo[0]}",
+                frametype=f"{ifo}_{frame_type[num]}",
+                gpsstart=seg_start,
+                gpsend=seg_end,
+                urltype="file",
+            )
+        print(f"{ifo}_{frame_type[num]}")
+        print(f"Found {len(files)} files for {ifo}")
+        if len(files) == 0:
+            raise ValueError(f"No files found for {ifo} between {seg_start} and {seg_end}")
+
+        print(seg_start, seg_end)
         strains[ifo] = TimeSeries.read(
             files, 
             f"{ifo}:{channels[num]}", 
@@ -88,7 +104,9 @@ def get_background(
             nproc=8, 
             verbose=verbose
         ).resample(sample_rate).value
-    
+        print(f"Strain data for {ifo} collected")
+        print(strains[ifo].shape)
+        print()
 
     return strains
 
