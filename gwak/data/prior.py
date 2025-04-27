@@ -99,7 +99,7 @@ class SineGaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = LogUniform(1e-24, 5e-20), 
+            hrss = LogUniform(5e-23, 3.33e-22), 
             quality = Uniform(3, 700),
             frequency = Uniform(14, 3067),
             phase = Uniform(0, torch.pi),
@@ -112,7 +112,7 @@ class GaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = LogUniform(1e-24, 1e-16), 
+            hrss = LogUniform(4e-19, 4e-18), 
             polarization = Uniform(0, torch.pi),
             eccentricity = Uniform(0, 1)
         )
@@ -126,7 +126,7 @@ class WhiteNoiseBurstBBC(BasePrior):
             bandwidth = Uniform(32, 2048),
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
-            int_hdot_squared = LogUniform(7.3e-41, 1.6e-35)
+            int_hdot_squared = LogUniform(1e-37, 1e-36)
         )
 
 class CuspBBC(BasePrior):
@@ -135,7 +135,7 @@ class CuspBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-4.0 / 3.0),
-            amplitude = Uniform(4.0e-22, 4.0e-21),
+            amplitude = Uniform(9.9e-22, 4.0e-21),
             f_high = Constant(1000)
         )
 
@@ -145,7 +145,7 @@ class KinkBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-5.0 / 3.0),
-            amplitude = Uniform(1.4e-21, 1.4e-20),
+            amplitude = Uniform(4.8e-21, 1.4e-20),
             f_high = Constant(1000)
         )
 
@@ -155,7 +155,7 @@ class KinkkinkBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-2.0),
-            amplitude = Uniform(4.7e-21, 4.7e-20),
+            amplitude = Uniform(2e-20, 4.7e-20),
             f_high = Constant(1000)
         )
 
