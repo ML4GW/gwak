@@ -42,3 +42,7 @@ rule pull_hv:
 rule pull_lv:
     input:
         expand(rules.pull_data.output, ifos='lv')
+
+rule pull_hlv:
+    input:
+        expand(rules.pull_data.output, ifos='hlv')
