@@ -80,7 +80,7 @@ class Sequence:
         self._started = {"state": False}
         self._done = {"state": False}
         result_size = len(self) * self.stride_batch_size
-        self._sequences = {"result": np.zeros(result_size) + 30}
+        self._sequences = {"result": np.zeros(result_size)}
 
     @property
     def started(self):

@@ -24,7 +24,7 @@ def export(
     inference_sampling_rate: float,
     sample_rate: int,
     preproc_instances: int,
-    # highpass: Optional[float] = None,
+    highpass: Optional[float] = None,
     # streams_per_gpu: int,
     model_dir: Optional[Path] = None,
     output_dir: Optional[Path] = None,
@@ -119,6 +119,7 @@ def export(
             inference_sampling_rate=inference_sampling_rate,
             fduration=fduration,
             fftlength=fftlength,
+            highpass=highpass,
             preproc_instances=preproc_instances,
             device=device
         )
