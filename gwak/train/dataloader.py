@@ -97,7 +97,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=[f'{self.ifos[i]}1' for i in self.ifos],
+                channels=[f'{ifo}1' for ifo in self.ifos],
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -115,7 +115,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def val_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=[f'{self.ifos[i]}1' for i in self.ifos],
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -133,7 +133,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=[f'{self.ifos[i]}1' for i in self.ifos],
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -250,7 +250,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        self.channels = channels
+        self.ifos = ifos
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
@@ -306,7 +306,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=[f'{self.ifos[i]}1' for i in self.ifos],
+                channels=[f'{ifo}1' for ifo in self.ifos],
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -321,7 +321,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=[f'{self.ifos[i]}1' for i in self.ifos],
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -336,7 +336,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=[f'{self.ifos[i]}1' for i in self.ifos],
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
