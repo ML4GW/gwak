@@ -188,13 +188,13 @@ class LAL_BBHPrior(BasePrior):
         self.sampled_params["fs"] = torch.arange(f_min, f_max, 1 / duration) 
         
         # Chirp mass in solar masses. (TensorType)
-        self.priors['chirp_mass'] = Uniform(15, 30) 
+        self.priors['chirp_mass'] = Uniform(5, 65)
         
         # Mass ratio m1/m2. (TensorType)
         self.priors['mass_ratio'] = Uniform(0.5, 0.99) 
         
         # # Luminosity distance in Mpc.(TensorType)
-        self.priors["distance"] = Uniform(50, 200) # dist_mpc
+        self.priors["distance"] = Uniform(50, 1500) # dist_mpc
         
         # Coalescence time. (TensorType)
         self.priors["tc"] = Constant(0) 

@@ -11,7 +11,7 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
   log_every_n_steps: 10
-  max_epochs: 4
+  max_epochs: 100
   limit_val_batches: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -91,8 +91,6 @@ data:
       - null
       - null
       - null
-    # data_dir: /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/train
-    data_dir: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/train
     sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64
