@@ -54,7 +54,6 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self.data_saving_file = data_saving_file
         self.ifos = ifos
         if self.data_saving_file is not None:
-
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
             self.data_group = h5py.File(self.data_saving_file, "w")
 
@@ -469,6 +468,7 @@ class SignalDataloader(GwakBaseDataloader):
                     self.waveforms[i],
                     self,
                     self.signal_configs[i],
+                    self.ifos,
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
@@ -482,6 +482,7 @@ class SignalDataloader(GwakBaseDataloader):
                     self.waveforms[i],
                     self,
                     self.signal_configs[i],
+                    self.ifos,
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
@@ -734,9 +735,8 @@ class AugmentationSignalDataloader(SignalDataloader):
 
 
 
-def generate_waveforms_standard(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
+def generate_waveforms_standard(batch_size, prior, waveform, loader, config, ifos, parameters=None, ra=None, dec=None):
         # get detector orientations
-        ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
         # sample from prior and generate waveforms
@@ -766,9 +766,8 @@ def generate_waveforms_standard(batch_size, prior, waveform, loader, config, par
 
         return responses, parameters, ra, dec, phic
 
-def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
+def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, ifos, parameters=None, ra=None, dec=None):
         # get detector orientations
-        ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
         if parameters is None:
