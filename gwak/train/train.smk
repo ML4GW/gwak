@@ -23,7 +23,8 @@ wildcard_constraints:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
+        # data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
+        data_dir = '/home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/{ifos}/train'
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
