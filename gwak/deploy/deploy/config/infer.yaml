@@ -1,7 +1,7 @@
 ifos: ["H1", "L1"]
 psd_length: 64
-# Tb: 100
-Tb: 2592000 # 30 Days
+Tb: 100
+# Tb: 2592000 # 30 Days
 # Tb: 31536000 # One Year
 stride_batch_size: 256
 sample_rate: 4096
@@ -11,7 +11,7 @@ fname: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/HL/test
 ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled # 1 kpc
 data_format: h5 # gwf
 shifts: [0, 1]
-project: white_noise_purst
+project: combination
 image: hermes/tritonserver:23.01
 model_repo_dir: null 
 result_dir: null  

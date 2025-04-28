@@ -42,7 +42,7 @@ def cli_main(args=None):
     logger = logging.getLogger(__name__)
     logger.info('Started')
 
-    cli = LightningCLI(
+    cli = GwakMultiSignalCLI(
         save_config_kwargs={'overwrite': True},
         args=args
     )

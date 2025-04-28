@@ -90,11 +90,11 @@ def infer(
 
     if model_repo_dir is None: 
         model_repo_dir = file_path.parents[2] / "output/export"
-    model_repo_dir = model_repo_dir / project
+    # model_repo_dir = model_repo_dir / project
 
     if result_dir is None: 
         result_dir = file_path.parents[2] / "output/infer"
-    result_dir = result_dir / project
+    # result_dir = result_dir / project # already passed trhough snakemake
     result_dir.mkdir(parents=True, exist_ok=True)
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"

@@ -33,10 +33,6 @@ def main(embedder_model_file,
     metric_model = torch.jit.load(metric_model_file, map_location="cpu")
     metric_model = metric_model.to("cuda:0")
     metric_model.eval()
-    # breakpoint()
-    # dummy_input = torch.randn(1, 8).to("cuda")
-    # metric_model = metric_model.to("cuda")
-    # metric_model(dummy_input)
     # Create the combined model.
     combined_model = CombinedModel(embedder_model, metric_model)
     combined_model.eval()
@@ -76,9 +72,3 @@ if __name__ == "__main__":
         num_ifos=args.num_ifos,
         output_path=args.outfile
     )
-
-    # for KATYA this would get called as such: 
-    # python combine_models.py /home/eric.moreno/gwak2/gwak/output/combination/embedding_model_JIT.pt 
-    #                          /home/eric.moreno/gwak2/gwak/output/combination/mlp_model_JIT.pt 
-    #       #from export.yaml: --batch_size 256 --kernel_length 0.5 --sample_rate 4096 --num_ifos 2
-    #                          --outfile /home/eric.moreno/gwak2/gwak/output/combination/model_JIT.pt

@@ -1,0 +1,20 @@
+ifos: ["L1", "V1"]
+
+state_flag: ["DMT-ANALYSIS_READY:1", "ITF_SCIENCE:1"]
+channels: ["GDS-CALIB_STRAIN_CLEAN", "Hrec_hoft_16384Hz"]
+frame_type: ["HOFT_C00", "HoftOnline"]
+# start and end don't matter if we provide segment npy array
+ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_2/O4b-2
+ana_end: 1402069900
+sample_rate: 4096
+save_dir: output/O4_MDC_background/LV
+# omi_paras:
+#   out_dir: "../output/omicron"
+#   q_range: [3.3166, 108.0]
+#   frequency_range: [32.0, 2048.0]
+#   cluster_dt: 0.5
+#   chunk_duration: 124
+#   segment_duration: 64
+#   overlap_duration: 4
+#   mismatch_max: 0.2
+#   snr_threshold: 5.0
