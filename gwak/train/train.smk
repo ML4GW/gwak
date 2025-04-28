@@ -1,25 +1,58 @@
 import os
 
-train_configs = [
-    'NF_onlyBkg',
-    'FM_multiSignalAndBkg',
+cl_configs = [
     'Transformer_SimCLR_multiSignal_all',
     'Transformer_SimCLR_multiSignalAndBkg_noSG',
     'S4_SimCLR_multiSignalAndBkg'
     ]
+fm_configs = [
+    'NF_onlyBkg',
+    'FM_multiSignalAndBkg',
+    ]
 wildcard_constraints:
-    train_config = '|'.join([x for x in train_configs])
+    cl_config = '|'.join([x for x in cl_configs]),
+    fm_config = '|'.join([x for x in fm_configs])
 
 
 rule train_cl:
     input:
-        config = 'train/configs/{train_config}.yaml'
-    log:
-        artefact = directory('output/{train_config}/')
+        config = 'train/configs/{cl_config}.yaml'
+    output:
+        model = 'output/{cl_config}/model.pt'
+    params:
+        artefact = directory('output/{cl_config}/')
     shell:
         'python train/cli.py fit --config {input.config} \
-            --trainer.logger.save_dir {log.artefact}'
+            --trainer.logger.save_dir {params.artefact}'
 
-rule train:
+rule train_fm:
     input:
-        expand('output/{train_config}', train_config=['NF_onlyBkg'])
+        embedding_model = expand(rules.train_cl.output.model, cl_config='{cl_config}'),
+        config = 'train/configs/{fm_config}.yaml'
+    output:
+        model = 'output/{cl_config}_{fm_config}/model.pt'
+    params:
+        artefact = directory('output/{cl_config}_{fm_config}/')
+    shell:
+        'python train/cli_fm.py fit --config {input.config} \
+            --trainer.logger.save_dir {params.artefact} '
+
+rule make_plots:
+    input:
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='S4_SimCLR_multiSignalAndBkg'),
+        fm_model = expand(rules.train_fm.output.model,
+            fm_config='NF_onlyBkg',
+            cl_config='S4_SimCLR_multiSignalAndBkg'),
+        data_dir = '/home/katya.govorkova/gwak2/gwak/output/O4_MDC_background',
+        config = 'train/configs/S4_SimCLR_multiSignalAndBkg.yaml'
+    output:
+        directory('output/plots/')
+    shell:
+        'mkdir {output}; '
+        'python train/plots.py \
+            --fm-model {input.fm_model} \
+            --data-dir {input.data_dir} \
+            --config {input.config} \
+            --output {output} '
+            # '--use-freq-correlation '

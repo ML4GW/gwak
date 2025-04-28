@@ -14,7 +14,7 @@ from lightning.pytorch.loggers import WandbLogger
 import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
 from ml4gw.transforms import SpectralDensity, Whiten
-from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_ifo_snr
+from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_network_snr
 
 from torch.distributions.uniform import Uniform
 from ml4gw.distributions import Cosine
@@ -59,7 +59,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
-        all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5')) 
+        all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
         n_all_files = len(all_files)
         # adding handling for the case where data_dir has subdirs for train/test/val
         if n_all_files == 0:
@@ -127,7 +127,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
             dataset, num_workers=self.num_workers, pin_memory=False
         )
         return dataloader
-    
+
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
@@ -247,7 +247,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        
+
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
             self.data_group = h5py.File(self.data_saving_file, "w")
@@ -336,7 +336,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         )
 
         return dataloader
-    
+
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
@@ -494,7 +494,7 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
-            
+
             all_responses.append(responses)
             if parameters is None:
                 output_params.append(params)
@@ -503,7 +503,7 @@ class SignalDataloader(GwakBaseDataloader):
             if decs is None:
                 output_decs.append(dec)
             output_phics.append(phic)
-        
+
         return all_responses, output_params, output_ras, output_decs, output_phics
 
     def inject(self, batch, waveforms, output_snrs = False):
@@ -574,11 +574,10 @@ class SignalDataloader(GwakBaseDataloader):
 
         psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
         psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
-        snrs = compute_ifo_snr(injected.double(), psds_resampled, self.sample_rate)
 
-        # compute network SNR 
-        snrs = snrs**2
-        snrs = torch.sum(snrs, dim=-1)  ** 0.5
+        snrs = torch.zeros(len(whitened)).to('cuda')
+        if waveforms is not None:
+            snrs = compute_network_snr(waveforms, psds_resampled, self.sample_rate)
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)

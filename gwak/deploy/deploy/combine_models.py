@@ -26,12 +26,13 @@ def main(embedder_model_file,
 
     # Load the embedder model (assumed to be a TorchScript module).
     embedder_model = torch.jit.load(embedder_model_file, map_location="cpu")
+    embedder_model = embedder_model.to("cuda:0")
     embedder_model.eval()
 
     # Load the metric model (also in TorchScript format).
     metric_model = torch.jit.load(metric_model_file, map_location="cpu")
+    metric_model = metric_model.to("cuda:0")
     metric_model.eval()
-
     # Create the combined model.
     combined_model = CombinedModel(embedder_model, metric_model)
     combined_model.eval()
@@ -42,7 +43,7 @@ def main(embedder_model_file,
     scripted_model.save(output_path)
     print(f"Combined model saved to {output_path}")
 
-    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cpu')
+    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
     output = combined_model(dummy_input)
     print("Test inference complete.")
     print(f"Output shape: {output.shape}")
@@ -71,9 +72,3 @@ if __name__ == "__main__":
         num_ifos=args.num_ifos,
         output_path=args.outfile
     )
-
-    # for KATYA this would get called as such: 
-    # python combine_models.py /home/eric.moreno/gwak2/gwak/output/combination/embedding_model_JIT.pt 
-    #                          /home/eric.moreno/gwak2/gwak/output/combination/mlp_model_JIT.pt 
-    #       #from export.yaml: --batch_size 256 --kernel_length 0.5 --sample_rate 4096 --num_ifos 2
-    #                          --outfile /home/eric.moreno/gwak2/gwak/output/combination/model_JIT.pt
