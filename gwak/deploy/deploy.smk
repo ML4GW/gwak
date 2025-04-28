@@ -5,13 +5,13 @@ wildcard_constraints:
 
 rule combine_models:
     params:
-        embedding_model = '/home/hongyin.chen/anti_gravity/gwak/gwak/output/S4_SimCLR_multiSignalAndBkg/model_JIT.pt',
-        # expand(rules.train_cl.output.model,
-        #     cl_config='S4_SimCLR_multiSignalAndBkg'),
-        fm_model = 'output/S4_SimCLR_multiSignalAndBkg_NF_onlyBkg/model.pt'
-        # expand(rules.train_fm.output.model,
-        #     fm_config='NF_onlyBkg',
-        #     cl_config='S4_SimCLR_multiSignalAndBkg'),
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='S4_SimCLR_multiSignalAndBkg',
+            ifos='HL'),
+        fm_model = expand(rules.train_fm.output.model,
+            fm_config='NF_onlyBkg',
+            cl_config='S4_SimCLR_multiSignalAndBkg',
+            ifos='HL'),
     output:
         '/home/katya.govorkova/gwak2/gwak/output/combination/model_JIT.pt'
     shell:
