@@ -1,11 +1,12 @@
 ifos: ["H1", "L1"]
 psd_length: 64
-Tb: 100
+Tb: 10
 # Tb: 2592000 # 30 Days
 # Tb: 31536000 # One Year
 stride_batch_size: 256
 sample_rate: 4096
 # fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data_4K
+# fname: /home/hongyin.chen/Data/GWAK_data/strain_check
 fname: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/HL/test
 # fname: /home/katya.govorkova/gwak2_background
 ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled # 1 kpc

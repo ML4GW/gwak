@@ -74,7 +74,12 @@ class PsdEstimator(torch.nn.Module):
         super().__init__()
         self.size = int(length * sample_rate)
         self.spectral_density = SpectralDensity(
-            sample_rate, fftlength, overlap, average, window=window, fast=fast
+            sample_rate, 
+            fftlength, 
+            overlap, 
+            average, 
+            window=window, 
+            fast=fast
         )
 
     def forward(self, X: Tensor) -> Tuple[Tensor, Tensor]:
@@ -130,7 +135,8 @@ class BatchWhitener(torch.nn.Module):
             fftlength=fftlength,
             overlap=None,
             average="median",
-            fast=highpass is not None,
+            # fast=highpass is not None,
+            fast=False
         )
         self.whitener = Whiten(fduration, sample_rate, highpass)
 
@@ -149,7 +155,7 @@ class BatchWhitener(torch.nn.Module):
                 "but found shape {}".format(x.shape)
             )
         x, psd = self.psd_estimator(x)
-        whitened = self.whitener(x.double(), psd)
+        whitened = self.whitener(x.double(), psd.double())
 
         # unfold x and then put it into the expected shape.
         # Note that if x has both signal and background

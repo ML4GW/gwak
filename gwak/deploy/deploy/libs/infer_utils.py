@@ -140,3 +140,11 @@ def padding(
     signal[:, 1, start:end] = hc / distance.reshape(-1, 1)
     
     return signal
+
+def get_seg_start_end(path):
+    path = Path(path)  
+    stem = path.stem    
+    parts = stem.replace("background-", "").split("-")
+    seg_start = int(parts[0])
+    seg_end = int(parts[1])
+    return seg_start, seg_end
