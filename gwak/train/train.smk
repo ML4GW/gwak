@@ -31,7 +31,8 @@ rule train_cl:
     shell:
         'python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
-            --data.init_args.data_dir {input.data_dir}'
+            --data.init_args.data_dir {input.data_dir} \
+            --data.ifos {wildcards.ifos}'
 
 rule train_fm:
     input:
@@ -47,7 +48,8 @@ rule train_fm:
     shell:
         'python train/cli_fm.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
-            --data.init_args.data_dir {input.data_dir}'
+            --data.init_args.data_dir {input.data_dir} \
+            --data.ifos {wildcards.ifos}'
 
 rule make_plots:
     input:
