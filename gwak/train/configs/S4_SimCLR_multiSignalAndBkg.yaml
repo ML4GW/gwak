@@ -37,6 +37,7 @@ model:
 data:
   class_path: dataloader.SignalDataloader
   init_args:
+    ifos: ["H1", "L1"]
     signal_classes:
       - "SineGaussian"
       - "BBH"

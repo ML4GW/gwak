@@ -38,7 +38,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         batch_size: int,
         batches_per_epoch: int,
         num_workers: int,
-        data_saving_file: Path = None
+        data_saving_file: Path = None,
+        ifos: list[str] = ['H1', 'L1']
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -51,8 +52,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
+        self.ifos = ifos
         if self.data_saving_file is not None:
-
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
             self.data_group = h5py.File(self.data_saving_file, "w")
 
@@ -95,7 +96,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=['H1', 'L1'],
+                channels=self.ifos,
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -113,7 +114,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def val_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=['H1', 'L1'],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -131,7 +132,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=['H1', 'L1'],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -234,7 +235,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
         batch_size: int,
         batches_per_epoch: int,
         num_workers: int,
-        data_saving_file: Path = None
+        data_saving_file: Path = None,
+        ifos: list[str] = ['H1', 'L1']
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -247,6 +249,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
+        self.ifos = ifos
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
@@ -302,7 +305,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=['H1', 'L1'],
+                channels=self.ifos,
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -321,7 +324,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=['H1', 'L1'],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -340,7 +343,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=['H1', 'L1'],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -477,6 +480,7 @@ class SignalDataloader(GwakBaseDataloader):
                     self.waveforms[i],
                     self,
                     self.signal_configs[i],
+                    self.ifos,
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
@@ -490,6 +494,7 @@ class SignalDataloader(GwakBaseDataloader):
                     self.waveforms[i],
                     self,
                     self.signal_configs[i],
+                    self.ifos,
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
@@ -742,9 +747,8 @@ class AugmentationSignalDataloader(SignalDataloader):
 
 
 
-def generate_waveforms_standard(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
+def generate_waveforms_standard(batch_size, prior, waveform, loader, config, ifos, parameters=None, ra=None, dec=None):
         # get detector orientations
-        ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
         # sample from prior and generate waveforms
@@ -774,9 +778,8 @@ def generate_waveforms_standard(batch_size, prior, waveform, loader, config, par
 
         return responses, parameters, ra, dec, phic
 
-def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, parameters=None, ra=None, dec=None):
+def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, ifos, parameters=None, ra=None, dec=None):
         # get detector orientations
-        ifos = ['H1', 'L1']
         tensors, vertices = get_ifo_geometry(*ifos)
 
         if parameters is None:
