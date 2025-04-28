@@ -1,0 +1,29 @@
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Current SDK version is 0.17.3
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Configure stats pid to 1816036
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Loading settings from /home/katya.govorkova/.config/wandb/settings
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Loading settings from /home/katya.govorkova/gwak2/gwak/wandb/settings
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Loading settings from environment variables: {}
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'gwak/train/cli_fm.py', 'program_abspath': '/home/katya.govorkova/gwak2/gwak/train/cli_fm.py', 'program': '/home/katya.govorkova/gwak2/gwak/train/cli_fm.py'}
+2025-04-28 11:08:21,243 INFO    MainThread:1816036 [wandb_setup.py:_flush():76] Applying login settings: {}
+2025-04-28 11:08:21,244 INFO    MainThread:1816036 [wandb_init.py:_log_setup():520] Logging user logs to output/S4_SimCLR_multiSignalAndBkg_NF_onlyBkg_HL/wandb/run-20250428_110821-2xiem11t/logs/debug.log
+2025-04-28 11:08:21,244 INFO    MainThread:1816036 [wandb_init.py:_log_setup():521] Logging internal logs to output/S4_SimCLR_multiSignalAndBkg_NF_onlyBkg_HL/wandb/run-20250428_110821-2xiem11t/logs/debug-internal.log
+2025-04-28 11:08:21,244 INFO    MainThread:1816036 [wandb_init.py:init():560] calling init triggers
+2025-04-28 11:08:21,244 INFO    MainThread:1816036 [wandb_init.py:init():567] wandb.init called with sweep_config: {}
+config: {}
+2025-04-28 11:08:21,244 INFO    MainThread:1816036 [wandb_init.py:init():610] starting backend
+2025-04-28 11:08:21,244 INFO    MainThread:1816036 [wandb_init.py:init():614] setting up manager
+2025-04-28 11:08:21,245 INFO    MainThread:1816036 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-04-28 11:08:21,246 INFO    MainThread:1816036 [wandb_init.py:init():622] backend started and connected
+2025-04-28 11:08:21,247 INFO    MainThread:1816036 [wandb_init.py:init():711] updated telemetry
+2025-04-28 11:08:21,257 INFO    MainThread:1816036 [wandb_init.py:init():744] communicating run to backend with 90.0 second timeout
+2025-04-28 11:08:21,527 INFO    MainThread:1816036 [wandb_run.py:_on_init():2402] communicating current version
+2025-04-28 11:08:21,604 INFO    MainThread:1816036 [wandb_run.py:_on_init():2411] got version response upgrade_message: "wandb version 0.19.10 is available!  To upgrade, please run:\n $ pip install wandb --upgrade"
+
+2025-04-28 11:08:21,604 INFO    MainThread:1816036 [wandb_init.py:init():795] starting run threads in backend
+2025-04-28 11:08:25,230 INFO    MainThread:1816036 [wandb_run.py:_console_start():2380] atexit reg
+2025-04-28 11:08:25,230 INFO    MainThread:1816036 [wandb_run.py:_redirect():2235] redirect: wrap_raw
+2025-04-28 11:08:25,230 INFO    MainThread:1816036 [wandb_run.py:_redirect():2300] Wrapping output streams.
+2025-04-28 11:08:25,231 INFO    MainThread:1816036 [wandb_run.py:_redirect():2325] Redirects installed.
+2025-04-28 11:08:25,232 INFO    MainThread:1816036 [wandb_init.py:init():838] run started, returning control to user process
+2025-04-28 11:08:25,694 INFO    MainThread:1816036 [wandb_run.py:_config_callback():1382] config_cb None None {'class_path': 'fm_models.BackgroundFlowModel', 'init_args': {'ckpt': 'output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt', 'cfg_path': 'output/S4_SimCLR_multiSignalAndBkg/config.yaml', 'new_shape': 128, 'n_dims': 8, 'n_flow_steps': 4, 'hidden_dim': 64, 'learning_rate': 0.001, 'use_freq_correlation': False}, '_instantiator': 'lightning.pytorch.cli.instantiate_module'}

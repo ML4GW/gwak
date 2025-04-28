@@ -1,0 +1,72 @@
+wandb_version: 1
+
+_wandb:
+  desc: null
+  value:
+    python_version: 3.11.11
+    cli_version: 0.17.3
+    framework: lightning
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1745864828
+    t:
+      1:
+      - 1
+      - 5
+      - 9
+      - 53
+      - 55
+      - 103
+      2:
+      - 1
+      - 5
+      - 9
+      - 53
+      - 55
+      - 103
+      3:
+      - 7
+      - 23
+      - 66
+      4: 3.11.11
+      5: 0.17.3
+      8:
+      - 5
+      13: linux-x86_64
+    m:
+    - 1: trainer/global_step
+      6:
+      - 3
+    - 1: val/loss
+      5: 1
+      6:
+      - 1
+    - 1: epoch
+      5: 1
+      6:
+      - 1
+    - 1: train/loss_epoch
+      5: 1
+      6:
+      - 1
+    - 1: train/loss_step
+      5: 1
+      6:
+      - 1
+class_path:
+  desc: null
+  value: fm_models.BackgroundFlowModel
+init_args:
+  desc: null
+  value:
+    ckpt: output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt
+    cfg_path: output/S4_SimCLR_multiSignalAndBkg/config.yaml
+    new_shape: 128
+    n_dims: 8
+    n_flow_steps: 4
+    hidden_dim: 64
+    learning_rate: 0.001
+    use_freq_correlation: false
+_instantiator:
+  desc: null
+  value: lightning.pytorch.cli.instantiate_module

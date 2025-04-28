@@ -39,7 +39,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         batches_per_epoch: int,
         num_workers: int,
         data_saving_file: Path = None,
-        ifos: str = 'HL'
+        ifos: str = ['H1', 'L1']
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -52,7 +52,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        self.ifos = ifos
+        self.ifos = [f'{ifo}1' for ifo in ifos]
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
             self.data_group = h5py.File(self.data_saving_file, "w")
@@ -96,7 +96,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=[f'{ifo}1' for ifo in self.ifos],
+                channels=self.ifos,
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -114,7 +114,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def val_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=[f'{ifo}1' for ifo in self.ifos],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -132,7 +132,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=[f'{ifo}1' for ifo in self.ifos],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -249,7 +249,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        self.ifos = ifos
+        self.ifos = [f'{ifo}1' for ifo in ifos]
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
@@ -305,7 +305,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=[f'{ifo}1' for ifo in self.ifos],
+                channels=self.ifos,
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -320,7 +320,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=[f'{ifo}1' for ifo in self.ifos],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -335,7 +335,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=[f'{ifo}1' for ifo in self.ifos],
+            channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,

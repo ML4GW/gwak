@@ -40,7 +40,7 @@ rule train_fm:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         config = 'train/configs/{fm_config}.yaml',
-        data_dir = '/home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/{ifos}/'
+        data_dir = '/home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     params:
@@ -49,18 +49,21 @@ rule train_fm:
         'python train/cli_fm.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
-            --data.ifos {wildcards.ifos}'
+            --data.ifos {wildcards.ifos} \
+            --model.embedding_model {input.embedding_model}'
 
 rule make_plots:
     input:
-        embedding_model = expand(rules.train_cl.output.model,
-            cl_config='S4_SimCLR_multiSignalAndBkg',
-            ifos='HL'),
-        fm_model = expand(rules.train_fm.output.model,
-            fm_config='NF_onlyBkg',
-            cl_config='S4_SimCLR_multiSignalAndBkg',
-            ifos='HL'),
-        data_dir = '/home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/{ifos}/',
+        embedding_model = 'output/S4_SimCLR_multiSignalAndBkg_HL/model_JIT.pt',
+        # expand(rules.train_cl.output.model,
+        #     cl_config='S4_SimCLR_multiSignalAndBkg',
+        #     ifos='HL'),
+        fm_model = 'output/S4_SimCLR_multiSignalAndBkg_NF_onlyBkg_HL/model_JIT.pt'
+        # expand(rules.train_fm.output.model,
+        #     fm_config='NF_onlyBkg',
+        #     cl_config='S4_SimCLR_multiSignalAndBkg',
+        #     ifos='HL'),
+        data_dir = '/home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/HL/',
         config = 'train/configs/S4_SimCLR_multiSignalAndBkg.yaml'
     output:
         directory('output/plots/')
@@ -68,6 +71,7 @@ rule make_plots:
         'mkdir {output}; '
         'python train/plots.py \
             --fm-model {input.fm_model} \
+            --embedding-model {input.embedding_model} \
             --data-dir {input.data_dir} \
             --config {input.config} \
             --output {output} '

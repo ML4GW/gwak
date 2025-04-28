@@ -94,12 +94,6 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         # Wrap flow in a traceable nn.Module
         wrapper = FlowWrapper(module.model).to("cuda:0")
         wrapper.eval()
-
-        # Dummy input: must match the expected shape of flow input
-        # For example, if input to flow is (batch_size, 8):
-        # if module.use_freq_correlation:
-        #     example_input = torch.randn(1, module.model._transform._transforms[0].features+1)
-        # else:
         example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
 
         # Trace the wrapped model
@@ -109,6 +103,46 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
         save_path = os.path.join(save_dir, "model_JIT.pt")
         traced.save(save_path)
+
+        # Wrap flow in a traceable nn.Module
+        wrapper = FlowWrapper(module.model).to("cuda:1")
+        wrapper.eval()
+        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:1")
+
+        # Trace the wrapped model
+        traced = torch.jit.trace(wrapper, example_input)
+
+        # Save the traced model
+        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
+        save_path = os.path.join(save_dir, "model_JIT_cuda1.pt")
+        traced.save(save_path)
+
+        # Wrap flow in a traceable nn.Module
+        wrapper = FlowWrapper(module.model).to("cpu")
+        wrapper.eval()
+        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cpu")
+
+        # Trace the wrapped model
+        traced = torch.jit.trace(wrapper, example_input)
+
+        # Save the traced model
+        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
+        save_path = os.path.join(save_dir, "model_JIT_cpu.pt")
+        traced.save(save_path)
+
+        # Wrap flow in a traceable nn.Module
+        wrapper = FlowWrapper(module.model).to("cuda:2")
+        wrapper.eval()
+        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:2")
+
+        # Trace the wrapped model
+        traced = torch.jit.trace(wrapper, example_input)
+
+        # Save the traced model
+        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
+        save_path = os.path.join(save_dir, "model_JIT_cuda2.pt")
+        traced.save(save_path)
+
 
 
 class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
@@ -359,7 +393,7 @@ class NonLinearClassifier(GwakBaseModelClass):
 class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
-            embedding_model: str = None,
+            embedding_model: str,
             ckpt: str = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt",
             cfg_path: str = "output/S4_SimCLR_multiSignalAndBkg/config.yaml",
             new_shape=128,
