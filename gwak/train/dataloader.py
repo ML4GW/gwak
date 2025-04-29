@@ -39,7 +39,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         batches_per_epoch: int,
         num_workers: int,
         data_saving_file: Path = None,
-        ifos: list[str] = ['H1', 'L1']
+        ifos: str = 'HL'
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -96,7 +96,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=self.ifos,
+                channels=[f'{ifo}1' for ifo in self.ifos],
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
@@ -114,7 +114,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def val_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=self.ifos,
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -132,7 +132,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=self.ifos,
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
@@ -236,7 +236,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         batches_per_epoch: int,
         num_workers: int,
         data_saving_file: Path = None,
-        ifos: list[str] = ['H1', 'L1']
+        ifos: str = 'HL'
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -305,16 +305,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
-                channels=self.ifos,
+                channels=[f'{ifo}1' for ifo in self.ifos],
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
                 coincident=False,
             )
-
-        #pin_memory = isinstance(
-        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        #)
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
@@ -324,16 +320,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
-            channels=self.ifos,
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
         )
-
-        #pin_memory = isinstance(
-        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        #)
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
@@ -343,16 +335,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
     def test_dataloader(self):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
-            channels=self.ifos,
+            channels=[f'{ifo}1' for ifo in self.ifos],
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
         )
-
-        #pin_memory = isinstance(
-        #    self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        #)
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
         )
