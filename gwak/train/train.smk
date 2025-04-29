@@ -86,8 +86,7 @@ rule make_plots:
     shell:
         'mkdir {output}; '
         'python train/plots.py \
-            --fm-model {params.fm_model} \
-            --embedding-model {params.embedding_model} \
+            --combined-model {params.combined_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
             --output {output} '
