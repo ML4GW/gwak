@@ -125,7 +125,7 @@ if __name__=='__main__':
 
     # Load feature extractor
     if args.embedding_model:
-        embed_model = torch.jit.load(embedding_model)
+        embed_model = torch.jit.load(args.embedding_model)
         embed_model.eval()
         embed_model.to(device=device)
     else:
@@ -319,7 +319,7 @@ if __name__=='__main__':
     plt.figure()
     for i, c in enumerate(signal_classes):
         scores_sel = all_scores[all_labels==i+1]
-        plt.hist(scores_sel, bins=100, label=c, density=True, alpha=0.8)
+        plt.hist(scores_sel, bins=100, label=c, density=True, alpha=0.8, range=(0,500))
 
     plt.xlabel("NF log probability")
     plt.legend()
