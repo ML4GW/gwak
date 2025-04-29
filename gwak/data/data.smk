@@ -1,3 +1,12 @@
+ifo_configs = [
+    'hl',
+    'hv',
+    'lv',
+    'hlv'
+]
+wildcard_constraints:
+    ifos = '|'.join([x for x in ifo_configs])
+
 rule find_valid_segments:
     output:
         save_path = 'output/data/segments.original.o4b-2-{ifos}.npy'
