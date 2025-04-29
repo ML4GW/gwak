@@ -104,46 +104,6 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         save_path = os.path.join(save_dir, "model_JIT.pt")
         traced.save(save_path)
 
-        # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model).to("cuda:1")
-        wrapper.eval()
-        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:1")
-
-        # Trace the wrapped model
-        traced = torch.jit.trace(wrapper, example_input)
-
-        # Save the traced model
-        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
-        save_path = os.path.join(save_dir, "model_JIT_cuda1.pt")
-        traced.save(save_path)
-
-        # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model).to("cpu")
-        wrapper.eval()
-        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cpu")
-
-        # Trace the wrapped model
-        traced = torch.jit.trace(wrapper, example_input)
-
-        # Save the traced model
-        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
-        save_path = os.path.join(save_dir, "model_JIT_cpu.pt")
-        traced.save(save_path)
-
-        # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model).to("cuda:2")
-        wrapper.eval()
-        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:2")
-
-        # Trace the wrapped model
-        traced = torch.jit.trace(wrapper, example_input)
-
-        # Save the traced model
-        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
-        save_path = os.path.join(save_dir, "model_JIT_cuda2.pt")
-        traced.save(save_path)
-
-
 
 class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
