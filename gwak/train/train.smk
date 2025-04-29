@@ -52,27 +52,43 @@ rule train_fm:
             --data.ifos {wildcards.ifos} \
             --model.embedding_model {input.embedding_model}'
 
+rule combine_models:
+    params:
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='{cl_config}',
+            ifos='{ifos}'),
+        fm_model = expand(rules.train_fm.output.model,
+            fm_config='{fm_config}',
+            cl_config='{cl_config}',
+            ifos='{ifos}'),
+    output:
+        'output/{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt'
+    shell:
+        'python train/combine_models.py \
+            {params.embedding_model} \
+            {params.fm_model} \
+            --batch_size 512 \
+            --kernel_length 0.5 \
+            --sample_rate 4096 \
+            --num_ifos 2 \
+            --outfile {output} '
+
 rule make_plots:
-    input:
-        embedding_model = 'output/S4_SimCLR_multiSignalAndBkg_HL/model_JIT.pt',
-        # expand(rules.train_cl.output.model,
-        #     cl_config='S4_SimCLR_multiSignalAndBkg',
-        #     ifos='HL'),
-        fm_model = 'output/S4_SimCLR_multiSignalAndBkg_NF_onlyBkg_HL/model_JIT.pt'
-        # expand(rules.train_fm.output.model,
-        #     fm_config='NF_onlyBkg',
-        #     cl_config='S4_SimCLR_multiSignalAndBkg',
-        #     ifos='HL'),
-        data_dir = '/home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/HL/',
+    params:
+        combined_model = expand(rules.combine_models.output,
+            cl_config='S4_SimCLR_multiSignalAndBkg',
+            fm_config='NF_onlyBkg',
+            ifos='HL'),
+        data_dir = 'output/O4_MDC_background/HL/',
         config = 'train/configs/S4_SimCLR_multiSignalAndBkg.yaml'
     output:
         directory('output/plots/')
     shell:
         'mkdir {output}; '
         'python train/plots.py \
-            --fm-model {input.fm_model} \
-            --embedding-model {input.embedding_model} \
-            --data-dir {input.data_dir} \
-            --config {input.config} \
+            --fm-model {params.fm_model} \
+            --embedding-model {params.embedding_model} \
+            --data-dir {params.data_dir} \
+            --config {params.config} \
             --output {output} '
             # '--use-freq-correlation '
