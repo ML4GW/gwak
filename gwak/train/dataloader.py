@@ -39,7 +39,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         batches_per_epoch: int,
         num_workers: int,
         data_saving_file: Path = None,
-        ifos: str = ['H1', 'L1']
+        ifos: str = 'HL'
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)

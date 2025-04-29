@@ -24,6 +24,7 @@ if __name__=='__main__':
 
     # Argument parser
     parser = argparse.ArgumentParser(description='Process and merge ROOT files into datasets.')
+    parser.add_argument('--combined-model', type=str, default=None)
     parser.add_argument('--embedding-model', type=str, default=None)
     parser.add_argument('--fm-model', type=str)
     parser.add_argument('--data-dir', type=str)
@@ -122,6 +123,10 @@ if __name__=='__main__':
         x,snr = loader.multiInject_SNR(waveforms, batch)
         labels = torch.cat([(i+1)*torch.ones(loader.num_per_class[i]) for i in range(loader.num_classes)])
         break
+
+    combined_model = torch.jit.load(args.combined_model)
+    combined_model.eval()
+    combined_model.to(device=device)
 
     # Load feature extractor
     if args.embedding_model:

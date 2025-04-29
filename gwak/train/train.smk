@@ -74,19 +74,29 @@ rule combine_models:
             --outfile {output} '
 
 rule make_plots:
-    params:
+    input:
         combined_model = expand(rules.combine_models.output,
             cl_config='S4_SimCLR_multiSignalAndBkg',
             fm_config='NF_onlyBkg',
-            ifos='HL'),
-        data_dir = 'output/O4_MDC_background/HL/',
+            ifos='HV'),
+    params:
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='S4_SimCLR_multiSignalAndBkg',
+            ifos='HV'),
+        fm_model = expand(rules.train_fm.output.model,
+            fm_config='NF_onlyBkg',
+            cl_config='S4_SimCLR_multiSignalAndBkg',
+            ifos='HV'),
+        data_dir = 'output/O4_MDC_background/HV/',
         config = 'train/configs/S4_SimCLR_multiSignalAndBkg.yaml'
     output:
         directory('output/plots/')
     shell:
         'mkdir {output}; '
         'python train/plots.py \
-            --combined-model {params.combined_model} \
+            --combined-model {input.combined_model} \
+            --embedding-model {params.embedding_model} \
+            --fm-model {params.fm_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
             --output {output} '
