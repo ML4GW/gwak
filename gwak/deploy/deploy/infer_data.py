@@ -23,9 +23,11 @@ def get_shifts_meta_data(
     # to accumulate the requested background,
     # given the duration of the background segments
     files, segments = segments_from_paths(background_fnames, data_foramt=data_foramt)
-    num_shifts = get_num_shifts_from_Tb(
-        segments, Tb, max(shifts)
-    )
+    num_shifts = 1
+    if Tb != 0:
+        num_shifts = get_num_shifts_from_Tb(
+            segments, Tb, max(shifts)
+        )
     return num_shifts, files, segments
 
 

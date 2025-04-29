@@ -1,23 +1,25 @@
 ifos: ["H1", "L1"]
+# ifos: ["H1", "V1"]
+# ifos: ["L1", "V1"]
 psd_length: 64
-# Tb: 86400
+Tb: 0
 # Tb: 2592000 # 30 Days
-Tb: 31536000 # One Year
+# Tb: 31536000 # One Year
 stride_batch_size: 256
 sample_rate: 4096
 # fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data_4K
 # fname: /home/hongyin.chen/Data/GWAK_data/gwak_inspect_4K
-# fname: /home/hongyin.chen/Data/GWAK_data/strain_check
-fname: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/HL/
-# fname: /home/katya.govorkova/gwak2_background
+fname: /home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/HL
 ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled # 1 kpc
-data_format: h5 # gwf
+data_format: hdf5 # gwf
 shifts: [0, 1]
-project: combination
+project: null
 image: hermes/tritonserver:23.01
 model_repo_dir: null 
 result_dir: null  
-job_rate_limit: 4
+job_rate_limit: 40
 monitor_patients: 1
 inference_sampling_rate: 4
 inj_type: null
+cl_config: S4_SimCLR_multiSignalAndBkg
+fm_config: NF_onlyBkg
