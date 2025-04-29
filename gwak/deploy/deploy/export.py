@@ -24,7 +24,7 @@ def export(
     inference_sampling_rate: float,
     sample_rate: int,
     preproc_instances: int,
-    model_weights: str,
+    # model_weights: str,
     highpass: Optional[float] = None,
     # streams_per_gpu: int,
     model_dir: Optional[Path] = None,
@@ -45,7 +45,7 @@ def export(
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)
 
-    with open(model_weights, "rb") as f:
+    with open(weights, "rb") as f:
         graph = torch.jit.load(f)
     graph.eval()
 
