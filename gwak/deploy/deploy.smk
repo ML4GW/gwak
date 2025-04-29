@@ -3,57 +3,30 @@ models = ['white_noise_burst', 'gaussian', 'sine_gaussian', 'cusp', 'kink', 'kin
 wildcard_constraints:
     deploymodels = '|'.join(models)
 
-rule combine_models:
-    params:
-        embedding_model = '/home/hongyin.chen/anti_gravity/gwak/gwak/output/S4_SimCLR_multiSignalAndBkg/model_JIT.pt',
-        # expand(rules.train_cl.output.model,
-        #     cl_config='S4_SimCLR_multiSignalAndBkg'),
-        fm_model = 'output/S4_SimCLR_multiSignalAndBkg_NF_onlyBkg/model.pt'
-        # expand(rules.train_fm.output.model,
-        #     fm_config='NF_onlyBkg',
-        #     cl_config='S4_SimCLR_multiSignalAndBkg'),
-    output:
-        '/home/katya.govorkova/gwak2/gwak/output/combination/model_JIT.pt'
-    shell:
-        'python deploy/deploy/combine_models.py \
-            {params.embedding_model} \
-            {params.fm_model} \
-            --batch_size 512 \
-            --kernel_length 0.5 \
-            --sample_rate 4096 \
-            --num_ifos 2 \
-            --outfile {output} '
-
 rule export:
     input:
-        config = 'deploy/deploy/config/export.yaml',
-        model = rules.combine_models.output
+        config = '../deploy/deploy/config/export.yaml',
     params:
-        cli = lambda wildcards: wildcards.deploymodels
-    output:
-        artefact = directory('/home/katya.govorkova/gwak2/gwak/output/export/{deploymodels}')
+        cli = lambda wildcards: wildcards.deploymodels,
+        artefact = 'output/export/{deploymodels}'
     shell:
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3fbb2a42-ab69-aabf-c395-3f5c943dc939 poetry run python \
         ../deploy/deploy/cli_export.py \
-        --config ../{input.config} \
-        --project {params.cli} \
-        --model_weights {input.model}'
+        --config {input.config} \
+        --project {params.cli} '
 
 rule infer:
     input:
-        config = 'deploy/deploy/config/infer.yaml',
-        model_dir = expand(rules.export.output.artefact, deploymodels='{deploymodels}')
+        config = '../deploy/deploy/config/infer.yaml',
     params:
-        cli = lambda wildcards: wildcards.deploymodels
-    output:
-        directory('/home/katya.govorkova/gwak2/gwak/output/infer/{deploymodels}')
+        cli = lambda wildcards: wildcards.deploymodels,
+        output = 'output/infer/{deploymodels}'
     shell:
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3fbb2a42-ab69-aabf-c395-3f5c943dc939 poetry run python \
         ../deploy/deploy/cli_infer.py \
-        --config ../{input.config} \
+        --config {input.config} \
         --project {params.cli} \
-        --model_repo_dir {input.model_dir} \
-        --result_dir {output}'
+        --result_dir {params.output}'
 
 rule export_all:
     input: expand(rules.export.output, deploymodels='combination')
@@ -63,7 +36,7 @@ rule infer_all:
 
 rule estimate_far:
     input:
-        path_to_infer = expand(rules.infer.output, deploymodels='combination')
+        path_to_infer = '/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/combination/inference_result/'# expand(rules.infer.output, deploymodels='combination')
     output:
         'output/infer/far_metrics.npy'
     shell:
