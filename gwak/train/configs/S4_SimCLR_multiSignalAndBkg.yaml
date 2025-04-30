@@ -10,7 +10,10 @@ trainer:
   #strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
-  log_every_n_steps: 10
+    init_args:
+      project: gwak2_embeddings
+      entity: gwak
+  log_every_n_steps: 1
   max_epochs: 100
   limit_val_batches: 10
   check_val_every_n_epoch: 1
@@ -21,23 +24,32 @@ model:
   init_args:
     num_ifos: 2
     num_timesteps: 2048
-    d_output: 8
-    d_contrastive_space: 8
-    temperature: 0.1
+    d_output: 4
+    d_contrastive_space: 4
+    temperature: 0.5
+    temperature_init: null # not annealing temp
+    n_temp_anneal: 10
     supervised_simclr: true
     lr_opt: 1e-3
+    lr_min: 1e-5
+    cos_anneal: false
+    cos_anneal_tmax: 50
+    use_classifier: true
+    num_classes: 8
+    lambda_classifier: 2.0
+    class_anneal_epochs: 50
     s4_kwargs:
-      d_model: 128
-      d_state: 32
+      d_model: 256
+      d_state: 64
       n_layers: 4
-      dropout: 0.1
+      dropout: 0.2
       prenorm: false
       dt_min: 0.001
       dt_max: 0.1
+      lr: 1e-4
 data:
   class_path: dataloader.SignalDataloader
   init_args:
-    ifos: ["H1", "L1"]
     signal_classes:
       - "SineGaussian"
       - "BBH"
@@ -97,7 +109,7 @@ data:
     psd_length: 64
     fduration: 1
     fftlength: 2
-    batch_size: 16
-    batches_per_epoch: 16
+    batch_size: 512
+    batches_per_epoch: 20
     num_workers: 4
     data_saving_file: null
