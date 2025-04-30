@@ -39,7 +39,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         batches_per_epoch: int,
         num_workers: int,
         data_saving_file: Path = None,
-        ifos: str = ['H1', 'L1']
+        ifos: str = 'HL'
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -193,12 +193,6 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         if self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             # unpack the batch
             [batch] = batch
-
-            # Time-slide L1 relative to H1 before whitening
-            max_shift = batch.shape[-1] // 10  # 10% of signal length
-            shifts = torch.randint(-max_shift, max_shift + 1, (batch.shape[0],), device=batch.device)
-            for i, shift in enumerate(shifts):
-                batch[i, 1] = torch.roll(batch[i, 1], shifts=shift.item(), dims=0)  # roll L1
 
             # whiten
             batch = self.whiten(batch)

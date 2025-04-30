@@ -17,13 +17,14 @@ from gwak.train.dataloader import SignalDataloader
 from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from gwak.train.cl_models import Crayon
 
-device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
+device = torch.device('cuda:1') if torch.cuda.is_available() else 'cpu'
 
 
 if __name__=='__main__':
 
     # Argument parser
     parser = argparse.ArgumentParser(description='Process and merge ROOT files into datasets.')
+    parser.add_argument('--combined-model', type=str, default=None)
     parser.add_argument('--embedding-model', type=str, default=None)
     parser.add_argument('--fm-model', type=str)
     parser.add_argument('--data-dir', type=str)
@@ -43,7 +44,7 @@ if __name__=='__main__':
     psd_length = config['data']['init_args']['psd_length']
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
-    batch_size = 1024 # config['data']['init_args']['batch_size']
+    batch_size = 512 # config['data']['init_args']['batch_size']
     batches_per_epoch = config['data']['init_args']['batches_per_epoch']
     num_workers = config['data']['init_args']['num_workers']
     data_saving_file = config['data']['init_args']['data_saving_file']
@@ -123,6 +124,10 @@ if __name__=='__main__':
         labels = torch.cat([(i+1)*torch.ones(loader.num_per_class[i]) for i in range(loader.num_classes)])
         break
 
+    combined_model = torch.jit.load(args.combined_model)
+    combined_model.eval()
+    combined_model.to(device=device)
+
     # Load feature extractor
     if args.embedding_model:
         embed_model = torch.jit.load(args.embedding_model)
@@ -177,8 +182,11 @@ if __name__=='__main__':
         for batch in tqdm(test_loader):
             [batch] = batch
             # Generate the corresponding waveforms
-            waveforms, params, ras, decs, phics = loader.generate_waveforms(batch.shape[0])
+            waveforms_, params, ras, decs, phics = loader.generate_waveforms(batch.shape[0])
             batch = batch.to(device)
+            waveforms=[]
+            for w in waveforms:
+                waveforms.append(w.to(device))
 
             # Process the waveforms into the required input format
             x, snrs = loader.multiInject_SNR(waveforms, batch)

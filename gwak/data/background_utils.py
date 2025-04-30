@@ -1,3 +1,5 @@
+import os
+import re
 import torch
 from torch.nn import functional as F 
 import math
@@ -107,6 +109,62 @@ def get_background(
         print(f"Strain data for {ifo} collected")
         print(strains[ifo].shape)
         print()
+
+    return strains
+
+
+def find_files_with_ifo(directory, start_time, end_time, ifo):
+    matching_files = []
+    # Pattern to capture IFO, start time, duration
+    pattern = re.compile(r".*-(\w\d)_BurstBenchmark-(\d+)-(\d+)\.gwf")
+
+    for filename in os.listdir(directory):
+        match = pattern.match(filename)
+        if match:
+            file_ifo = match.group(1)
+            file_start = int(match.group(2))
+            duration = int(match.group(3))
+            file_end = file_start + duration
+            # Match requested IFO and time overlap
+            if file_ifo == ifo and not (file_end <= start_time or file_start >= end_time):
+                full_path = os.path.join(directory, filename)
+                matching_files.append(full_path)
+
+    return sorted(matching_files)
+
+def get_injections(
+    seg_start: int,
+    seg_end: int,
+    ifos:list,
+    channels:list,
+    sample_rate:int,
+    injections_dir:str='/scratch/burst.benchmark/o4b-2/',
+    verbose:bool=True
+):
+
+    strains = {}
+    logging.info(f"Collecting strain data from {seg_start} to {seg_end} at {channels}")
+
+    for num, ifo in enumerate(ifos):
+        files = find_files_with_ifo(injections_dir, seg_start, seg_end, ifo)
+        print(f"Found {len(files)} files for {ifo}")
+        if len(files) == 0:
+            raise ValueError(f"No files found for {ifo} between {seg_start} and {seg_end}")
+
+        print(seg_start, seg_end)
+        strains[ifo] = TimeSeries.read(
+            files,
+            f"{ifo}:{channels[num]}",
+            start=seg_start,
+            end=seg_end,
+            nproc=8,
+            verbose=verbose
+        ).resample(sample_rate).value
+        print(f"Strain data for {ifo} collected")
+        print(strains[ifo].shape)
+        print()
+    strains['GPS_start'] = seg_start
+    strains['GPS_stop'] = seg_end
 
     return strains
 

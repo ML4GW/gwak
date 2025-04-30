@@ -166,7 +166,8 @@ cython_debug/
 *.snakemake
 
 # ignore output folders with artefacts
-*output/
+*/output/**
+!*/output/**/*.pt
 lightning_logs/
 wandb/
 slurm_logs/

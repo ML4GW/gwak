@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from background_utils import (
     get_conincident_segs,
     get_background,
+    get_injections,
     create_lcs,
     omicron_bashes,
     glitch_merger
@@ -25,13 +26,13 @@ def run_bash(bash_file):
 
 def gwak_background(
     ifos: list[str], 
-    state_flag: list[str], 
-    channels: list[str], 
-    frame_type: list[str], 
+    channels: list[str],
     ana_start: int,
-    ana_end: int, 
-    sample_rate: int, 
-    save_dir: Path, 
+    ana_end: int,
+    sample_rate: int,
+    save_dir: Path,
+    state_flag: list[str]=None,
+    frame_type: list[str]=None,
     segments: str = None, # provide segments instead of start and end time
     # Omicron process
     omi_paras: Optional[dict] = None,
@@ -57,22 +58,33 @@ def gwak_background(
 
         print(f'Downloading segment from {seg_start} to {seg_end}')
 
-        strains = get_background(
-            seg_start=seg_start,
-            seg_end=seg_end,
-            ifos=ifos,
-            channels=channels,
-            frame_type=frame_type,
-            sample_rate=sample_rate,
-        )
+
+        if not frame_type and not state_flag:
+            strains = get_injections(
+                seg_start=seg_start,
+                seg_end=seg_end,
+                ifos=ifos,
+                channels=channels,
+                sample_rate=sample_rate,
+            )
+
+        else:
+            strains = get_background(
+                seg_start=seg_start,
+                seg_end=seg_end,
+                ifos=ifos,
+                channels=channels,
+                frame_type=frame_type,
+                sample_rate=sample_rate,
+            )
 
         seg_dur = seg_end-seg_start
         file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
 
         with h5py.File(save_dir / file_name, "w") as g:
 
-            for ifo in ifos:
-                g.create_dataset(ifo, data=strains[ifo])
+            for dname, dset in strains.items():
+                g.create_dataset(dname, data=dset)
 
         bash_files = [] # List of omicron commands to excute in background.  
         if omi_paras is not None:
