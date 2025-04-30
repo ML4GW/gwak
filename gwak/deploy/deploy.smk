@@ -12,7 +12,7 @@ rule export:
         artefact = 'tmp/export_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3fbb2a42-ab69-aabf-c395-3f5c943dc939 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-02d6e144-a6ba-2b84-3467-ad78793b43e4 poetry run python \
         ../deploy/deploy/cli_export.py \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
@@ -27,7 +27,7 @@ rule infer:
         artefact = 'tmp/infer_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3fbb2a42-ab69-aabf-c395-3f5c943dc939 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-02d6e144-a6ba-2b84-3467-ad78793b43e4 poetry run python \
         ../deploy/deploy/cli_infer.py \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'

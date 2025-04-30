@@ -99,6 +99,7 @@ def run_infer(
 
     with h5py.File(result_file, "w") as f:
         f.create_dataset(f"data", data=results)
+        f.attrs["GPS_start"] = sequence.gps_start
 
 if __name__ == "__main__":
     

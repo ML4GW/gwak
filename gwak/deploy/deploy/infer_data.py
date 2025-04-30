@@ -77,6 +77,8 @@ class Sequence:
                 for ifo in self.ifos:
                     self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
 
+                self.gps_start = h["GPS_start"][()]
+
         self.size = len(self.strain_dict[ifo])
 
         self._started = {"state": False}
@@ -155,8 +157,8 @@ class Sequence:
 
             inj_state = bg_state
             
-            # with limiter:
-            yield bg_state, inj_state
+            with limiter:
+                yield bg_state, inj_state
 
 
     def __call__(self, y, request_id, sequence_id):
