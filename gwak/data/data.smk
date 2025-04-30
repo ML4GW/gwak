@@ -2,7 +2,7 @@ ifo_configs = [
     'hl',
     'hv',
     'lv',
-    'hls'
+    'hlv'
 ]
 segment_types = [
     'original.o4b-2',
@@ -47,26 +47,8 @@ rule pull_data:
             --segments {input.segments} \
             | tee {output}'
 
-rule pull_hl:
+rule pull_all:
     input:
         expand(rules.pull_data.output,
-            segment_type='short-1',
-            ifos='hl')
-
-rule pull_hv:
-    input:
-        expand(rules.pull_data.output,
-            segment_type='short-0',
-            ifos='hv')
-
-rule pull_lv:
-    input:
-        expand(rules.pull_data.output,
-            segment_type='short-0',
-            ifos='lv')
-
-rule pull_hlv:
-    input:
-        expand(rules.pull_data.output,
-            segment_type='short-0',
-            ifos='hlv')
+            segment_type=['short-0','short-1'],
+            ifos=['hv', 'lv', 'hlv'])
