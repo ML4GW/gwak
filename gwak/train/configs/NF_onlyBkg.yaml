@@ -4,7 +4,7 @@ trainer:
   callbacks:
     - class_path: callback.ValidationCallback
   accelerator: gpu
-  devices: [0,1,2]
+  devices: [0]
   # accelerator: auto
   # devices: auto
   strategy: ddp_find_unused_parameters_true
@@ -16,6 +16,8 @@ trainer:
 ckpt_path: null
 model:
   class_path: fm_models.BackgroundFlowModel
+  init_args:
+    n_dims: 4
 
 data:
   class_path: dataloader.TimeSlidesDataloader

@@ -30,7 +30,7 @@ import wandb
 from PIL import Image
 from io import BytesIO
 
-from plotting import make_corner
+from gwak.train.plotting import make_corner
 
 class GwakBaseModelClass(pl.LightningModule):
 

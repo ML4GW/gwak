@@ -376,12 +376,14 @@ class BackgroundFlowModel(GwakBaseModelClass):
             self.graph = torch.jit.load(embedding_model)
             self.graph.eval()
             self.graph.to(device=self.device)
+            self.get_logger().info(f"Loaded embedding model from {embedding_model}")
         else:
             with open(cfg_path, "r") as fin:
                 cfg = yaml.load(fin, yaml.FullLoader)
             self.graph = Crayon.load_from_checkpoint(ckpt, **cfg['model']['init_args']).model
             self.graph.eval()
             self.graph.to(device=self.device)
+            self.get_logger().info(f"Loaded embedding model from {ckpt}")
 
         self.n_dims = n_dims +1 if use_freq_correlation else n_dims
 

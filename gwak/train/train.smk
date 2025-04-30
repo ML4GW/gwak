@@ -42,7 +42,7 @@ rule train_fm:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         config = 'train/configs/{fm_config}.yaml',
-        data_dir = '/home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/{ifos}/'
+        data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     params:
@@ -51,6 +51,7 @@ rule train_fm:
         'python train/cli_fm.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
+            --model.init_args.embedding_model {input.embedding_model} \
             --data.ifos {wildcards.ifos}'
 
 rule make_plots:
