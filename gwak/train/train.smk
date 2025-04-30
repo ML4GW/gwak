@@ -24,8 +24,6 @@ rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
         data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
-        #data_dir = '/n/netscratch/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
-        #data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/train/'
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
@@ -34,7 +32,8 @@ rule train_cl:
         'python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
-            --data.init_args.ifos {wildcards.ifos}'
+            --data.init_args.ifos {wildcards.ifos} \
+            --model.init_args.ifos {wildcards.ifos}'
 
 rule train_fm:
     input:
@@ -42,7 +41,7 @@ rule train_fm:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         config = 'train/configs/{fm_config}.yaml',
-        data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
+        data_dir = '/home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     params:
@@ -51,27 +50,55 @@ rule train_fm:
         'python train/cli_fm.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
-            --model.init_args.embedding_model {input.embedding_model} \
-            --data.ifos {wildcards.ifos}'
+            --data.ifos {wildcards.ifos} \
+            --model.embedding_model {input.embedding_model}'
+
+rule combine_models:
+    params:
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='{cl_config}',
+            ifos='{ifos}'),
+        fm_model = expand(rules.train_fm.output.model,
+            fm_config='{fm_config}',
+            cl_config='{cl_config}',
+            ifos='{ifos}'),
+    output:
+        'output/{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt'
+    shell:
+        'python train/combine_models.py \
+            {params.embedding_model} \
+            {params.fm_model} \
+            --batch_size 512 \
+            --kernel_length 0.5 \
+            --sample_rate 4096 \
+            --num_ifos 2 \
+            --outfile {output} '
 
 rule make_plots:
     input:
+        combined_model = expand(rules.combine_models.output,
+            cl_config='S4_SimCLR_multiSignalAndBkg',
+            fm_config='NF_onlyBkg',
+            ifos='HV'),
+    params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='S4_SimCLR_multiSignalAndBkg',
-            ifos='HL'),
+            ifos='HV'),
         fm_model = expand(rules.train_fm.output.model,
             fm_config='NF_onlyBkg',
             cl_config='S4_SimCLR_multiSignalAndBkg',
-            ifos='HL'),
-        data_dir = '/home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/{ifos}/',
+            ifos='HV'),
+        data_dir = 'output/O4_MDC_background/HV/',
         config = 'train/configs/S4_SimCLR_multiSignalAndBkg.yaml'
     output:
         directory('output/plots/')
     shell:
         'mkdir {output}; '
         'python train/plots.py \
-            --fm-model {input.fm_model} \
-            --data-dir {input.data_dir} \
-            --config {input.config} \
+            --combined-model {input.combined_model} \
+            --embedding-model {params.embedding_model} \
+            --fm-model {params.fm_model} \
+            --data-dir {params.data_dir} \
+            --config {params.config} \
             --output {output} '
             # '--use-freq-correlation '

@@ -643,7 +643,7 @@ class Crayon(GwakBaseModelClass):
 
     def __init__(
         self,
-        num_ifos: int = 2,
+        num_ifos: Union[int,str] = 2,
         num_timesteps: int = 200,
         d_output:int = 10,
         d_contrastive_space: int = 20,
@@ -663,7 +663,7 @@ class Crayon(GwakBaseModelClass):
         ):
 
         super().__init__()
-        self.num_ifos = num_ifos
+        self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
         self.num_timesteps = num_timesteps
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
