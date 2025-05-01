@@ -1,6 +1,7 @@
 import h5py
 import math
 import torch
+import logging
 
 import numpy as np
 
@@ -77,7 +78,12 @@ class Sequence:
                 for ifo in self.ifos:
                     self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
 
-                self.gps_start = h["GPS_start"][()]
+                try:
+                    self.gps_start = h["GPS_start"][()]
+                except KeyError:
+                    logging.info("No GPS_start to read.")
+                except Exception as e:
+                    logging.info(f"{type(e).__name__}")
 
         self.size = len(self.strain_dict[ifo])
 
