@@ -83,7 +83,7 @@ input, select, textarea {
     }
 
     body {
-        background: #2f312f;
+        background: rgba(22,26,43,255);
     }
 
     .avo {
@@ -95,7 +95,7 @@ input, select, textarea {
     }
 
 .button {
-  background-color: #4CAF50; /* Green */
+  background-color: rgb(206,44,108); /* Green */
   border: none;
   color: white;
   padding: 20px;
@@ -2466,17 +2466,17 @@ input, select, textarea {
         input[type="reset"]:hover,
         input[type="button"]:hover,
         .button:hover {
-            border-color: #49bf9d;
-            color: #49bf9d !important;
+            border-color: rgb(206,44,108);
+            color: rgb(206,44,108) !important;
         }
 
         input[type="submit"]:active,
         input[type="reset"]:active,
         input[type="button"]:active,
         .button:active {
-            background-color: rgba(73, 191, 157, 0.1);
-            border-color: #49bf9d;
-            color: #49bf9d !important;
+            background-color: rgb(206,44,108);
+            border-color: rgb(206,44,108);
+            color: rgb(206,44,108) !important;
         }
 
         input[type="submit"].icon,
@@ -2529,7 +2529,7 @@ input, select, textarea {
             input[type="button"].primary:hover,
             .button.primary:hover {
                 background-color: #5cc6a7;
-                border-color: #5cc6a7;
+                border-color: rgb(206,44,108);
             }
 
             input[type="submit"].primary:active,
@@ -2597,8 +2597,8 @@ input, select, textarea {
         background-attachment: scroll;
         background-position: top left;
         background-repeat: no-repeat;
-        background: rgb(251,103,162);
-        background: linear-gradient(320deg, rgba(251,103,162,1) 0%, rgba(151,179,76,1) 75%);
+        background: rgba(22,26,43,255);
+        background: linear-gradient(320deg, rgb(206,44,108) 0%, rgba(22,26,43,255) 35%);
         background-size: contain;
         color: rgba(255, 255, 255, 0.0);
         height: 100%;
@@ -3238,4 +3238,16 @@ input, select, textarea {
     width: 100%;
     height: 100%;
     object-fit: scale-down;
+}
+
+.avo {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  z-index: 1000; /* Make sure it's on top of other content */
+}
+
+.avo img {
+  width: 270px;
+  height: auto;
 }
