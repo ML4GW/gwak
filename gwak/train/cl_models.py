@@ -15,7 +15,7 @@ import torch.optim as optim
 import lightning.pytorch as pl
 
 import math
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 import torch.nn as nn
@@ -30,6 +30,7 @@ import wandb
 from PIL import Image
 from io import BytesIO
 
+from gwak.train.plotting import make_corner
 
 class GwakBaseModelClass(pl.LightningModule):
 
@@ -642,24 +643,43 @@ class Crayon(GwakBaseModelClass):
 
     def __init__(
         self,
-        num_ifos: int = 2,
+        num_ifos: Union[int,str] = 2,
         num_timesteps: int = 200,
         d_output:int = 10,
         d_contrastive_space: int = 20,
         temperature: float = 0.1,
+        temperature_init: float = None, # initial temperature to start with, if None then constant temp throughout
+        n_temp_anneal: int = 10, # number of epochs to anneal temperature
         supervised_simclr: bool = False,
         lr_opt: float = 1e-4,
+        lr_min: float = 1e-5,
+        cos_anneal: bool = False,
+        cos_anneal_tmax: int = 50,
+        num_classes: int = 8,
+        use_classifier: bool = False,
+        lambda_classifier: float = 0.5,
+        class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
         s4_kwargs: Optional[dict] = {}
         ):
 
         super().__init__()
-        self.num_ifos = num_ifos
+        self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
         self.num_timesteps = num_timesteps
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
         self.temperature = temperature
+        self.temperature_init = temperature_init
+        self.n_temp_anneal = n_temp_anneal
         self.supervised_simclr = supervised_simclr
         self.lr_opt = lr_opt
+        self.lr_min = lr_min
+        self.cos_anneal = cos_anneal
+        self.cos_anneal_tmax = cos_anneal_tmax
+        self.num_classes = num_classes
+        self.use_classifier = use_classifier
+        self.lambda_classifier = lambda_classifier
+        self.lambda_classifier_original = lambda_classifier
+        self.class_anneal_epochs = class_anneal_epochs
 
         self.model = S4Model(d_input=self.num_ifos,
                     length=self.num_timesteps,
@@ -667,8 +687,11 @@ class Crayon(GwakBaseModelClass):
                     **s4_kwargs)
 
         self.projection_head = MLP(d_input = self.d_output, hidden_dims=[self.d_output], d_output = self.d_contrastive_space)
+        if self.use_classifier:
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=[4*self.d_output for _ in range(2)], 
+                                d_output = self.num_classes)
         
-        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
                                                   contrast_mode='all', 
                                                   base_temperature=self.temperature)
 
@@ -677,8 +700,53 @@ class Crayon(GwakBaseModelClass):
         self.save_hyperparameters()
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr_opt)
-        return optimizer
+        all_parameters = list(self.parameters())
+        general_params = [p for p in all_parameters if not hasattr(p, "_optim")]
+        optimizer = torch.optim.AdamW(general_params,lr=self.lr_opt)
+
+        # special parameters for S4 that get their own LR
+        hps = [getattr(p, "_optim") for p in all_parameters if hasattr(p, "_optim")]
+        #self.get_logger().info("doing unique stuff with optimizers")
+        hps = [
+            dict(s) for s in sorted(list(dict.fromkeys(frozenset(hp.items()) for hp in hps)))
+        ]  # Unique dicts
+        for hp in hps:
+            params = [p for p in all_parameters if getattr(p, "_optim", None) == hp]
+            optimizer.add_param_group(
+                {"params": params, **hp}
+            )
+        
+        if self.cos_anneal:
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.lr_min)
+            return {"optimizer": optimizer, "lr_scheduler": sched}
+        else:
+            return optimizer
+        
+    def get_temperature(self,epoch):
+        if self.temperature_init is None:
+            return self.temperature
+        elif epoch < self.n_temp_anneal:
+            m = (self.temperature - self.temperature_init) / self.n_temp_anneal
+            return self.temperature_init + m * epoch
+        else:
+            return self.temperature
+        
+    def get_lambda_classifier(self,epoch):
+        if epoch < self.class_anneal_epochs:
+            return self.lambda_classifier_original * ((self.class_anneal_epochs - epoch) / self.class_anneal_epochs)
+        else:
+            return 0.0
+    
+    def on_train_epoch_start(self):
+        #self.get_logger().info(f"Train epoch start called, epoch {self.current_epoch}")
+        temp = self.get_temperature(self.current_epoch)
+        lambda_class = self.get_lambda_classifier(self.current_epoch)
+        self.log("train/temperature", temp)
+        self.log("train/lambda_class", lambda_class)
+        self.loss_function = SupervisedSimCLRLoss(temperature=temp,
+                                                  contrast_mode='all', 
+                                                  base_temperature=temp)
+        self.lambda_classifier = lambda_class
 
     def training_step(self, batch, batch_idx):
         if self.supervised_simclr:
@@ -686,7 +754,15 @@ class Crayon(GwakBaseModelClass):
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
             z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
-            loss = self.loss_function(z_embd,labels=labels)
+            loss_simclr = self.loss_function(z_embd,labels=labels)
+            if self.use_classifier:
+                logits = self.classifier(x_embd)
+                #self.get_logger().info(f"Logits dtype: {logits.dtype}")
+                #self.get_logger().info(f"labels dtype: {labels.dtype}")
+                loss_class = self.lambda_classifier * F.cross_entropy(logits, (labels-1).to(torch.long))
+                loss = loss_simclr + loss_class
+            else:
+                loss = loss_simclr
         else:
             batch, labels = batch
             aug_0, aug_1 = batch[0], batch[1]
@@ -697,7 +773,8 @@ class Crayon(GwakBaseModelClass):
             embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
             embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
-            loss = self.loss_function(embds,labels=None)
+            loss_simclr = self.loss_function(embds,labels=None)
+            loss = loss_simclr
 
         self.metric = loss.detach()
 
@@ -705,6 +782,15 @@ class Crayon(GwakBaseModelClass):
             'train/loss',
             loss,
             sync_dist=True)
+        self.log(
+            'train/loss_simclr',
+            loss_simclr,
+            sync_dist=True)
+        if self.use_classifier:
+            self.log(
+                'train/loss_classifier',
+                loss_class,
+                sync_dist=True)
 
         return loss
 
@@ -715,7 +801,17 @@ class Crayon(GwakBaseModelClass):
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
             z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
-            loss = self.loss_function(z_embd,labels=labels)
+            loss_simclr = self.loss_function(z_embd,labels=labels)
+            if self.use_classifier:
+                logits = self.classifier(x_embd)
+                #self.get_logger().info(f"Logits dtype: {logits.dtype}")
+                #self.get_logger().info(f"labels dtype: {labels.dtype}")
+                #self.get_logger().info(f"Logits shape: {logits.shape}")
+                #self.get_logger().info(f"labels shape: {labels.shape}")
+                loss_class = self.lambda_classifier * F.cross_entropy(logits, (labels-1).to(torch.long))
+                loss = loss_simclr + loss_class
+            else:
+                loss = loss_simclr
         else:
             batch, labels = batch
             aug_0, aug_1 = batch[0], batch[1]
@@ -726,12 +822,22 @@ class Crayon(GwakBaseModelClass):
             embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
             embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
-            loss = self.loss_function(embds,labels=None)
+            loss_simclr = self.loss_function(embds,labels=None)
+            loss = loss_simclr
 
         self.log(
             'val/loss',
             loss,
             sync_dist=True)
+        self.log(
+            'val/loss_simclr',
+            loss_simclr,
+            sync_dist=True)
+        if self.use_classifier:
+            self.log(
+                'val/loss_classifier',
+                loss_class,
+                sync_dist=True)
 
         if self.supervised_simclr:
             self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
@@ -742,6 +848,9 @@ class Crayon(GwakBaseModelClass):
         if self.supervised_simclr:
             preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
             labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
+            fig = make_corner(preds,labels,return_fig=True)
+            """if np.any(np.isnan(preds)):
+                self.logger.info("predictions fucked")
             N = preds.shape[1]
             labs_uniq = sorted(list(set(labels)))
             fig,axes = plt.subplots(N,N,figsize=(20,20))
@@ -772,16 +881,15 @@ class Crayon(GwakBaseModelClass):
             patches = []
             for k,lab in enumerate(labs_uniq):
                 patches.append(Patch(color=f"C{k}",label=f"Class {k+1}"))
-            plt.legend(handles=patches,ncol=2,fontsize=12)
+            plt.legend(handles=patches,ncol=2,fontsize=12)"""
 
             buf = BytesIO()
-            plt.savefig(buf,format='jpg',dpi=200)
+            fig.savefig(buf,format='jpg',dpi=200)
             buf.seek(0)
             self.logger.log_image(
                 'val/space',
                 [Image.open(buf)],
             )
-
             plt.close(fig)
 
             self.val_outputs.clear()
