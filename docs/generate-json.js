@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataFolder = path.join(__dirname, 'all_O3_new');
+const dataFolder = path.join(__dirname, 'HL_eventdisplay/short1-195');
 
 const files = fs.readdirSync(dataFolder);
 
@@ -11,13 +11,13 @@ let f = [];
 
 files.forEach((file) => {
     if(!file.match(/\d+_.+/)) return;
-    const [date, value, value2] = file.split('_');
+    const [name_, date, value, value2] = file.split('_');
     x.push(gpsTimeToDate(date));
     y.push(value2.replaceAll(".png", ""));
     f.push(file);
 });
 
-fs.writeFile(path.join(__dirname, 'all_O3_new.json'), JSON.stringify([{x, y, file: f, mode: "markers"}], null, 2), (err) => {
+fs.writeFile(path.join(__dirname, 'HL_short1-195.json'), JSON.stringify([{x, y, file: f, mode: "markers"}], null, 2), (err) => {
     if (err) {
         console.log(err);
     }
