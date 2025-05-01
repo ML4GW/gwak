@@ -94,12 +94,6 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         # Wrap flow in a traceable nn.Module
         wrapper = FlowWrapper(module.model).to("cuda:0")
         wrapper.eval()
-
-        # Dummy input: must match the expected shape of flow input
-        # For example, if input to flow is (batch_size, 8):
-        # if module.use_freq_correlation:
-        #     example_input = torch.randn(1, module.model._transform._transforms[0].features+1)
-        # else:
         example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
 
         # Trace the wrapped model
@@ -359,7 +353,7 @@ class NonLinearClassifier(GwakBaseModelClass):
 class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
-            embedding_model: str = None,
+            embedding_model: str,
             ckpt: str = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt",
             cfg_path: str = "output/S4_SimCLR_multiSignalAndBkg/config.yaml",
             new_shape=128,
