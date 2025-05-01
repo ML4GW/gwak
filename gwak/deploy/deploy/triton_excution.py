@@ -10,7 +10,7 @@ from jsonargparse import ArgumentParser, ActionConfigFile
 
 from hermes.aeriel.client import InferenceClient
 from infer_data import Sequence, CCSN_Waveform_Projector, load_h5_as_dict
-from deploy.libs import gwak_logger
+from deploy.libs import gwak_logger, get_seg_start_end
 
 
 EXTREME_CCSN = [
@@ -43,7 +43,9 @@ def run_infer(
     result_dir = job_dir.resolve().parents[1]
     saving_dir =  result_dir / "inference_result"
     saving_dir.mkdir(parents=True, exist_ok=True)
-
+    seg_start, seg_end = get_seg_start_end(strain_file)
+    result_file = saving_dir / f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
+    
     logging.info(f"Applying shifts = {shifts} to {strain_file}")
     sequence = Sequence(
         fname=strain_file,
@@ -93,7 +95,6 @@ def run_infer(
 
     # Job Done leaving client         
     results = np.stack(results)
-    result_file = saving_dir / f"sequence_{sequence_id}.h5"
     logging.info(f"Collecting result to {result_file.resolve()}")
 
     with h5py.File(result_file, "w") as f:
