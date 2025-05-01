@@ -15,7 +15,7 @@ import torch.optim as optim
 import lightning.pytorch as pl
 
 import math
-from typing import Optional
+from typing import Optional, Union
 
 import torch
 import torch.nn as nn
@@ -738,7 +738,7 @@ class Crayon(GwakBaseModelClass):
             return 0.0
     
     def on_train_epoch_start(self):
-        self.get_logger().info(f"Train epoch start called, epoch {self.current_epoch}")
+        #self.get_logger().info(f"Train epoch start called, epoch {self.current_epoch}")
         temp = self.get_temperature(self.current_epoch)
         lambda_class = self.get_lambda_classifier(self.current_epoch)
         self.log("train/temperature", temp)

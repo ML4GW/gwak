@@ -109,7 +109,7 @@ data:
     psd_length: 64
     fduration: 1
     fftlength: 2
-    batch_size: 512
+    batch_size: 256
     batches_per_epoch: 20
     num_workers: 4
     data_saving_file: null
