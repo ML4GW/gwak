@@ -2598,7 +2598,7 @@ input, select, textarea {
         background-position: top left;
         background-repeat: no-repeat;
         background: rgba(22,26,43,255);
-        background: linear-gradient(320deg, rgb(206,44,108) 0%, rgba(22,26,43,255) 35%);
+        background: linear-gradient(60deg, rgb(206,44,108) 0%, rgba(22,26,43,255) 35%);
         background-size: contain;
         color: rgba(255, 255, 255, 0.0);
         height: 100%;
