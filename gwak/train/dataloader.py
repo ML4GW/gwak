@@ -249,9 +249,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-<<<<<<< HEAD
-        self.ifos = [f'{ifo}1' for ifo in ifos]
-=======
         if type(ifos) == list:
             self.ifos = ifos
         else:
@@ -261,7 +258,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 sys.exit(1)
         print("ifos are", self.ifos)
         print("data dir is", data_dir)
->>>>>>> sam
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
