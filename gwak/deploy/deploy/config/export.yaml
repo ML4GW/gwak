@@ -1,10 +1,12 @@
-project: combination
+project: null
 model_dir: null 
 output_dir: null 
 clean: True
 background_batch_size: 2
 stride_batch_size: 256
-num_ifos: 2
+ifos: ["H1", "L1"]
+# ifos: ["H1", "V1"]
+# ifos: ["L1", "V1"]
 gwak_instances: 8
 platform: TORCHSCRIPT
 # platform: TENSORRT
@@ -17,3 +19,5 @@ sample_rate: 4096
 preproc_instances: 1
 inference_sampling_rate: 4
 device: cuda:0 # cuda:0
+cl_config: S4_SimCLR_multiSignalAndBkg
+fm_config: NF_onlyBkg

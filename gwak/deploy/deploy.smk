@@ -5,31 +5,33 @@ wildcard_constraints:
 
 rule export:
     input:
-        config = '../deploy/deploy/config/export.yaml',
+        config = 'deploy/deploy/config/export.yaml',
     params:
         cli = lambda wildcards: wildcards.deploymodels,
     output:
         artefact = 'tmp/export_{deploymodels}.log'
     shell:
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3fbb2a42-ab69-aabf-c395-3f5c943dc939 poetry run python \
+        'mkdir -p tmp; '
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-d331e3e2-4314-0785-e2af-1ed0812b0c84 poetry run python \
         ../deploy/deploy/cli_export.py \
-        --config {input.config} \
-        --project {params.cli} | tee {output.artefact}'
+        --config ../{input.config} \
+        --project {params.cli} | tee ../{output.artefact}'
 
 rule infer:
     input:
-        config = '../deploy/deploy/config/infer.yaml',
+        config = 'deploy/deploy/config/infer.yaml',
     params:
         cli = lambda wildcards: wildcards.deploymodels,
         output = 'output/infer/{deploymodels}'
     output:
         artefact = 'tmp/infer_{deploymodels}.log'
     shell:
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3fbb2a42-ab69-aabf-c395-3f5c943dc939 poetry run python \
+        'mkdir -p tmp; '
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-d331e3e2-4314-0785-e2af-1ed0812b0c84 poetry run python \
         ../deploy/deploy/cli_infer.py \
-        --config {input.config} \
-        --project {params.cli} \
-        --result_dir {params.output} | tee {output.artefact}'
+        --config ../{input.config} \
+        --project {params.cli} | tee ../{output.artefact}'
+        # --result_dir {params.output} 
 
 rule export_all:
     input: expand(rules.export.output, deploymodels='combination')

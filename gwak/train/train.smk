@@ -32,7 +32,8 @@ rule train_cl:
         'python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
-            --data.ifos {wildcards.ifos}'
+            --data.ifos {wildcards.ifos} \
+            --model.num_ifos {wildcards.ifos}'
 
 rule train_fm:
     input:
@@ -40,7 +41,7 @@ rule train_fm:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         config = 'train/configs/{fm_config}.yaml',
-        data_dir = '/home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/{ifos}/'
+        data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     params:

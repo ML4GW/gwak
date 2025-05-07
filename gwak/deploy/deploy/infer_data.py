@@ -1,6 +1,7 @@
 import h5py
 import math
 import torch
+import logging
 
 import numpy as np
 
@@ -23,9 +24,11 @@ def get_shifts_meta_data(
     # to accumulate the requested background,
     # given the duration of the background segments
     files, segments = segments_from_paths(background_fnames, data_foramt=data_foramt)
-    num_shifts = get_num_shifts_from_Tb(
-        segments, Tb, max(shifts)
-    )
+    num_shifts = 1
+    if Tb != 0:
+        num_shifts = get_num_shifts_from_Tb(
+            segments, Tb, max(shifts)
+        )
     return num_shifts, files, segments
 
 
@@ -74,6 +77,13 @@ class Sequence:
 
                 for ifo in self.ifos:
                     self.strain_dict[ifo] = h[ifo][:].astype(self.precision)
+
+                try:
+                    self.gps_start = h["GPS_start"][()]
+                except KeyError:
+                    logging.info("No GPS_start to read.")
+                except Exception as e:
+                    logging.info(f"{type(e).__name__}")
 
         self.size = len(self.strain_dict[ifo])
 
@@ -153,8 +163,8 @@ class Sequence:
 
             inj_state = bg_state
             
-            # with limiter:
-            yield bg_state, inj_state
+            with limiter:
+                yield bg_state, inj_state
 
 
     def __call__(self, y, request_id, sequence_id):

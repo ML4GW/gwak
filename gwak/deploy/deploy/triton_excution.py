@@ -100,6 +100,11 @@ def run_infer(
     with h5py.File(result_file, "w") as f:
         f.create_dataset(f"data", data=results)
 
+        try:
+            f.attrs["GPS_start"] = sequence.gps_start
+        except Exception as e:
+            logging.info(f"{type(e).__name__}") 
+
 if __name__ == "__main__":
     
     parser = ArgumentParser()

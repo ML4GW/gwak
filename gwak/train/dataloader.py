@@ -52,7 +52,13 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        self.ifos = [f'{ifo}1' for ifo in ifos]
+        if type(ifos) == list:
+            self.ifos = ifos
+        else:
+            self.ifos = [f'{ifo}1' for ifo in ifos]
+            if self.ifos not in [['H1', 'L1'], ['H1', 'V1'], ['L1', 'V1'], ['H1', 'L1', 'V1']]:
+                print(f"Unrecognized ifo configuration {self.ifos}, please specify a valid one")
+                sys.exit(1)
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
             self.data_group = h5py.File(self.data_saving_file, "w")
@@ -243,7 +249,15 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
         self.data_saving_file = data_saving_file
-        self.ifos = [f'{ifo}1' for ifo in ifos]
+        if type(ifos) == list:
+            self.ifos = ifos
+        else:
+            self.ifos = [f'{ifo}1' for ifo in ifos]
+            if self.ifos not in [['H1', 'L1'], ['H1', 'V1'], ['L1', 'V1'], ['H1', 'L1', 'V1']]:
+                print(f"Unrecognized ifo configuration {self.ifos}, please specify a valid one")
+                sys.exit(1)
+        print("ifos are", self.ifos)
+        print("data dir is", data_dir)
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
@@ -511,6 +525,8 @@ class SignalDataloader(GwakBaseDataloader):
 
         # calculate psds
         psds = spectral_density(psd_data.double())
+        if torch.any(torch.isnan(psds)):
+            self._logger.info('psds fucked')
 
         # Waveform padding
         if waveforms is not None:
@@ -545,6 +561,9 @@ class SignalDataloader(GwakBaseDataloader):
                 waveforms[i] = F.pad(waveforms[i], (left_pad, right_pad), mode='constant', value=0)[..., new_left_idx:new_right_idx+1].unsqueeze(0)
             waveforms = torch.cat(waveforms,dim=0)
 
+            if torch.any(torch.isnan(waveforms)):
+                self._logger.info('centered waveforms fucked')
+
             injected = batch + waveforms
         else:
             injected = batch
@@ -558,6 +577,8 @@ class SignalDataloader(GwakBaseDataloader):
         whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(injected.double(), psds.double())
+        if torch.any(torch.isnan(whitened)):
+            self._logger.info('whitened fucked before dividing by std')
 
         psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
         psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
@@ -568,7 +589,14 @@ class SignalDataloader(GwakBaseDataloader):
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
+        if torch.any(torch.isnan(stds)):
+            self._logger.info('stds fucked (nan)')
+        if torch.any(stds == 0):
+            self._logger.info('stds fucked (zero)')
         whitened = whitened / stds
+
+        if torch.any(torch.isnan(whitened)):
+            self._logger.info('whitened fucked')
         
         if output_snrs:
             return whitened, snrs
@@ -581,6 +609,8 @@ class SignalDataloader(GwakBaseDataloader):
         for i in range(self.num_classes):
             sub_batches.append(self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
             idx_lo += self.num_per_class[i]
+            if torch.any(torch.isnan(sub_batches[-1])):
+                self._logger.info(f'had a nan batch with class {self.signal_classes[i]}')
         batch = torch.cat(sub_batches)
         return batch
     
@@ -607,8 +637,20 @@ class SignalDataloader(GwakBaseDataloader):
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
             waveforms, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
             
+            for wf in waveforms:
+                if wf is None:
+                    continue
+                if torch.any(torch.isnan(wf)):
+                    self._logger.info('waveforms fucked')
+            if torch.any(torch.isnan(batch)):
+                self._logger.info('batch fucked')
             # inject waveforms; maybe also whiten data preprocess etc..    
-            batch = self.multiInject(waveforms, batch)
+            _batch = self.multiInject(waveforms, batch)
+            while torch.any(torch.isnan(_batch)):
+                self._logger.info('batch fucked after inject, regenerating')
+                waveforms, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
+                _batch = self.multiInject(waveforms, batch)
+            batch = _batch
             labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
 

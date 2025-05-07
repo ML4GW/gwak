@@ -15,7 +15,7 @@ def export(
     clean: bool,
     background_batch_size: int, 
     stride_batch_size: int, 
-    num_ifos: int, 
+    ifos: list[str], 
     gwak_instances: int, 
     psd_length: float,
     kernel_length: float,
@@ -31,6 +31,8 @@ def export(
     output_dir: Optional[Path] = None,
     platform: qv.Platform = qv.Platform.ONNX,
     device: str = "cpu",
+    cl_config: str='S4_SimCLR_multiSignalAndBkg',
+    fm_config: str='NF_onlyBkg',
     **kwargs,
 ):
     
@@ -40,8 +42,11 @@ def export(
     if output_dir is None: 
         output_dir = file_path.parents[2] / "output/export"
 
-    weights = model_dir / project / "model_JIT.pt"
-    output_dir = output_dir / project
+    num_ifos = len(ifos)
+    ifo_str = ''.join(ifo[0] for ifo in ifos)
+
+    weights = model_dir / f"{cl_config}_{fm_config}_{ifo_str}" / project / "model_JIT.pt"
+    output_dir = output_dir / f"{cl_config}_{fm_config}_{ifo_str}" /project
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)
 
@@ -151,7 +156,7 @@ def export(
         6e10
     )
     snapshotter.config.write()
-
+    logging.info(f"Model saved at {output_dir}")
     # Todo:
     # Add max_sequence_idle_microseconds for trasformer or larger model that 
     # may took longer time during inference. 
