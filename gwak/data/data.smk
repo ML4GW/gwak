@@ -6,8 +6,11 @@ ifo_configs = [
 ]
 segment_types = [
     'original.o4b-2',
-    'short-0',
-    'short-1',
+    'short-0.o4b-2',
+    'short-1.o4b-2',
+    'original.o4b-0',
+    'short-0.o4b-0',
+    'short-1.o4b-0',
 ]
 wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs]),
@@ -31,10 +34,16 @@ rule pull_O3b_data:
             --segments {input.segments} '
 
 rule find_valid_segments:
+    params:
+        segments = 'data/segments/'
     output:
         save_path = 'output/data/segments.{segment_type}-{ifos}.npy'
-    script:
-        'segments_intersection.py'
+    shell:
+        'python data/segments_intersection.py \
+            --folder-segments {params.segments} \
+            --segment-type {wildcards.segment_type} \
+            --ifos {wildcards.ifos} \
+            --save-path {output.save_path}'
 
 rule pull_data:
     input:
@@ -50,5 +59,5 @@ rule pull_data:
 rule pull_all:
     input:
         expand(rules.pull_data.output,
-            segment_type=['short-0','short-1'],
-            ifos=['hv', 'lv', 'hlv'])
+            segment_type=['short-0.o4b-2', 'short-1.o4b-2', 'short-0.o4b-0', 'short-1.o4b-0'],
+            ifos=['hl', 'hv', 'lv', 'hlv'])

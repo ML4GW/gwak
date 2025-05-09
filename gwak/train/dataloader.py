@@ -315,9 +315,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 self.train_fnames,
                 channels=self.ifos,
                 kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
+                psd_length=self.psd_length,
+                sample_rate=self.sample_rate,
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
                 coincident=False,
+                mode='clean'
             )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -330,9 +333,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
             self.val_fnames,
             channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
+            mode='clean'
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -345,9 +351,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
             self.test_fnames,
             channels=self.ifos,
             kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
+            mode='clean'
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
