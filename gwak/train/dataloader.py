@@ -314,7 +314,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
         dataset = Hdf5TimeSeriesDataset(
                 self.train_fnames,
                 channels=self.ifos,
-                kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
+                kernel_length=self.kernel_length,
+                fduration=self.fduration,
                 psd_length=self.psd_length,
                 sample_rate=self.sample_rate,
                 batch_size=self.batch_size,
@@ -332,7 +333,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
         dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
             channels=self.ifos,
-            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
             psd_length=self.psd_length,
             sample_rate=self.sample_rate,
             batch_size=self.batch_size,
@@ -350,7 +352,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
         dataset = Hdf5TimeSeriesDataset(
             self.test_fnames,
             channels=self.ifos,
-            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
             psd_length=self.psd_length,
             sample_rate=self.sample_rate,
             batch_size=self.batch_size,
@@ -434,12 +437,11 @@ class GwakBaseDataloader(pl.LightningDataModule):
 class SignalDataloader(GwakBaseDataloader):
     def __init__(
         self,
-        signal_classes: list[str] | str, # string names of signal class(es) desired
-        priors: list[Optional[data.BasePrior]] | Optional[data.BasePrior], # priors for each class
-        waveforms: list[Optional[torch.nn.Module]] | Optional[torch.nn.Module], # waveforms for each class
-        extra_kwargs: list[Optional[dict]] | Optional[dict], # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
-        *args,
-        **kwargs
+        signal_classes: list[str] | str,
+        priors,
+        waveforms,
+        extra_kwargs,
+        *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.signal_classes = signal_classes if type(signal_classes) == list else [signal_classes]
@@ -447,6 +449,10 @@ class SignalDataloader(GwakBaseDataloader):
         self.waveforms = waveforms if type(waveforms) == list else [waveforms]
         self.priors = priors if type(priors) == list else [priors]
         self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
+        self._is_glitch = (self.signal_classes == ["Glitch"]
+                           or (self.num_classes == 1
+                               and self.signal_classes[0] == "Glitch"))
+
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
@@ -471,6 +477,52 @@ class SignalDataloader(GwakBaseDataloader):
             self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
             self.data_group["class_label_names"] = self.signal_classes
 
+    def _build_glitch_dataset(self, fnames):
+        """
+        Helper that builds an Hdf5TimeSeriesDataset for Glitch
+        (tweak the arguments below as needed for your use-case).
+        """
+        return Hdf5TimeSeriesDataset(
+            fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+            mode="glitch"
+        )
+
+    def train_dataloader(self):
+        if self._is_glitch:
+            dataset = self._build_glitch_dataset(self.train_fnames)
+            return torch.utils.data.DataLoader(
+                dataset, num_workers=self.num_workers, pin_memory=False
+            )
+        # default behaviour for every other signal type
+        return super().train_dataloader()
+
+
+    def val_dataloader(self):
+        if self._is_glitch:
+            dataset = self._build_glitch_dataset(self.val_fnames)
+            return torch.utils.data.DataLoader(
+                dataset, num_workers=self.num_workers, pin_memory=False
+            )
+        return super().val_dataloader()
+
+
+    def test_dataloader(self):
+        if self._is_glitch:
+            dataset = self._build_glitch_dataset(self.test_fnames)
+            return torch.utils.data.DataLoader(
+                dataset, num_workers=self.num_workers, pin_memory=False
+            )
+        return super().test_dataloader()
+
+
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
         all_responses = []
         output_params = [] if parameters is None else parameters
@@ -491,6 +543,8 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             elif signal_class == "Background":
+                responses, params, ra, dec, phic = None, None, None, None, None
+            elif signal_class == "Glitch":
                 responses, params, ra, dec, phic = None, None, None, None, None
             else:
                 responses, params, ra, dec, phic = generate_waveforms_standard(
@@ -543,15 +597,6 @@ class SignalDataloader(GwakBaseDataloader):
             window_len = splits[1]
             half = int((window_len - inj_len)/2)
             first_half, second_half = half, window_len - half - inj_len
-
-            # old implementation - pad with zeros if inj_len < window_len
-            # otherwise take the center chunk of waveform with length window_len
-            #waveforms = F.pad(
-            #    input=waveforms,
-            #    pad=(first_half, second_half),
-            #    mode='constant',
-            #    value=0
-            #)
 
             # new implementation: center the window of length window_len
             # about the max amplitude point in the signal waveform
@@ -606,12 +651,12 @@ class SignalDataloader(GwakBaseDataloader):
 
         if torch.any(torch.isnan(whitened)):
             self._logger.info('whitened fucked')
-        
+
         if output_snrs:
             return whitened, snrs
         else:
             return whitened
-    
+
     def multiInject(self,waveforms,batch):
         sub_batches = []
         idx_lo = 0
@@ -622,7 +667,7 @@ class SignalDataloader(GwakBaseDataloader):
                 self._logger.info(f'had a nan batch with class {self.signal_classes[i]}')
         batch = torch.cat(sub_batches)
         return batch
-    
+
     def multiInject_SNR(self,waveforms,batch):
         sub_batches = []
         sub_batches_snr = []
@@ -645,7 +690,7 @@ class SignalDataloader(GwakBaseDataloader):
 
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
             waveforms, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
-            
+
             for wf in waveforms:
                 if wf is None:
                     continue
@@ -653,7 +698,7 @@ class SignalDataloader(GwakBaseDataloader):
                     self._logger.info('waveforms fucked')
             if torch.any(torch.isnan(batch)):
                 self._logger.info('batch fucked')
-            # inject waveforms; maybe also whiten data preprocess etc..    
+            # inject waveforms; maybe also whiten data preprocess etc..
             _batch = self.multiInject(waveforms, batch)
             while torch.any(torch.isnan(_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
