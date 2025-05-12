@@ -321,7 +321,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
                 coincident=False,
-                mode='clean'
+                mode='clean',
+                glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+                ifos=self.ifos
             )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -340,7 +342,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
-            mode='clean'
+            mode='clean',
+            glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+            ifos=self.ifos
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -359,7 +363,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
-            mode='clean'
+            mode='clean',
+            glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+            ifos=self.ifos
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -492,7 +498,9 @@ class SignalDataloader(GwakBaseDataloader):
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
-            mode="glitch"
+            mode="glitch",
+            glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+            ifos=self.ifos
         )
 
     def train_dataloader(self):
