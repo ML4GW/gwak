@@ -43,12 +43,12 @@ rule pull_data:
     output:
         'tmp/{segment_type}-{ifos}.log'
     shell:
-        'python data/cli.py --config {input.config} \
+        'python -u data/cli.py --config {input.config} \
             --segments {input.segments} \
             | tee {output}'
 
 rule pull_all:
     input:
         expand(rules.pull_data.output,
-            segment_type=['short-0','short-1'],
-            ifos=['hv', 'lv', 'hlv'])
+            segment_type=['original.o4b-2'],
+            ifos=['hl'])
