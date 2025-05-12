@@ -174,41 +174,41 @@ def infer(
                     # inj_type=inj_type,
                 )
 
-        #         # Condor inference
-        #         submit_file = make_subfile(
-        #             job_dir=job_dir,
-        #             arguments=arguments,
-        #             config=config_file.resolve()
-        #         )
-        #         sub_files.append(submit_file)
-
-        #         submit_num += 1
-                
-        # # Condor inference
-        # condor_submit_with_rate_limit(
-        #     sub_files=sub_files,
-        #     rate_limit=job_rate_limit
-        # )
-
-
-                # Local inference
-                cmd = f"python {str(arguments)} --config {config_file}"
-                bash_files.append(bash_commnad_files(job_dir, cmd))
+                # Condor inference
+                submit_file = make_subfile(
+                    job_dir=job_dir,
+                    arguments=arguments,
+                    config=config_file.resolve()
+                )
+                sub_files.append(submit_file)
 
                 submit_num += 1
+                
+        # Condor inference
+        condor_submit_with_rate_limit(
+            sub_files=sub_files,
+            rate_limit=job_rate_limit
+        )
 
-        # Local inference
-        with ThreadPoolExecutor(max_workers=job_rate_limit) as e:
+
+        #         # Local inference
+        #         cmd = f"python {str(arguments)} --config {config_file}"
+        #         bash_files.append(bash_commnad_files(job_dir, cmd))
+
+        #         submit_num += 1
+
+        # # Local inference
+        # with ThreadPoolExecutor(max_workers=job_rate_limit) as e:
         
-            # for bash_file in bash_files:
-            #     logging.info(f"Excuting {bash_file}")
-            #     e.submit(run_bash, bash_file)
-            futures = [e.submit(run_bash, f) for f in bash_files]
-            for future in futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    logging.error(f"Thread crashed: {e}")
+        #     # for bash_file in bash_files:
+        #     #     logging.info(f"Excuting {bash_file}")
+        #     #     e.submit(run_bash, bash_file)
+        #     futures = [e.submit(run_bash, f) for f in bash_files]
+        #     for future in futures:
+        #         try:
+        #             future.result()
+        #         except Exception as e:
+        #             logging.error(f"Thread crashed: {e}")
 
 
         logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")

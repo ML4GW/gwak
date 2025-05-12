@@ -1,4 +1,5 @@
 import h5py
+import toml
 import logging
 import argparse
 import numpy as np
@@ -449,6 +450,12 @@ class SignalDataloader(GwakBaseDataloader):
         self.ra_prior =  Uniform(0, 2*torch.pi)
         self.dec_prior = Cosine(-np.pi/2, torch.pi/2)
         self.phic_prior = Uniform(0, 2 * torch.pi)
+        
+        # CCSN second-derivitive waveform data
+        self.ccsn_dict = load_h5_as_dict(
+            chosen_signals=Path("/home/hongyin.chen/anti_gravity/CCSNet/apps/train/ccsn.toml"),
+            source_file=Path("/home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled")
+        )
 
         # compute number of events to generate per class per batch
         self.num_per_class = self.num_classes * [self.batch_size//self.num_classes]
@@ -461,7 +468,17 @@ class SignalDataloader(GwakBaseDataloader):
         if self.data_saving_file is not None:
             self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
             self.data_group["class_label_names"] = self.signal_classes
-
+            
+        self.generate_waveforms_ccsn = CCSN_Injector(
+            ifos=self.ifos,
+            signals_dict=self.ccsn_dict,
+            sample_rate=self.sample_rate,
+            sample_duration=0.5,
+            # highpass=30,
+            buffer_duration=2.5
+            # batch_size
+        )
+        
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
         all_responses = []
         output_params = [] if parameters is None else parameters
@@ -480,6 +497,21 @@ class SignalDataloader(GwakBaseDataloader):
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
+                )
+            if signal_class == "CCSN":
+                # responses, params, ra, dec, phic = generate_waveforms_standard(
+                #     self.num_per_class[i],
+                #     self.priors[i],
+                #     self.waveforms[i],
+                #     self,
+                #     self.signal_configs[i],
+                #     self.ifos,
+                #     parameters=parameters[i] if parameters is not None else None,
+                #     ra=ras[i] if ras is not None else None,
+                #     dec=decs[i] if decs is not None else None
+                # )
+                self.generate_waveforms_ccsn(
+                    total_counts=self.num_per_class[i]
                 )
             elif signal_class == "Background":
                 responses, params, ra, dec, phic = None, None, None, None, None
@@ -607,7 +639,8 @@ class SignalDataloader(GwakBaseDataloader):
         sub_batches = []
         idx_lo = 0
         for i in range(self.num_classes):
-            sub_batches.append(self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
+            sub_batches.append(
+                self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
             idx_lo += self.num_per_class[i]
             if torch.any(torch.isnan(sub_batches[-1])):
                 self._logger.info(f'had a nan batch with class {self.signal_classes[i]}')
@@ -771,74 +804,278 @@ class AugmentationSignalDataloader(SignalDataloader):
 
 
 
-def generate_waveforms_standard(batch_size, prior, waveform, loader, config, ifos, parameters=None, ra=None, dec=None):
-        # get detector orientations
-        tensors, vertices = get_ifo_geometry(*ifos)
+def generate_waveforms_standard(
+    batch_size, 
+    prior, 
+    waveform, 
+    loader, 
+    config, 
+    ifos, 
+    parameters=None, 
+    ra=None, 
+    dec=None
+):
+    # get detector orientations
+    tensors, vertices = get_ifo_geometry(*ifos)
 
+    # sample from prior and generate waveforms
+    if parameters is None:
+        parameters = prior.sample(batch_size) # dict[str, torch.tensor]
+    if ra is None:
+        ra = loader.ra_prior.sample((batch_size,))
+    if dec is None:
+        dec = loader.dec_prior.sample((batch_size,))
+    phic = loader.phic_prior.sample((batch_size,))
+
+    cross, plus = waveform(**parameters)
+
+
+    # compute detector responses
+    responses = compute_observed_strain(
+        dec,
+        phic,
+        ra,
+        tensors,
+        vertices,
+        config['sample_rate'],
+        cross=cross.float(),
+        plus=plus.float()
+    )
+    responses = responses.to('cuda') if torch.cuda.is_available() else responses
+
+    return responses, parameters, ra, dec, phic
+
+def generate_waveforms_bbh(
+    batch_size, 
+    prior, 
+    waveform, 
+    loader, 
+    config, 
+    ifos, 
+    parameters=None, 
+    ra=None, 
+    dec=None
+):
+    # get detector orientations
+    tensors, vertices = get_ifo_geometry(*ifos)
+
+    if parameters is None:
         # sample from prior and generate waveforms
-        if parameters is None:
-            parameters = prior.sample(batch_size) # dict[str, torch.tensor]
-        if ra is None:
-            ra = loader.ra_prior.sample((batch_size,))
-        if dec is None:
-            dec = loader.dec_prior.sample((batch_size,))
-        phic = loader.phic_prior.sample((batch_size,))
+        parameters = prior.sample(batch_size) # dict[str, torch.tensor]
+    if ra is None:
+        ra = loader.ra_prior.sample((batch_size,))
+    if dec is None:
+        dec = loader.dec_prior.sample((batch_size,))
 
-        cross, plus = waveform(**parameters)
+    cross, plus = waveform(**parameters)
+    cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)
+    # Normalization
+    cross *= config['sample_rate']
+    plus *= config['sample_rate']
+
+    # roll the waveforms to join
+    # the coalescence and ringdown
+    ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
+    cross = torch.roll(cross, -ringdown_size, dims=-1)
+    plus = torch.roll(plus, -ringdown_size, dims=-1)
+
+    # compute detector responses
+    responses = compute_observed_strain(
+        # parameters['dec'],
+        dec,
+        parameters['phic'], # psi
+        # parameters['ra'],
+        ra,
+        tensors,
+        vertices,
+        config['sample_rate'],
+        cross=cross.float(),
+        plus=plus.float()
+    )
+    responses = responses.to('cuda') if torch.cuda.is_available() else responses
+
+    return responses, parameters, ra, dec, parameters['phic']
 
 
-        # compute detector responses
-        responses = compute_observed_strain(
+def load_h5_as_dict(
+    chosen_signals: Path,
+    source_file: Path
+)-> dict:
+    """Open up a buffer to load in different CCSN wavefroms.
+
+    Args:
+        chosen_signals (Path): A file with names of each wavefrom.
+        source_file (Path): The path that contains reasmpled raw waveform.
+
+    Returns:
+        dict: Time and resampled SQDM of Each waveform
+    """
+    selected_ccsn = toml.load(chosen_signals)
+    source_file = Path(source_file)
+    
+    grand_dict = {}
+    ccsn_list = []
+    
+    for key in selected_ccsn.keys():
+        
+        for name in selected_ccsn[key]:
+            ccsn_list.append(f"{key}/{name}")
+
+    for name in ccsn_list:
+        
+        with h5py.File(source_file/ f'{name}.h5', 'r', locking=False) as h:
+
+            time = np.array(h['time'][:])
+            quad_moment = h['quad_moment'][:] 
+            
+        grand_dict[name] =  [time, quad_moment]
+    
+    return grand_dict
+
+def get_hp_hc_from_q2ij( 
+    q2ij, 
+    theta: np.ndarray, 
+    phi: np.ndarray
+):
+
+    '''
+    The orientation of GW emition is given by theta, phi
+    '''
+
+    hp =\
+        q2ij[:,0,0]*(np.cos(theta)**2*np.cos(phi)**2 - np.sin(phi)**2).reshape(-1, 1)\
+        + q2ij[:,1,1]*(np.cos(theta)**2*np.sin(phi)**2 - np.cos(phi)**2).reshape(-1, 1)\
+        + q2ij[:,2,2]*(np.sin(theta)**2).reshape(-1, 1)\
+        + q2ij[:,0,1]*(np.cos(theta)**2*np.sin(2*phi) - np.sin(2*phi)).reshape(-1, 1)\
+        - q2ij[:,1,2]*(np.sin(2*theta)*np.sin(phi)).reshape(-1, 1)\
+        - q2ij[:,2,0]*(np.sin(2*theta)*np.cos(phi)).reshape(-1, 1)
+
+    hc = 2*(
+        - q2ij[:,0,0]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
+        + q2ij[:,1,1]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
+        + q2ij[:,0,1]*(np.cos(theta)*np.cos(2*phi)).reshape(-1, 1)
+        - q2ij[:,1,2]*(np.sin(theta)*np.cos(phi)).reshape(-1, 1)
+        + q2ij[:,2,0]*(np.sin(theta)*np.sin(phi)).reshape(-1, 1)
+    )
+
+    return hp, hc
+
+def padding(
+    time,
+    hp,
+    hc,
+    distance,
+    sample_kernel = 3,
+    sample_rate = 4096,
+    time_shift = -0.15, # shift zero to distination time
+):
+    
+    # Two polarization
+    signal = np.zeros([hp.shape[0], 2, int(sample_kernel * sample_rate)])
+
+    half_kernel_idx = int(sample_kernel * sample_rate/2)
+    time_shift_idx = int(time_shift * sample_rate)
+    t0_idx = int(time[0] * sample_rate)
+
+    start = half_kernel_idx + t0_idx + time_shift_idx
+    end = half_kernel_idx + t0_idx + time.shape[0] + time_shift_idx
+
+    signal[:, 0, start:end] = hp / distance.reshape(-1, 1)
+    signal[:, 1, start:end] = hc / distance.reshape(-1, 1)
+    
+    return signal
+
+from ml4gw import gw
+from ml4gw.distributions import PowerLaw
+from ml4gw.transforms import SnrRescaler
+class CCSN_Injector:
+
+    def __init__(
+        self,
+        ifos,
+        signals_dict,
+        sample_rate,
+        sample_duration,
+        buffer_duration = 4,
+        off_set = 0.15,
+        time_shift = -0.15
+    ):
+
+        self.tensors, self.vertices = gw.get_ifo_geometry(*ifos)
+        
+        self.signals = signals_dict
+        self.ccsn_list = list(self.signals.keys())
+        
+        self.sample_rate = sample_rate
+        self.sample_duration = sample_duration
+        self.buffer_duration = buffer_duration
+        self.off_set = off_set
+        self.time_shift = time_shift
+        self.kernel_length = int(sample_duration * sample_rate)
+        self.buffer_length = int(buffer_duration * sample_rate)
+        self.max_center_offset = int((buffer_duration/2 - sample_duration - off_set) * sample_rate)
+
+        if off_set <= -time_shift:
+            
+            logging.info(f"Core bounce siganl may leak out of sample kernel by {-time_shift - off_set}")
+        
+    def __call__(
+        self,
+        total_counts # batch_size
+    ):
+        
+        ccsn_num = len(self.ccsn_list)
+        ccsn_sample = np.random.choice(ccsn_num, total_counts)
+        ccsn_counts = np.eye(ccsn_num)[ccsn_sample].sum(0).astype("int")
+        X = torch.empty((total_counts, 2, self.buffer_length))
+        ccsne_agg_count = 0
+
+        for name, count in zip(self.ccsn_list, ccsn_counts):    
+            
+            time = self.signals[name][0]
+            quad_moment = torch.Tensor(self.signals[name][1])
+
+            theta = torch.Tensor(np.random.uniform(0, np.pi, count))
+            phi = torch.Tensor(np.random.uniform(0, 2*np.pi, count))       
+
+            hp, hc = get_hp_hc_from_q2ij(
+                quad_moment,
+                theta=theta,
+                phi=phi
+            )
+            
+            hp_hc = padding(
+                time,
+                hp,
+                hc,
+                np.random.uniform(1, 10, count),
+                sample_kernel = self.buffer_duration,
+                sample_rate = self.sample_rate,
+                time_shift = self.time_shift, # Core-bounce will be at here
+            )
+
+            X[ccsne_agg_count:ccsne_agg_count+count, :, :] = torch.Tensor(hp_hc)
+
+            
+            ccsne_agg_count += count
+        X = X[:, :, 2048:-2048]
+        dec_distro = Cosine()
+        psi_distro = Uniform(0, np.pi)
+        phi_distro = Uniform(0, 2 * np.pi)
+        
+        dec = dec_distro.rsample(total_counts)
+        psi = psi_distro.sample((total_counts,))
+        phi = phi_distro.sample((total_counts,))
+        
+        ht = gw.compute_observed_strain(
             dec,
-            phic,
-            ra,
-            tensors,
-            vertices,
-            config['sample_rate'],
-            cross=cross.float(),
-            plus=plus.float()
+            psi,
+            phi,
+            detector_tensors=self.tensors,
+            detector_vertices=self.vertices,
+            sample_rate=self.sample_rate,
+            plus=X[:,0,:],
+            cross=X[:,1,:]
         )
-        responses = responses.to('cuda') if torch.cuda.is_available() else responses
 
-        return responses, parameters, ra, dec, phic
-
-def generate_waveforms_bbh(batch_size, prior, waveform, loader, config, ifos, parameters=None, ra=None, dec=None):
-        # get detector orientations
-        tensors, vertices = get_ifo_geometry(*ifos)
-
-        if parameters is None:
-            # sample from prior and generate waveforms
-            parameters = prior.sample(batch_size) # dict[str, torch.tensor]
-        if ra is None:
-            ra = loader.ra_prior.sample((batch_size,))
-        if dec is None:
-            dec = loader.dec_prior.sample((batch_size,))
-
-        cross, plus = waveform(**parameters)
-        cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)
-        # Normalization
-        cross *= config['sample_rate']
-        plus *= config['sample_rate']
-
-        # roll the waveforms to join
-        # the coalescence and ringdown
-        ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
-        cross = torch.roll(cross, -ringdown_size, dims=-1)
-        plus = torch.roll(plus, -ringdown_size, dims=-1)
-
-        # compute detector responses
-        responses = compute_observed_strain(
-            # parameters['dec'],
-            dec,
-            parameters['phic'], # psi
-            # parameters['ra'],
-            ra,
-            tensors,
-            vertices,
-            config['sample_rate'],
-            cross=cross.float(),
-            plus=plus.float()
-        )
-        responses = responses.to('cuda') if torch.cuda.is_available() else responses
-
-        return responses, parameters, ra, dec, parameters['phic']
+        return  ht
