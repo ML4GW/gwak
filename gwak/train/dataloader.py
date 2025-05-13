@@ -444,10 +444,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
 class SignalDataloader(GwakBaseDataloader):
     def __init__(
         self,
-        signal_classes: list[str] | str,
-        priors,
-        waveforms,
-        extra_kwargs,
+        signal_classes: list[str] | str, # string names of signal class(es) desired
+        priors: list[Optional[data.BasePrior]] | Optional[data.BasePrior], # priors for each class
+        waveforms: list[Optional[torch.nn.Module]] | Optional[torch.nn.Module], # waveforms for each class
+        extra_kwargs: list[Optional[dict]] | Optional[dict], # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -569,10 +569,11 @@ class SignalDataloader(GwakBaseDataloader):
                 self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
-            elif signal_class == "Background":
                 responses, params, ra, dec, phic = None, None, None, None, None
-            elif signal_class == "Glitch":
+
+            elif signal_class in ["Background", "Glitch"]:
                 responses, params, ra, dec, phic = None, None, None, None, None
+
             else:
                 responses, params, ra, dec, phic = generate_waveforms_standard(
                     self.num_per_class[i],

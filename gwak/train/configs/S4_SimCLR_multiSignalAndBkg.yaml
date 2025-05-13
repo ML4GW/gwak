@@ -69,7 +69,7 @@ data:
       - class_path: gwak.data.prior.KinkBBC
       - class_path: gwak.data.prior.KinkkinkBBC
       - class_path: gwak.data.prior.WhiteNoiseBurstBBC
-      - class_path: gwak.data.prior.SineGaussianBBC
+      - null
       - null
       - null
     waveforms:
