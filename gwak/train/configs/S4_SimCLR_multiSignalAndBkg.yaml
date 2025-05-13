@@ -58,6 +58,7 @@ data:
       - "Kink"
       - "KinkKink"
       - "WhiteNoiseBurst"
+      - "CCSN"
       - "Background"
       - "Glitch"
     priors:
@@ -68,6 +69,7 @@ data:
       - class_path: gwak.data.prior.KinkBBC
       - class_path: gwak.data.prior.KinkkinkBBC
       - class_path: gwak.data.prior.WhiteNoiseBurstBBC
+      - class_path: gwak.data.prior.SineGaussianBBC
       - null
       - null
     waveforms:
@@ -91,6 +93,10 @@ data:
         init_args:
           sample_rate: 0
       - class_path: ml4gw.waveforms.WhiteNoiseBurst
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.SineGaussian
         init_args:
           sample_rate: 0
           duration: 0

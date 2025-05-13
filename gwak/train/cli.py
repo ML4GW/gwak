@@ -32,7 +32,7 @@ class GwakMultiSignalCLI(LightningCLI):
         # make sure length is right if we're using S4 SSM
         if self.config['fit.model.class_path'] == "models.Crayon":
             self.config['fit.model.init_args.num_timesteps'] = int(sample_rate * kernel_length)
-                
+
         return
 
 def cli_main(args=None):

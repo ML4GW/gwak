@@ -52,7 +52,7 @@ rule pull_data:
     output:
         'tmp/{segment_type}-{ifos}.log'
     shell:
-        'python data/cli.py --config {input.config} \
+        'python -u data/cli.py --config {input.config} \
             --segments {input.segments} \
             | tee {output}'
 

@@ -22,6 +22,7 @@ import torch.nn as nn
 from einops import rearrange, repeat
 from gwak.train.losses import SupervisedSimCLRLoss
 from gwak.train.schedulers import WarmupCosineAnnealingLR
+from gwak.train.plotting import make_corner
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -30,7 +31,6 @@ import wandb
 from PIL import Image
 from io import BytesIO
 
-# from gwak.train.plotting import make_corner
 
 class GwakBaseModelClass(pl.LightningModule):
 
@@ -52,12 +52,7 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         )
 
         module.model.eval()
-        # Modifiy these to read the last training/valdation data 
-        # to acess the input shape. 
-        # X = torch.randn(1, 200, 2) # GWAK 1
-        X = torch.randn(1, 2, 200) # GWAK 2
 
-        # trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
         trace = torch.jit.script(module.model.to("cpu"))
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
 
@@ -844,55 +839,55 @@ class Crayon(GwakBaseModelClass):
         else:
             return loss
     
-    def on_validation_epoch_end(self):
-        if self.supervised_simclr:
-            preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
-            labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
-            fig = make_corner(preds,labels,return_fig=True)
-            """if np.any(np.isnan(preds)):
-                self.logger.info("predictions fucked")
-            N = preds.shape[1]
-            labs_uniq = sorted(list(set(labels)))
-            fig,axes = plt.subplots(N,N,figsize=(20,20))
+    # def on_validation_epoch_end(self):
+    #     if self.supervised_simclr:
+    #         preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
+    #         labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
+    #         # fig = make_corner(preds,labels,return_fig=True)
+    #         """if np.any(np.isnan(preds)):
+    #             self.logger.info("predictions fucked")
+    #         N = preds.shape[1]
+    #         labs_uniq = sorted(list(set(labels)))
+    #         fig,axes = plt.subplots(N,N,figsize=(20,20))
 
-            for i in range(preds.shape[1]):
-                for j in range(i+1,preds.shape[1]):
-                    plt.sca(axes[i,j])
-                    plt.axis('off')
+    #         for i in range(preds.shape[1]):
+    #             for j in range(i+1,preds.shape[1]):
+    #                 plt.sca(axes[i,j])
+    #                 plt.axis('off')
 
-            for i in range(preds.shape[1]):
-                plt.sca(axes[i,i])
-                plt.xticks([])
-                plt.yticks([])
-                bins = 30
-                for j,lab in enumerate(labs_uniq):
-                    h,bins,_ = plt.hist(preds[labels==lab][:,i],bins=bins,histtype='step',color=f"C{j}")
+    #         for i in range(preds.shape[1]):
+    #             plt.sca(axes[i,i])
+    #             plt.xticks([])
+    #             plt.yticks([])
+    #             bins = 30
+    #             for j,lab in enumerate(labs_uniq):
+    #                 h,bins,_ = plt.hist(preds[labels==lab][:,i],bins=bins,histtype='step',color=f"C{j}")
                     
-            for i in range(1,preds.shape[1]):
-                for j in range(i):
-                    plt.sca(axes[i,j])
-                    plt.xticks([])
-                    plt.yticks([])
-                    for k,lab in enumerate(labs_uniq):
-                        ysel = preds[labels==lab]
-                        plt.scatter(ysel[:,j],ysel[:,i],s=2,color=f"C{k}")
+    #         for i in range(1,preds.shape[1]):
+    #             for j in range(i):
+    #                 plt.sca(axes[i,j])
+    #                 plt.xticks([])
+    #                 plt.yticks([])
+    #                 for k,lab in enumerate(labs_uniq):
+    #                     ysel = preds[labels==lab]
+    #                     plt.scatter(ysel[:,j],ysel[:,i],s=2,color=f"C{k}")
                         
-            plt.sca(axes[0,2])
-            patches = []
-            for k,lab in enumerate(labs_uniq):
-                patches.append(Patch(color=f"C{k}",label=f"Class {k+1}"))
-            plt.legend(handles=patches,ncol=2,fontsize=12)"""
+    #         plt.sca(axes[0,2])
+    #         patches = []
+    #         for k,lab in enumerate(labs_uniq):
+    #             patches.append(Patch(color=f"C{k}",label=f"Class {k+1}"))
+    #         plt.legend(handles=patches,ncol=2,fontsize=12)"""
 
-            buf = BytesIO()
-            fig.savefig(buf,format='jpg',dpi=200)
-            buf.seek(0)
-            self.logger.log_image(
-                'val/space',
-                [Image.open(buf)],
-            )
-            plt.close(fig)
+    #         buf = BytesIO()
+    #         fig.savefig(buf,format='jpg',dpi=200)
+    #         buf.seek(0)
+    #         self.logger.log_image(
+    #             'val/space',
+    #             [Image.open(buf)],
+    #         )
+    #         plt.close(fig)
 
-            self.val_outputs.clear()
+    #         self.val_outputs.clear()
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
         # checkpoint for saving best model
