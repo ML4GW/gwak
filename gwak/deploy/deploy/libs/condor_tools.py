@@ -20,7 +20,7 @@ def make_subfile(
     condor_config = {}
     submit_file = job_dir / "condor.sub"
 
-    condor_config["universe"] = "vanilla"
+    condor_config["universe"] = "vanilla" #"local"
     condor_config["executable"] = sys.executable
     condor_config["arguments"] = f"{arguments} --config {config}"
     
@@ -36,7 +36,7 @@ def make_subfile(
     condor_config["request_cpus"] = 1
     condor_config["request_memory"] = "2.5G"
     condor_config["request_disk"] = "2G"
-    condor_config["accounting_group"] = "ligo.dev.o4.cbc.explore.test"
+    condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
     
     with open(submit_file, "w") as f:
         for key, value in condor_config.items():

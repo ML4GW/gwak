@@ -1,0 +1,61 @@
+Andresen_2016 :
+    [
+        "s11", 
+        "s20", # Burst
+        "s20s", # Burst 
+        "s27", 
+    ]
+
+Andresen_2019 :
+    [ 
+        "s15nr", 
+        "s15sr", 
+        "s15fr", # Burst
+    ]
+
+OConnor_2018: 
+    [ 
+        "mesa20", 
+        "mesa20_pert", 
+        "mesa20_LR", 
+        "mesa20_v_LR", 
+        "mesa20_pert_LR" # Burst 
+    ]
+
+Pan_2021: 
+    [ 
+        "NR", 
+        "SR",  
+        "FR", # Burst
+    ]
+
+Powell_2020:
+    [ 
+        "s18", # Burst ? >>> 2018?
+        "y20", # Burst
+        "m39", # Burst ? >>> 2023?
+    ]
+
+Radice_2019:
+    [ 
+        "s09", 
+        "s10",  # Burst 
+        "s11", 
+        "s12", 
+        "s13", 
+        "s14", 
+        "s15", 
+        "s16", 
+        "s17", 
+        "s18", 
+        "s19", 
+        "s20", 
+        "s60",
+    ]
+
+
+# UnDone
+# Powell_2021 = [ "z85_sfhx", "z100_sfho", "z85",]
+# Mezzacappa_2020 = [ "C15-3D",]
+# Powell_2018 = [ "s3_pns",]
+# Powell_2023 = [ "m39_b10", "m39_b12",]
