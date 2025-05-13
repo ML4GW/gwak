@@ -7,7 +7,7 @@ frame_type: ["HOFT_C00", "HOFT_C00", "HoftOnline"]
 ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_2/O4b-2
 ana_end: 1402069900
 sample_rate: 4096
-save_dir: output/O4_MDC_background/HV
+save_dir: output/O4_MDC_background/HLV
 skip_background_generation: True
 omi_paras:
   clear_out_dir: False

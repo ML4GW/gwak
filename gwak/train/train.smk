@@ -34,11 +34,7 @@ rule train_cl:
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
             --model.num_ifos {wildcards.ifos}'
-python train/cli.py fit --config train/configs/S4_SimCLR_multiSignalAndBkg.yaml \
---trainer.logger.save_dir output/S4_SimCLR_multiSignalAndBkg_HL \
---data.init_args.data_dir /home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/HL \
---data.ifos HL \
---model.num_ifos 2
+
 rule train_fm:
     input:
         embedding_model = expand(rules.train_cl.output.model,

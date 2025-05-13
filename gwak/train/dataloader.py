@@ -1,5 +1,5 @@
 import h5py
-import toml
+import yaml
 import logging
 import argparse
 import numpy as np
@@ -452,8 +452,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.phic_prior = Uniform(0, 2 * torch.pi)
         
         # CCSN second-derivitive waveform data
+        file_path = Path(__file__).resolve()
         self.ccsn_dict = load_h5_as_dict(
-            chosen_signals=Path("/home/hongyin.chen/anti_gravity/CCSNet/apps/train/ccsn.toml"),
+            chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
             source_file=Path("/home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled")
         )
 
@@ -474,9 +475,7 @@ class SignalDataloader(GwakBaseDataloader):
             signals_dict=self.ccsn_dict,
             sample_rate=self.sample_rate,
             sample_duration=0.5,
-            # highpass=30,
             buffer_duration=2.5
-            # batch_size
         )
         
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
@@ -499,17 +498,6 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             if signal_class == "CCSN":
-                # responses, params, ra, dec, phic = generate_waveforms_standard(
-                #     self.num_per_class[i],
-                #     self.priors[i],
-                #     self.waveforms[i],
-                #     self,
-                #     self.signal_configs[i],
-                #     self.ifos,
-                #     parameters=parameters[i] if parameters is not None else None,
-                #     ra=ras[i] if ras is not None else None,
-                #     dec=decs[i] if decs is not None else None
-                # )
                 self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
@@ -910,7 +898,9 @@ def load_h5_as_dict(
     Returns:
         dict: Time and resampled SQDM of Each waveform
     """
-    selected_ccsn = toml.load(chosen_signals)
+    with open(chosen_signals) as f:
+        selected_ccsn = yaml.load(f, Loader=yaml.SafeLoader)
+        
     source_file = Path(source_file)
     
     grand_dict = {}
