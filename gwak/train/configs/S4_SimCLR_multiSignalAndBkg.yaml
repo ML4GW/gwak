@@ -52,6 +52,7 @@ data:
   init_args:
     signal_classes:
       - "SineGaussian"
+      - "MultiSineGaussian"
       - "BBH"
       - "Gaussian"
       - "Cusp"
@@ -62,16 +63,22 @@ data:
       # - "Glitch"
     priors:
       - class_path: gwak.data.prior.SineGaussianBBC
+      - class_path: gwak.data.prior.MultiSineGaussianBBC
       - class_path: gwak.data.prior.LAL_BBHPrior
       - class_path: gwak.data.prior.GaussianBBC
       - class_path: gwak.data.prior.CuspBBC
       - class_path: gwak.data.prior.KinkBBC
       - class_path: gwak.data.prior.KinkkinkBBC
       - class_path: gwak.data.prior.WhiteNoiseBurstBBC
+      - class_path: gwak.data.prior.MultiSineGaussian
       - null
       # - null [0, 0.25, 0.25, 0.5]
     waveforms:
       - class_path: ml4gw.waveforms.SineGaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.MultiSineGaussian
         init_args:
           sample_rate: 0
           duration: 0
