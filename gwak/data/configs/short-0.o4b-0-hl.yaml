@@ -1,0 +1,7 @@
+ifos: ["H1", "L1"]
+
+channels: ["STRAIN_BURST_0", "STRAIN_BURST_0"]
+ana_start: 1401544825
+ana_end: 1403964034
+sample_rate: 4096
+save_dir: output/O4_test_MDC_short-0/HL

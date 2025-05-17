@@ -21,7 +21,7 @@ The algorithm works as follows:
 """
 
 import numpy as np
-
+import argparse
 
 def intersect_two_lists(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """
@@ -50,26 +50,26 @@ def intersect_two_lists(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.asarray(out, dtype=int)
 
 
-def load_segments(ifo_char: str) -> np.ndarray:
+def load_segments(ifo_char, segment_type, folder_segments) -> np.ndarray:
     """
     Load the segment list for a single IFO, sort it by start time, and
     return a (N,2) int array.
     """
-    path = f"data/configs/segments.original.o4b-2.{ifo_char}1"
+    path = f"{folder_segments}segments.{segment_type}.{ifo_char}1"
     print(f"Loading segments from {path}")
     segs = np.loadtxt(path, dtype=int)
     return segs[np.argsort(segs[:, 0])]          # ensure sorted
 
 
-def find_intersections() -> np.ndarray:
+def find_intersections(ifos, segment_type, folder_segments) -> np.ndarray:
     """
     Intersect the segment lists for ALL IFOs given in
     `snakemake.wildcards.ifos` (e.g. 'hlv').
     """
-    ifos = list(snakemake.wildcards.ifos)        # e.g. ['h','l','v']
+    ifos = list(ifos)        # e.g. ['h','l','v']
 
     # load every detector’s list
-    segment_lists = [load_segments(ifo) for ifo in ifos]
+    segment_lists = [load_segments(ifo, segment_type, folder_segments) for ifo in ifos]
 
     # iterative k-way intersection
     valid = segment_lists[0]
@@ -81,15 +81,19 @@ def find_intersections() -> np.ndarray:
     return valid
 
 
-def main(save_path: str) -> None:
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='Find intersections between given files.'
+    )
+    parser.add_argument('--folder-segments', type=str, help='Path to the folder containing JIT embedder model.')
+    parser.add_argument('--segment-type', type=str, help='Path to the folder containing JIT metric model.')
+    parser.add_argument('--ifos', type=str, help='Path to the folder containing JIT metric model.')
+    parser.add_argument('--save-path', type=str, help='Path to the folder containing JIT metric model.')
+    args = parser.parse_args()
     """
     Write the resulting intersections to `save_path` as an .npy file so
     that downstream Snakemake rules can consume them.
     """
-    intersections = find_intersections()
-    np.save(save_path, intersections)
-    print(f"Saved {len(intersections)} intersecting segment(s) to {save_path}")
-
-
-# Snakemake entry point
-main(snakemake.output[0])
+    intersections = find_intersections(args.ifos, args.segment_type, args.folder_segments)
+    np.save(args.save_path, intersections)
+    print(f"Saved {len(intersections)} intersecting segment(s) to {args.save_path}")
