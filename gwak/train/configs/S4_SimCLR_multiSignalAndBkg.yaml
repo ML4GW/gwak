@@ -117,6 +117,7 @@ data:
       - null # CCSN
       - null # Background
       - null # Glitch
+    glitch_root: /home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/
     sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64

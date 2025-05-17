@@ -39,6 +39,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         batch_size: int,
         batches_per_epoch: int,
         num_workers: int,
+        glitch_root: Path,
         data_saving_file: Path = None,
         ifos: str = 'HL'
     ):
@@ -52,6 +53,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self.batch_size = batch_size
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
+        self.glitch_root = glitch_root
         self.data_saving_file = data_saving_file
         if type(ifos) == list:
             self.ifos = ifos
@@ -108,6 +110,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
                 batch_size=self.batch_size,
                 batches_per_epoch=self.batches_per_epoch,
                 coincident=False,
+                glitch_root=self.glitch_root
             )
 
         pin_memory = isinstance(
@@ -126,6 +129,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
+            glitch_root=self.glitch_root
         )
 
         pin_memory = isinstance(
@@ -144,6 +148,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
+            glitch_root=self.glitch_root
         )
 
         pin_memory = isinstance(
@@ -236,6 +241,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         batch_size: int,
         batches_per_epoch: int,
         num_workers: int,
+        glitch_root: Path = None,
         data_saving_file: Path = None,
         ifos: str = 'HL'
     ):
@@ -249,6 +255,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.batch_size = batch_size
         self.batches_per_epoch = batches_per_epoch
         self.num_workers = num_workers
+        self.glitch_root = glitch_root
         self.data_saving_file = data_saving_file
         if type(ifos) == list:
             self.ifos = ifos
@@ -323,7 +330,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 batches_per_epoch=self.batches_per_epoch,
                 coincident=False,
                 mode='clean',
-                glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+                glitch_root=self.glitch_root,
                 ifos=self.ifos
             )
         dataloader = torch.utils.data.DataLoader(
@@ -344,7 +351,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
             mode='clean',
-            glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+            glitch_root=self.glitch_root,
             ifos=self.ifos
         )
         dataloader = torch.utils.data.DataLoader(
@@ -365,7 +372,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
             mode='clean',
-            glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+            glitch_root=self.glitch_root,
             ifos=self.ifos
         )
         dataloader = torch.utils.data.DataLoader(
@@ -515,7 +522,7 @@ class SignalDataloader(GwakBaseDataloader):
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
             mode="glitch",
-            glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/',
+            glitch_root=self.glitch_root,
             ifos=self.ifos
         )
 
