@@ -52,6 +52,7 @@ data:
   init_args:
     signal_classes:
       - "SineGaussian"
+      - "MultiSineGaussian"
       - "BBH"
       - "Gaussian"
       - "Cusp"
@@ -62,56 +63,60 @@ data:
       - "Background"
       - "Glitch"
     priors:
-      - class_path: gwak.data.prior.SineGaussianBBC
-      - class_path: gwak.data.prior.LAL_BBHPrior
-      - class_path: gwak.data.prior.GaussianBBC
-      - class_path: gwak.data.prior.CuspBBC
-      - class_path: gwak.data.prior.KinkBBC
-      - class_path: gwak.data.prior.KinkkinkBBC
-      - class_path: gwak.data.prior.WhiteNoiseBurstBBC
-      - null
-      - null
-      - null
+      - class_path: gwak.data.prior.SineGaussianBBC # SineGaussian
+      - class_path: gwak.data.prior.MultiSineGaussianBBC # MultiSineGaussian
+      - class_path: gwak.data.prior.LAL_BBHPrior # BBH
+      - class_path: gwak.data.prior.GaussianBBC # Gaussian
+      - class_path: gwak.data.prior.CuspBBC # Cusp
+      - class_path: gwak.data.prior.KinkBBC # Kink
+      - class_path: gwak.data.prior.KinkkinkBBC # KinkKink
+      - class_path: gwak.data.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      - null # Glitch
     waveforms:
-      - class_path: ml4gw.waveforms.SineGaussian
+      - class_path: ml4gw.waveforms.SineGaussian # SineGaussian
         init_args:
           sample_rate: 0
           duration: 0
-      - class_path: ml4gw.waveforms.IMRPhenomPv2
+      - class_path: ml4gw.waveforms.MultiSineGaussian # MultiSineGaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.IMRPhenomPv2 # BBH
         init_args: {}
-      - class_path: ml4gw.waveforms.Gaussian
+      - class_path: ml4gw.waveforms.Gaussian # Gaussian
         init_args:
           sample_rate: 0
           duration: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # Cusp
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # Kink
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # KinkKink
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.WhiteNoiseBurst
-        init_args:
-          sample_rate: 0
-          duration: 0
-      - class_path: ml4gw.waveforms.SineGaussian
+      - class_path: ml4gw.waveforms.WhiteNoiseBurst # WhiteNoiseBurst
         init_args:
           sample_rate: 0
           duration: 0
-      - null
-      - null
+      - null # CCSN
+      - null # Background
+      - null # Glitch
     extra_kwargs:
-      - null
-      - ringdown_duration: 0.9
-      - null
-      - null
-      - null
-      - null
-      - null
-      - null
-      - null
+      - null # SineGaussian
+      - null # MultiSineGaussian
+      - ringdown_duration: 0.9 # BBH
+      - null # Gaussian
+      - null # Cusp
+      - null # Kink
+      - null # KinkKink
+      - null # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      - null # Glitch
     sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64
