@@ -35,7 +35,7 @@ model:
     cos_anneal: false
     cos_anneal_tmax: 50
     use_classifier: true
-    num_classes: 8
+    num_classes: 9
     lambda_classifier: 2.0
     class_anneal_epochs: 50
     s4_kwargs:
@@ -70,7 +70,6 @@ data:
       - class_path: gwak.data.prior.KinkBBC
       - class_path: gwak.data.prior.KinkkinkBBC
       - class_path: gwak.data.prior.WhiteNoiseBurstBBC
-      - class_path: gwak.data.prior.MultiSineGaussian
       - null
       # - null [0, 0.25, 0.25, 0.5]
     waveforms:
@@ -103,6 +102,7 @@ data:
           duration: 0
       - null
     extra_kwargs:
+      - null
       - null
       - ringdown_duration: 0.9
       - null
