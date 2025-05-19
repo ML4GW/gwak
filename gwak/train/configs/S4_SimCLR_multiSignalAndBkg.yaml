@@ -35,7 +35,7 @@ model:
     cos_anneal: false
     cos_anneal_tmax: 50
     use_classifier: true
-    num_classes: 9
+    num_classes: 11
     lambda_classifier: 2.0
     class_anneal_epochs: 50
     s4_kwargs:

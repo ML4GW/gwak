@@ -451,10 +451,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
 class SignalDataloader(GwakBaseDataloader):
     def __init__(
         self,
-        signal_classes: list[str] | str, # string names of signal class(es) desired
-        priors: list[Optional[data.BasePrior]] | Optional[data.BasePrior], # priors for each class
-        waveforms: list[Optional[torch.nn.Module]] | Optional[torch.nn.Module], # waveforms for each class
-        extra_kwargs: list[Optional[dict]] | Optional[dict], # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
+        signal_classes, # string names of signal class(es) desired
+        priors, # priors for each class
+        waveforms, # waveforms for each class
+        extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -478,7 +478,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.ra_prior =  Uniform(0, 2*torch.pi)
         self.dec_prior = Cosine(-np.pi/2, torch.pi/2)
         self.phic_prior = Uniform(0, 2 * torch.pi)
-        
+
         # CCSN second-derivitive waveform data
         file_path = Path(__file__).resolve()
         self.ccsn_dict = load_h5_as_dict(
@@ -504,8 +504,8 @@ class SignalDataloader(GwakBaseDataloader):
             sample_rate=self.sample_rate,
             sample_duration=0.5,
             buffer_duration=2.5
-        )   
-            
+        )
+
     def _build_glitch_dataset(self, fnames):
         """
         Helper that builds an Hdf5TimeSeriesDataset for Glitch
@@ -573,10 +573,10 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             if signal_class == "CCSN":
-                self.generate_waveforms_ccsn(
+                responses, dec, phic = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
-                responses, params, ra, dec, phic = None, None, None, None, None
+                params, ra = None, None
 
             elif signal_class in ["Background", "Glitch"]:
                 responses, params, ra, dec, phic = None, None, None, None, None
@@ -825,7 +825,7 @@ class AugmentationSignalDataloader(SignalDataloader):
 
             # generate another set of waveforms with augmented parameters
             waveforms_aug1, _, _, _, _ = self.generate_waveforms(batch.shape[0], parameters=params, ras=ras, decs=decs)
-            
+
             # inject waveforms; maybe also whiten data preprocess etc..
 
             batch_aug0 = self.multiInject(batch, waveforms_aug0)
@@ -862,14 +862,14 @@ class AugmentationSignalDataloader(SignalDataloader):
 
 
 def generate_waveforms_standard(
-    batch_size, 
-    prior, 
-    waveform, 
-    loader, 
-    config, 
-    ifos, 
-    parameters=None, 
-    ra=None, 
+    batch_size,
+    prior,
+    waveform,
+    loader,
+    config,
+    ifos,
+    parameters=None,
+    ra=None,
     dec=None
 ):
     # get detector orientations
@@ -903,14 +903,14 @@ def generate_waveforms_standard(
     return responses, parameters, ra, dec, phic
 
 def generate_waveforms_bbh(
-    batch_size, 
-    prior, 
-    waveform, 
-    loader, 
-    config, 
-    ifos, 
-    parameters=None, 
-    ra=None, 
+    batch_size,
+    prior,
+    waveform,
+    loader,
+    config,
+    ifos,
+    parameters=None,
+    ra=None,
     dec=None
 ):
     # get detector orientations
@@ -969,31 +969,31 @@ def load_h5_as_dict(
     """
     with open(chosen_signals) as f:
         selected_ccsn = yaml.load(f, Loader=yaml.SafeLoader)
-        
+
     source_file = Path(source_file)
-    
+
     grand_dict = {}
     ccsn_list = []
-    
+
     for key in selected_ccsn.keys():
-        
+
         for name in selected_ccsn[key]:
             ccsn_list.append(f"{key}/{name}")
 
     for name in ccsn_list:
-        
+
         with h5py.File(source_file/ f'{name}.h5', 'r', locking=False) as h:
 
             time = np.array(h['time'][:])
-            quad_moment = h['quad_moment'][:] 
-            
+            quad_moment = h['quad_moment'][:]
+
         grand_dict[name] =  [time, quad_moment]
-    
+
     return grand_dict
 
-def get_hp_hc_from_q2ij( 
-    q2ij, 
-    theta: np.ndarray, 
+def get_hp_hc_from_q2ij(
+    q2ij,
+    theta: np.ndarray,
     phi: np.ndarray
 ):
 
@@ -1028,7 +1028,7 @@ def padding(
     sample_rate = 4096,
     time_shift = -0.15, # shift zero to distination time
 ):
-    
+
     # Two polarization
     signal = np.zeros([hp.shape[0], 2, int(sample_kernel * sample_rate)])
 
@@ -1041,7 +1041,7 @@ def padding(
 
     signal[:, 0, start:end] = hp / distance.reshape(-1, 1)
     signal[:, 1, start:end] = hc / distance.reshape(-1, 1)
-    
+
     return signal
 
 from ml4gw import gw
@@ -1061,10 +1061,10 @@ class CCSN_Injector:
     ):
 
         self.tensors, self.vertices = gw.get_ifo_geometry(*ifos)
-        
+
         self.signals = signals_dict
         self.ccsn_list = list(self.signals.keys())
-        
+
         self.sample_rate = sample_rate
         self.sample_duration = sample_duration
         self.buffer_duration = buffer_duration
@@ -1075,34 +1075,34 @@ class CCSN_Injector:
         self.max_center_offset = int((buffer_duration/2 - sample_duration - off_set) * sample_rate)
 
         if off_set <= -time_shift:
-            
+
             logging.info(f"Core bounce siganl may leak out of sample kernel by {-time_shift - off_set}")
-        
+
     def __call__(
         self,
         total_counts # batch_size
     ):
-        
+
         ccsn_num = len(self.ccsn_list)
         ccsn_sample = np.random.choice(ccsn_num, total_counts)
         ccsn_counts = np.eye(ccsn_num)[ccsn_sample].sum(0).astype("int")
         X = torch.empty((total_counts, 2, self.buffer_length))
         ccsne_agg_count = 0
 
-        for name, count in zip(self.ccsn_list, ccsn_counts):    
-            
+        for name, count in zip(self.ccsn_list, ccsn_counts):
+
             time = self.signals[name][0]
             quad_moment = torch.Tensor(self.signals[name][1])
 
             theta = torch.Tensor(np.random.uniform(0, np.pi, count))
-            phi = torch.Tensor(np.random.uniform(0, 2*np.pi, count))       
+            phi = torch.Tensor(np.random.uniform(0, 2*np.pi, count))
 
             hp, hc = get_hp_hc_from_q2ij(
                 quad_moment,
                 theta=theta,
                 phi=phi
             )
-            
+
             hp_hc = padding(
                 time,
                 hp,
@@ -1115,17 +1115,17 @@ class CCSN_Injector:
 
             X[ccsne_agg_count:ccsne_agg_count+count, :, :] = torch.Tensor(hp_hc)
 
-            
+
             ccsne_agg_count += count
         X = X[:, :, 2048:-2048]
         dec_distro = Cosine()
         psi_distro = Uniform(0, np.pi)
         phi_distro = Uniform(0, 2 * np.pi)
-        
+
         dec = dec_distro.rsample(total_counts)
         psi = psi_distro.sample((total_counts,))
         phi = phi_distro.sample((total_counts,))
-        
+
         ht = gw.compute_observed_strain(
             dec,
             psi,
@@ -1137,4 +1137,7 @@ class CCSN_Injector:
             cross=X[:,1,:]
         )
 
-        return  ht
+        ht = ht.to('cuda') if torch.cuda.is_available() else ht
+
+
+        return ht, dec, phi
