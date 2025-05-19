@@ -133,10 +133,10 @@ class MultiSineGaussianBBC(BasePrior):
         super().__init__()
         n_max = 10
         p = OrderedDict()
-        p["n_components"] = IntUniform(1, n_max + 1)          # 1 … n_max
+        p["n_components"] = IntUniform(2, n_max + 1)          # 1 … n_max
 
         for i in range(1, n_max + 1):
-            p[f"hrss_{i}"]        = LogUniform(2.6e-23, 2.0e-22)
+            p[f"hrss_{i}"]        = LogUniform(1.6e-23, 1.5e-22)
             p[f"quality_{i}"]     = torchdist.Uniform(3.0, 700.0)
             p[f"frequency_{i}"]   = torchdist.Uniform(30, 2048.0)
             p[f"phase_{i}"]       = torchdist.Uniform(0.0, torch.pi)
