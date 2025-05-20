@@ -59,6 +59,8 @@ def infer(
     monitor_patients: int=3,
     inference_sampling_rate: float = 2,
     inj_type: Optional[str]=None,
+    cl_config: str='S4_SimCLR_multiSignalAndBkg',
+    fm_config: str='NF_onlyBkg',
     **kwargs,
 ):
     """ Timeslide and Hermes(Triton) handeler to generate test result for GWAK model. 
@@ -84,17 +86,21 @@ def infer(
         inference_sampling_rate -- Numbers of kernel to run in one second. (default: {2})
         inj_type -- Class of wavform to inject on timeslide. (default: {None})
     """
-
+    result_dir = None
     # File handling 
     file_path = Path(__file__).resolve()
+    ifo_str = ''.join(ifo[0] for ifo in ifos)
 
+    prefix = f"{cl_config}_{fm_config}_{ifo_str}"
     if model_repo_dir is None: 
         model_repo_dir = file_path.parents[2] / "output/export"
-    model_repo_dir = model_repo_dir / project
-
+    model_repo_dir = model_repo_dir / prefix / project
     if result_dir is None: 
         result_dir = file_path.parents[2] / "output/infer"
-    result_dir = result_dir / project # already passed trhough snakemake
+
+    result_dir = result_dir / project / prefix # already passed through snakemake
+    result_dir = result_dir.resolve()
+
     result_dir.mkdir(parents=True, exist_ok=True)
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
@@ -112,7 +118,7 @@ def infer(
         model_repo_dir, 
         image, 
         log_file=triton_log, 
-        wait=False
+        wait=True
     )
     # The Triton excution to run
     arguments=Path("deploy/triton_excution.py").resolve()
@@ -120,10 +126,9 @@ def infer(
         arguments=Path("deploy/triton_inj_excution.py").resolve()
         os.environ["CCSN_FILE"] = str(Path("deploy/config/ccsn.yaml").resolve())
     # arguments=Path("deploy/triton_inj_excution.py").resolve()
-    # breakpoint()
+
     with serve_context:
-        # breakpoint()
-        # monitor_patients = 30
+
         # logging.info(f"Waiting {monitor_patients} seconds to recieve connetion to port 8002!")
         # time.sleep(monitor_patients)
         # monitor = ServerMonitor(
@@ -145,11 +150,12 @@ def infer(
                 # print(fname, shift)
                 fingerprint = f"{seg_start}{seg_end}{shift}".encode()
                 sequence_id = adler32(fingerprint)
-
                 _shifts = [s * (shift + 1) for s in shifts]
+                if Tb == 0: 
+                    _shifts = [0, 0]
                 job_dir = result_dir / f"condor/job_{submit_num:08d}" # Make this to flexable
+                logging.info(f"Creating config at {job_dir}.")
                 job_dir.mkdir(parents=True, exist_ok=True)
-
                 config_file = make_infer_config(
                     job_dir=job_dir,
                     triton_server_ip=ip,
@@ -168,37 +174,41 @@ def infer(
                     # inj_type=inj_type,
                 )
 
-                # Local inference
-                cmd = f"python {str(arguments)} --config {config_file}"
-                bash_files.append(bash_commnad_files(job_dir, cmd))
-
-                # # Condor inference
-                # submit_file = make_subfile(
-                #     job_dir=job_dir,
-                #     arguments=arguments,
-                #     config=config_file.resolve()
-                # )
-                # sub_files.append(submit_file)
+                # Condor inference
+                submit_file = make_subfile(
+                    job_dir=job_dir,
+                    arguments=arguments,
+                    config=config_file.resolve()
+                )
+                sub_files.append(submit_file)
 
                 submit_num += 1
+                
+        # Condor inference
+        condor_submit_with_rate_limit(
+            sub_files=sub_files,
+            rate_limit=job_rate_limit
+        )
 
-        # Local inference
-        with ThreadPoolExecutor(max_workers=job_rate_limit) as e:
+
+        #         # Local inference
+        #         cmd = f"python {str(arguments)} --config {config_file}"
+        #         bash_files.append(bash_commnad_files(job_dir, cmd))
+
+        #         submit_num += 1
+
+        # # Local inference
+        # with ThreadPoolExecutor(max_workers=job_rate_limit) as e:
         
-            # for bash_file in bash_files:
-            #     logging.info(f"Excuting {bash_file}")
-            #     e.submit(run_bash, bash_file)
-            futures = [e.submit(run_bash, f) for f in bash_files]
-            for future in futures:
-                try:
-                    future.result()
-                except Exception as e:
-                    logging.error(f"Thread crashed: {e}")
+        #     # for bash_file in bash_files:
+        #     #     logging.info(f"Excuting {bash_file}")
+        #     #     e.submit(run_bash, bash_file)
+        #     futures = [e.submit(run_bash, f) for f in bash_files]
+        #     for future in futures:
+        #         try:
+        #             future.result()
+        #         except Exception as e:
+        #             logging.error(f"Thread crashed: {e}")
 
-        # # Condor inference
-        # condor_submit_with_rate_limit(
-        #     sub_files=sub_files,
-        #     rate_limit=job_rate_limit
-        # )
 
         logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")

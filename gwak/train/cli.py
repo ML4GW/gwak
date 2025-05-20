@@ -15,8 +15,7 @@ class GwakMultiSignalCLI(LightningCLI):
         kernel_length = self.config['fit.data.init_args.kernel_length']
         
         for i in range(len(self.config['fit.data.init_args.waveforms'])):
-            if self.config['fit.data.init_args.signal_classes'][i] == "Background":
-                continue
+            if self.config['fit.data.init_args.signal_classes'][i] in ["Background", "Glitch", "CCSN"]: continue
             
             if "sample_rate" in self.config['fit.data.init_args.waveforms'][i]['init_args'].keys():
                 self.config['fit.data.init_args.waveforms'][i]['init_args']['sample_rate'] = sample_rate
@@ -33,7 +32,7 @@ class GwakMultiSignalCLI(LightningCLI):
         # make sure length is right if we're using S4 SSM
         if self.config['fit.model.class_path'] == "models.Crayon":
             self.config['fit.model.init_args.num_timesteps'] = int(sample_rate * kernel_length)
-                
+
         return
 
 def cli_main(args=None):

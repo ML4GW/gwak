@@ -1,9 +1,11 @@
-import numpy as np
 import h5py
+import time
+import shutil
 import subprocess
-from typing import Optional
+import numpy as np
 
 from pathlib import Path
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
 from background_utils import (
@@ -16,11 +18,15 @@ from background_utils import (
 )
 
 
-def run_bash(bash_file):
+FILE_PATH = Path(__file__).resolve()
+PYOMICRON_PATH = FILE_PATH.parents[2] / "pyomicron"
+OUTPUT_PATH = FILE_PATH.parents[1] / "output"
+
+def run_omicron_bash_file(bash_file):
 
     subprocess.run(
         ["bash", f"{bash_file}"], 
-        cwd="../../pyomicron", 
+        cwd=PYOMICRON_PATH, 
     )
 
 
@@ -34,13 +40,26 @@ def gwak_background(
     state_flag: list[str]=None,
     frame_type: list[str]=None,
     segments: str = None, # provide segments instead of start and end time
+    skip_background_generation: Optional[bool]=False,
     # Omicron process
     omi_paras: Optional[dict] = None,
     **kwargs
 ):
-
+    
+    # File handling
+    ifo_abbrs = "".join(ifo[0] for ifo in ifos)
     save_dir.mkdir(parents=True, exist_ok=True)
+    if omi_paras is not None:
+        
+        omicron_bash_files = [] # List of omicron commands to excute in background.     
+        out_dir = omi_paras.get("out_dir") or (OUTPUT_PATH / f"omicron/{ifo_abbrs}")
+        out_dir = Path(out_dir)
+        if omi_paras["clear_out_dir"] and out_dir.exists():
+            print(f"Cleaning up folder {out_dir}")
+            shutil.rmtree(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Find segments
     if segments:
 
         segs = np.load(segments)
@@ -54,84 +73,98 @@ def gwak_background(
             state_flag=state_flag,
         )
 
+    # Run data fetching and Omicron process
     for seg_num, (seg_start, seg_end) in enumerate(segs):
 
-        print(f'Downloading segment from {seg_start} to {seg_end}')
-
-
-        if not frame_type and not state_flag:
-            strains = get_injections(
-                seg_start=seg_start,
-                seg_end=seg_end,
-                ifos=ifos,
-                channels=channels,
-                sample_rate=sample_rate,
-            )
-
-        else:
-            strains = get_background(
-                seg_start=seg_start,
-                seg_end=seg_end,
-                ifos=ifos,
-                channels=channels,
-                frame_type=frame_type,
-                sample_rate=sample_rate,
-            )
-
         seg_dur = seg_end-seg_start
-        file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
-
-        with h5py.File(save_dir / file_name, "w") as g:
-
-            for dname, dset in strains.items():
-                g.create_dataset(dname, data=dset)
-
-        bash_files = [] # List of omicron commands to excute in background.  
-        if omi_paras is not None:
+        if not skip_background_generation:
             
+            print(f'Downloading segment from {seg_start} to {seg_dur}')    
+            if not frame_type and not state_flag:
+                strains = get_injections(
+                    seg_start=seg_start,
+                    seg_end=seg_end,
+                    ifos=ifos,
+                    channels=channels,
+                    sample_rate=sample_rate,
+                )
+
+            else:
+                strains = get_background(
+                    seg_start=seg_start,
+                    seg_end=seg_end,
+                    ifos=ifos,
+                    channels=channels,
+                    frame_type=frame_type,
+                    sample_rate=sample_rate,
+                )
+
+            file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
+
+            with h5py.File(save_dir / file_name, "w") as g:
+
+                for dname, dset in strains.items():
+                    g.create_dataset(dname, data=dset)
+
+        # Handle Omicron processing
+        if omi_paras is not None:
+
             for ifo, frametype in zip(ifos, frame_type):
 
+                frametype_name = f"{ifo}_{frametype}"
+                if ifo == "V1":
+                    frametype_name = frametype
                 create_lcs(
                     ifo=ifo,
-                    frametype=f"{ifo}_{frametype}",
+                    frametype=frametype_name,
                     start_time=seg_start,
                     end_time=seg_end,
-                    output_dir= Path(omi_paras["out_dir"]) / f"Segs_{int(seg_start)}_{int(seg_end)}", 
+                    output_dir= Path(out_dir) / f"Segs_{int(seg_start)}_{int(seg_dur)}", 
                     urltype="file"
                 )
 
             bash_scripts = omicron_bashes(
-                ifos= ifos,
+                ifos=ifos,
                 start_time=seg_start,
                 end_time=seg_end,
-                # project_dir= Path(omi_paras["out_dir"]) / f"Segs_{seg_num:05d}", ### Change this seg-start seg-end
-                project_dir= Path(omi_paras["out_dir"]) / f"Segs_{int(seg_start)}_{int(seg_end)}", ### Change this seg-start seg-end
+                project_dir=Path(out_dir) / f"Segs_{int(seg_start)}_{int(seg_dur)}", 
                 # INI
-                q_range= omi_paras["q_range"],
-                frequency_range= omi_paras["frequency_range"],
-                frame_type= frame_type,
-                channels= channels,
-                cluster_dt= omi_paras["cluster_dt"],
-                sample_rate= sample_rate,
-                chunk_duration= omi_paras["chunk_duration"],
-                segment_duration= omi_paras["segment_duration"],
-                overlap_duration= omi_paras["overlap_duration"],
-                mismatch_max= omi_paras["mismatch_max"],
-                snr_threshold= omi_paras["snr_threshold"],
+                q_range=omi_paras["q_range"],
+                frequency_range=omi_paras["frequency_range"],
+                frame_type=frame_type,
+                channels=channels,
+                cluster_dt=omi_paras["cluster_dt"],
+                sample_rate=sample_rate,
+                chunk_duration=omi_paras["chunk_duration"],
+                segment_duration=omi_paras["segment_duration"],
+                overlap_duration=omi_paras["overlap_duration"],
+                mismatch_max=omi_paras["mismatch_max"],
+                snr_threshold=omi_paras["snr_threshold"],
             )
 
             for bash_script in bash_scripts:
-                bash_files.append(bash_script)
+                if seg_dur <= 64:
+                    continue
+                omicron_bash_files.append(bash_script)
 
+    bash_scripts = sorted(bash_scripts)
 
-            with ThreadPoolExecutor(max_workers=8) as e: # 8 workers
-            
-                for bash_file in bash_files:
-                    e.submit(run_bash, bash_file)
+    print("Launching Omicron....")
+    with ThreadPoolExecutor(max_workers=2) as e:
+        
+        for bash_file in omicron_bash_files:
+        
+            e.submit(run_omicron_bash_file, bash_file)
+            print(f"Run {bash_file}")
+            time.sleep(0.1)
+            print("====")
 
-                # Generate a glitch_info.h5 file that stores omicron informations 
-                glitch_merger(
-                    ifos=ifos,
-                    omicron_path=omi_paras["out_dir"],
-                    channels=channels
-                )
+    # Generate a glitch_info.h5 file that stores omicron informations 
+    for seg_num, (seg_start, seg_end) in enumerate(segs):
+        seg_dur = seg_end-seg_start
+
+        glitch_merger(
+            ifos=ifos,
+            omicron_path=out_dir / f"Segs_{int(seg_start)}_{int(seg_dur)}",
+            channels=channels
+        )

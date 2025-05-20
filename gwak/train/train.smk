@@ -32,8 +32,8 @@ rule train_cl:
         'python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
-            --data.init_args.ifos {wildcards.ifos} \
-            --model.init_args.num_ifos {wildcards.ifos}'
+            --data.ifos {wildcards.ifos} \
+            --model.num_ifos {wildcards.ifos}'
 
 rule train_fm:
     input:
@@ -50,8 +50,8 @@ rule train_fm:
         'python train/cli_fm.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
-            --data.init_args.ifos {wildcards.ifos} \
-            --model.init_args.embedding_model {input.embedding_model}'
+            --data.ifos {wildcards.ifos} \
+            --model.embedding_model {input.embedding_model}'
 
 rule combine_models:
     params:

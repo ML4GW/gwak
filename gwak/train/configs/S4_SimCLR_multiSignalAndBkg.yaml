@@ -35,7 +35,7 @@ model:
     cos_anneal: false
     cos_anneal_tmax: 50
     use_classifier: true
-    num_classes: 8
+    num_classes: 11
     lambda_classifier: 2.0
     class_anneal_epochs: 50
     s4_kwargs:
@@ -52,58 +52,72 @@ data:
   init_args:
     signal_classes:
       - "SineGaussian"
+      - "MultiSineGaussian"
       - "BBH"
       - "Gaussian"
       - "Cusp"
       - "Kink"
       - "KinkKink"
       - "WhiteNoiseBurst"
+      - "CCSN"
       - "Background"
-      # - "Glitch"
+      - "Glitch"
     priors:
-      - class_path: gwak.data.prior.SineGaussianBBC
-      - class_path: gwak.data.prior.LAL_BBHPrior
-      - class_path: gwak.data.prior.GaussianBBC
-      - class_path: gwak.data.prior.CuspBBC
-      - class_path: gwak.data.prior.KinkBBC
-      - class_path: gwak.data.prior.KinkkinkBBC
-      - class_path: gwak.data.prior.WhiteNoiseBurstBBC
-      - null
-      # - null [0, 0.25, 0.25, 0.5]
+      - class_path: gwak.data.prior.SineGaussianBBC # SineGaussian
+      - class_path: gwak.data.prior.MultiSineGaussianBBC # MultiSineGaussian
+      - class_path: gwak.data.prior.LAL_BBHPrior # BBH
+      - class_path: gwak.data.prior.GaussianBBC # Gaussian
+      - class_path: gwak.data.prior.CuspBBC # Cusp
+      - class_path: gwak.data.prior.KinkBBC # Kink
+      - class_path: gwak.data.prior.KinkkinkBBC # KinkKink
+      - class_path: gwak.data.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      - null # Glitch
     waveforms:
-      - class_path: ml4gw.waveforms.SineGaussian
+      - class_path: ml4gw.waveforms.SineGaussian # SineGaussian
         init_args:
           sample_rate: 0
           duration: 0
-      - class_path: ml4gw.waveforms.IMRPhenomPv2
+      - class_path: ml4gw.waveforms.MultiSineGaussian # MultiSineGaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.IMRPhenomPv2 # BBH
         init_args: {}
-      - class_path: ml4gw.waveforms.Gaussian
+      - class_path: ml4gw.waveforms.Gaussian # Gaussian
         init_args:
           sample_rate: 0
           duration: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # Cusp
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # Kink
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # KinkKink
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.WhiteNoiseBurst
+      - class_path: ml4gw.waveforms.WhiteNoiseBurst # WhiteNoiseBurst
         init_args:
           sample_rate: 0
           duration: 0
-      - null
+      - null # CCSN
+      - null # Background
+      - null # Glitch
     extra_kwargs:
-      - null
-      - ringdown_duration: 0.9
-      - null
-      - null
-      - null
-      - null
-      - null
-      - null
+      - null # SineGaussian
+      - null # MultiSineGaussian
+      - ringdown_duration: 0.9 # BBH
+      - null # Gaussian
+      - null # Cusp
+      - null # Kink
+      - null # KinkKink
+      - null # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      - null # Glitch
+    glitch_root: /home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/
     sample_rate: 4096
     kernel_length: 0.5
     psd_length: 64

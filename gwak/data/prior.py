@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.distributions.uniform import Uniform
-import torch.distributions as torchdist
+import torch.distributions as torchdist 
 from tqdm import tqdm
 import lal
 from astropy import units as u
@@ -63,6 +63,28 @@ class LogUniform(torchdist.TransformedDistribution):
         self.low = low_tensor
         self.high = high_tensor
 
+class IntUniform(torchdist.Distribution):
+    """Discrete uniform on {low, …, high‑1} with the same .sample(...) API."""
+    arg_constraints = {}
+
+    def __init__(self, low: int, high: int, validate_args=None):
+        assert low < high, "`low` must be < `high`"
+        self.low, self.high = int(low), int(high)
+        super().__init__(torch.Size(), validate_args=validate_args)
+
+    def sample(self, sample_shape=torch.Size()):
+        return torch.randint(
+            self.low, self.high, sample_shape, dtype=torch.long
+        )
+
+    # (optional) rarely used, but keeps some libraries happy
+    def log_prob(self, value):
+        return torch.full_like(
+            value.float(),
+            -torch.log(torch.tensor(self.high - self.low, dtype=torch.float32)),
+        )
+
+
 class SineGaussianHighFrequency(BasePrior):
 
     def __init__(self):
@@ -101,10 +123,26 @@ class SineGaussianBBC(BasePrior):
         self.params = OrderedDict(
             hrss = LogUniform(5e-23, 3.33e-22), 
             quality = Uniform(3, 700),
-            frequency = Uniform(14, 3067),
+            frequency = Uniform(30, 2048),
             phase = Uniform(0, torch.pi),
             eccentricity = Uniform(0, 1)
         )
+
+class MultiSineGaussianBBC(BasePrior):
+    def __init__(self):
+        super().__init__()
+        n_max = 10
+        p = OrderedDict()
+        p["n_components"] = IntUniform(2, n_max + 1)          # 1 … n_max
+
+        for i in range(1, n_max + 1):
+            p[f"hrss_{i}"]        = LogUniform(1.6e-23, 1.5e-22)
+            p[f"quality_{i}"]     = torchdist.Uniform(3.0, 700.0)
+            p[f"frequency_{i}"]   = torchdist.Uniform(30, 2048.0)
+            p[f"phase_{i}"]       = torchdist.Uniform(0.0, torch.pi)
+            p[f"eccentricity_{i}"]= torchdist.Uniform(0.0, 1.0)
+
+        self.params = p
 
 class GaussianBBC(BasePrior):
 
@@ -112,7 +150,7 @@ class GaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = LogUniform(4e-19, 4e-18), 
+            hrss = LogUniform(8.5e-19, 4e-18), 
             polarization = Uniform(0, torch.pi),
             eccentricity = Uniform(0, 1)
         )
@@ -135,7 +173,7 @@ class CuspBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-4.0 / 3.0),
-            amplitude = Uniform(9.9e-22, 4.0e-21),
+            amplitude = Uniform(3.0e-21, 7.0e-21),
             f_high = Constant(1000)
         )
 
@@ -145,7 +183,7 @@ class KinkBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-5.0 / 3.0),
-            amplitude = Uniform(4.8e-21, 1.4e-20),
+            amplitude = Uniform(7.8e-21, 3.4e-20),
             f_high = Constant(1000)
         )
 
@@ -155,7 +193,7 @@ class KinkkinkBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-2.0),
-            amplitude = Uniform(2e-20, 4.7e-20),
+            amplitude = Uniform(3.5e-20, 8.7e-20),
             f_high = Constant(1000)
         )
 
@@ -194,7 +232,7 @@ class LAL_BBHPrior(BasePrior):
         self.priors['mass_ratio'] = Uniform(0.5, 0.99) 
         
         # # Luminosity distance in Mpc.(TensorType)
-        self.priors["distance"] = Uniform(50, 1500) # dist_mpc
+        self.priors["distance"] = Uniform(100, 1375) # dist_mpc
         
         # Coalescence time. (TensorType)
         self.priors["tc"] = Constant(0) 
