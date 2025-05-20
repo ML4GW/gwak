@@ -25,6 +25,17 @@ from abc import ABC
 import copy
 import sys
 
+class CleanGlitchPairedDataset(torch.utils.data.IterableDataset):
+    def __init__(self, clean_ds, glitch_ds):
+        self.clean_ds = clean_ds
+        self.glitch_ds = glitch_ds
+
+        print("In GlitchCleanPairedDataset")
+        
+    def __iter__(self):
+        for clean_x, glitch_x in zip(iter(self.clean_ds), iter(self.glitch_ds)):
+            yield clean_x, glitch_x
+
 
 class TimeSlidesDataloader(pl.LightningDataModule):
 
@@ -285,6 +296,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
+        all_files = sorted(all_files)
         n_all_files = len(all_files)
         # adding handling for the case where data_dir has subdirs for train/test/val
         if n_all_files == 0:
@@ -506,13 +518,10 @@ class SignalDataloader(GwakBaseDataloader):
             buffer_duration=2.5
         )
 
-    def _build_glitch_dataset(self, fnames):
-        """
-        Helper that builds an Hdf5TimeSeriesDataset for Glitch
-        (tweak the arguments below as needed for your use-case).
-        """
-        return Hdf5TimeSeriesDataset(
-            fnames,
+    def setup(self, stage=None):
+
+        train_clean_dataset = Hdf5TimeSeriesDataset(
+            self.train_fnames,
             channels=self.ifos,
             kernel_length=self.kernel_length,
             fduration=self.fduration,
@@ -521,37 +530,100 @@ class SignalDataloader(GwakBaseDataloader):
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=False,
-            mode="glitch",
+            mode='clean',
             glitch_root=self.glitch_root,
             ifos=self.ifos
         )
 
-    def train_dataloader(self):
-        if self._is_glitch:
-            dataset = self._build_glitch_dataset(self.train_fnames)
-            return torch.utils.data.DataLoader(
-                dataset, num_workers=self.num_workers, pin_memory=False
-            )
-        # default behaviour for every other signal type
-        return super().train_dataloader()
+        val_clean_dataset = Hdf5TimeSeriesDataset(
+            self.val_fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+            mode='clean',
+            glitch_root=self.glitch_root,
+            ifos=self.ifos,
+        )
 
+        test_clean_dataset = Hdf5TimeSeriesDataset(
+            self.test_fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+            mode='clean',
+            glitch_root=self.glitch_root,
+            ifos=self.ifos,
+        )
+
+        train_glitch_dataset = Hdf5TimeSeriesDataset(
+            self.train_fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+            mode='glitch',
+            glitch_root=self.glitch_root,
+            ifos=self.ifos
+        )
+
+        # Create glitch dataset (same config but with mode='glitch')
+        val_glitch_dataset = Hdf5TimeSeriesDataset(
+            self.val_fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+            mode='glitch',
+            glitch_root=self.glitch_root,
+            ifos=self.ifos,
+        )
+
+        test_glitch_dataset = Hdf5TimeSeriesDataset(
+            self.test_fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=False,
+            mode='glitch',
+            glitch_root=self.glitch_root,
+            ifos=self.ifos,
+        )
+
+        # Wrap both datasets in the paired dataset
+        self.train_paired_dataset = CleanGlitchPairedDataset(train_clean_dataset, train_glitch_dataset)
+        self.val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset, val_glitch_dataset)
+        self.test_paired_dataset = CleanGlitchPairedDataset(test_clean_dataset, test_glitch_dataset)
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(self.train_paired_dataset, batch_size=None)
 
     def val_dataloader(self):
-        if self._is_glitch:
-            dataset = self._build_glitch_dataset(self.val_fnames)
-            return torch.utils.data.DataLoader(
-                dataset, num_workers=self.num_workers, pin_memory=False
-            )
-        return super().val_dataloader()
-
+        return torch.utils.data.DataLoader(self.val_paired_dataset, batch_size=None)
 
     def test_dataloader(self):
-        if self._is_glitch:
-            dataset = self._build_glitch_dataset(self.test_fnames)
-            return torch.utils.data.DataLoader(
-                dataset, num_workers=self.num_workers, pin_memory=False
-            )
-        return super().test_dataloader()
+        return torch.utils.data.DataLoader(self.test_paired_dataset, batch_size=None)
 
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
         all_responses = []
@@ -722,30 +794,35 @@ class SignalDataloader(GwakBaseDataloader):
 
         if self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             # unpack the batch
-            [batch] = batch
+            # raw_batch, clean_batch, glitch_batch = batch
+            clean_batch, glitch_batch = batch
+            # [batch] = batch
 
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
-            waveforms, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
+            waveforms, params, ras, decs, phics = self.generate_waveforms(clean_batch.shape[0])
 
             for wf in waveforms:
                 if wf is None:
                     continue
                 if torch.any(torch.isnan(wf)):
                     self._logger.info('waveforms fucked')
-            if torch.any(torch.isnan(batch)):
+            if torch.any(torch.isnan(clean_batch)):
                 self._logger.info('batch fucked')
             # inject waveforms; maybe also whiten data preprocess etc..
-            _batch = self.multiInject(waveforms, batch)
-            while torch.any(torch.isnan(_batch)):
+            _clean_batch = self.multiInject(waveforms, clean_batch)
+            glitch_batch = self.multiInject(waveforms, glitch_batch)
+            while torch.any(torch.isnan(_clean_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
-                waveforms, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
-                _batch = self.multiInject(waveforms, batch)
-            batch = _batch
+                waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])
+                _clean_batch = self.multiInject(waveforms, clean_batch)
+                
+            clean_batch = _clean_batch
             labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
-
-            perm = torch.randperm(batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
-            batch = batch[perm]
+            glitch_mask = (torch.where(labels == 11))[0] # glitch is at class 11
+            clean_batch[glitch_mask] = glitch_batch[glitch_mask]
+            perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
+            batch = clean_batch[perm]
             labels = labels[perm]
 
             if self.trainer.training and (self.data_saving_file is not None):
@@ -761,8 +838,9 @@ class SignalDataloader(GwakBaseDataloader):
                     idx_curr += self.num_per_class[i]
 
                     self.data_group.create_dataset(bk_step, data = batch[data_range].cpu())
-                    self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
                     self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
+                    if waveforms[i] is not None:
+                        self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
 
             if self.trainer.validating and (self.data_saving_file is not None):
                 idx_curr = 0
@@ -774,8 +852,9 @@ class SignalDataloader(GwakBaseDataloader):
                     idx_curr += self.num_per_class[i]
 
                     self.data_group.create_dataset(bk_step, data = batch[data_range].cpu())
-                    self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
                     self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
+                    if waveforms[i] is not None:
+                        self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
 
             return batch, labels
 
