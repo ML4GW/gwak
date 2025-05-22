@@ -455,7 +455,9 @@ class SignalDataloader(GwakBaseDataloader):
         priors, # priors for each class
         waveforms, # waveforms for each class
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
-        *args, **kwargs
+        *args, 
+        label_offset: int = 0, # if we want to put an offset on label numbers, otherwise class in signal_classes are labeled 1,2,3,...
+        **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.signal_classes = signal_classes if type(signal_classes) == list else [signal_classes]
@@ -463,6 +465,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.waveforms = waveforms if type(waveforms) == list else [waveforms]
         self.priors = priors if type(priors) == list else [priors]
         self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
+        self.label_offset = label_offset
         self._is_glitch = (self.signal_classes == ["Glitch"]
                            or (self.num_classes == 1
                                and self.signal_classes[0] == "Glitch"))
@@ -483,7 +486,7 @@ class SignalDataloader(GwakBaseDataloader):
         file_path = Path(__file__).resolve()
         self.ccsn_dict = load_h5_as_dict(
             chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
-            source_file=Path("/home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled")
+            source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
         )
 
         # compute number of events to generate per class per batch
@@ -493,7 +496,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
-        class_labels = [i+1 for i in range(self.num_classes)]
+        class_labels = [self.label_offset+i+1 for i in range(self.num_classes)]
         if self.data_saving_file is not None:
             self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
             self.data_group["class_label_names"] = self.signal_classes
@@ -505,6 +508,14 @@ class SignalDataloader(GwakBaseDataloader):
             sample_duration=0.5,
             buffer_duration=2.5
         )
+
+        # make a list of signals we can use for "fake" glitch generation
+        # i.e. where we populate one ifo with a signal and the other with nothing
+        # use only signals for which waveforms/priors are easy
+        self.fake_glitch_candidate_inds = []
+        for i, sc in enumerate(self.signal_classes):
+            if sc not in ["Background","Glitch","CCSN","FakeGlitch"]:
+                self.fake_glitch_candidate_inds.append(i)
 
     def _build_glitch_dataset(self, fnames):
         """
@@ -580,7 +591,28 @@ class SignalDataloader(GwakBaseDataloader):
 
             elif signal_class in ["Background", "Glitch"]:
                 responses, params, ra, dec, phic = None, None, None, None, None
-
+            elif signal_class == "FakeGlitch":
+                idx_sel = np.random.choice(self.fake_glitch_candidate_inds)
+                gen_fn = generate_waveforms_standard if self.signal_classes[idx_sel] != "BBH" else generate_waveforms_bbh
+                responses, params, ra, dec, phic = gen_fn(
+                    self.num_per_class[i],
+                    self.priors[idx_sel],
+                    self.waveforms[idx_sel],
+                    self,
+                    self.signal_configs[idx_sel],
+                    self.ifos,
+                    parameters=parameters[idx_sel] if parameters is not None else None,
+                    ra=ras[idx_sel] if ras is not None else None,
+                    dec=decs[idx_sel] if decs is not None else None
+                )
+                # responses: (B, F, T)
+                B, F, T = responses.shape
+                # for each waveform randomly select one ifo to be nonzero
+                random_features = torch.randint(0, F, (B,))
+                # Create a mask of zeros, then put 1s in selected ifo for each waveform
+                mask = torch.zeros_like(responses)
+                mask[torch.arange(B), random_features, :] = 1.0
+                responses = responses * mask
             else:
                 responses, params, ra, dec, phic = generate_waveforms_standard(
                     self.num_per_class[i],
@@ -696,8 +728,8 @@ class SignalDataloader(GwakBaseDataloader):
         sub_batches = []
         idx_lo = 0
         for i in range(self.num_classes):
-            sub_batches.append(
-                self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
+            whitened = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i])
+            sub_batches.append(whitened)
             idx_lo += self.num_per_class[i]
             if torch.any(torch.isnan(sub_batches[-1])):
                 self._logger.info(f'had a nan batch with class {self.signal_classes[i]}')
@@ -741,7 +773,7 @@ class SignalDataloader(GwakBaseDataloader):
                 waveforms, params, ras, decs, phics = self.generate_waveforms(batch.shape[0])
                 _batch = self.multiInject(waveforms, batch)
             batch = _batch
-            labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
+            labels = torch.cat([(self.label_offset+i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
 
             perm = torch.randperm(batch.size(0)).to('cuda') if torch.cuda.is_available() else perm

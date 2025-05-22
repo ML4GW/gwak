@@ -133,7 +133,7 @@ class MultiSineGaussianBBC(BasePrior):
         super().__init__()
         n_max = 10
         p = OrderedDict()
-        p["n_components"] = IntUniform(2, n_max + 1)          # 1 … n_max
+        p["n_components"] = IntUniform(1, n_max + 1)          # 1 … n_max
 
         for i in range(1, n_max + 1):
             p[f"hrss_{i}"]        = LogUniform(1.6e-23, 1.5e-22)
@@ -383,5 +383,32 @@ class BBHPrior(BasePrior):
                 logger.info(f'The shape of {k} is {self.sampled_params[k]}')
             else:
                 logger.info(f'The shape of {k} is {self.sampled_params[k].shape}')
+        
+        return self.sampled_params
+
+class FakeGlitchPrior(BasePrior):
+    def __init__(self,selected_priors):
+        super().__init__()
+        self.selected_priors = selected_priors
+        all_priors = {
+            "MultiSineGaussian":MultiSineGaussianBBC,
+            "BBH":LAL_BBHPrior,
+            "Gaussian":GaussianBBC,
+            "Cusp":CuspBBC,
+            "Kink":KinkBBC,
+            "Kinkkink":KinkkinkBBC,
+            "WhiteNoiseBurst":WhiteNoiseBurstBBC
+        }
+        self.priors = [all_priors[p]() for p in selected_priors]
+
+    def sample(self, batch_size):
+        self.sampled_params = {}
+        for prior in self.priors:
+            sampled = prior.sample(batch_size)
+            for k, v in sampled.items():
+                if k not in self.sampled_params:
+                    self.sampled_params[k] = v
+                else:
+                    self.sampled_params[k] = torch.cat((self.sampled_params[k], v), dim=0)
         
         return self.sampled_params

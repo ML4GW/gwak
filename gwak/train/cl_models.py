@@ -754,8 +754,8 @@ class Crayon(GwakBaseModelClass):
                 logits = self.classifier(x_embd)
                 #self.get_logger().info(f"Logits dtype: {logits.dtype}")
                 #self.get_logger().info(f"labels dtype: {labels.dtype}")
-                loss_class = self.lambda_classifier * F.cross_entropy(logits, (labels-1).to(torch.long))
-                loss = loss_simclr + loss_class
+                loss_class = F.cross_entropy(logits, (labels-1).to(torch.long))
+                loss = loss_simclr + self.lambda_classifier * loss_class
             else:
                 loss = loss_simclr
         else:
@@ -803,8 +803,8 @@ class Crayon(GwakBaseModelClass):
                 #self.get_logger().info(f"labels dtype: {labels.dtype}")
                 #self.get_logger().info(f"Logits shape: {logits.shape}")
                 #self.get_logger().info(f"labels shape: {labels.shape}")
-                loss_class = self.lambda_classifier * F.cross_entropy(logits, (labels-1).to(torch.long))
-                loss = loss_simclr + loss_class
+                loss_class = F.cross_entropy(logits, (labels-1).to(torch.long))
+                loss = loss_simclr + self.lambda_classifier * loss_class
             else:
                 loss = loss_simclr
         else:
@@ -883,7 +883,8 @@ class EncoderTransformer(nn.Module):
                  latent_dim:int=16,
                  dim_factor_feedforward:int=4,
                  dropout:float=0.1,
-                 embed_first:bool=True):
+                 embed_first:bool=True,
+                 patch_size:int=None):
         super().__init__()
         self.num_timesteps = num_timesteps
         self.num_features = num_features
@@ -892,9 +893,16 @@ class EncoderTransformer(nn.Module):
         self.dropout = dropout
         self.nhead = nhead
         self.embed_first = embed_first
+        self.patch_size = patch_size
 
-        if self.embed_first:
-            # linear embedding into the latent dimension
+        # Check if patching is enabled and validate patch size
+        if self.patch_size is not None:
+            assert num_timesteps % patch_size == 0, f"Patch size {patch_size} must divide the number of timesteps {num_timesteps}"
+            self.num_patches = num_timesteps // patch_size
+            # Patch embedding layer (maps each patch to latent_dim)
+            self.patch_embedding = nn.Linear(num_features * patch_size, latent_dim)
+        elif self.embed_first:
+            # linear embedding into the latent dimension (no patching)
             self.embedding = nn.Linear(num_features, latent_dim, bias=False)
 
         # self-attention layers
@@ -908,10 +916,28 @@ class EncoderTransformer(nn.Module):
         self.attn_layers = nn.ModuleList(attn_layers)
 
     def forward(self, x):
-        x = x.transpose(1,2) # we get data in the shape (B,F,T) but transformers like (B,T,F)
-        if self.embed_first:
-            x = self.embedding(x)
+        # Input shape: (B, F, T) - batch, features, timesteps
+        
+        if self.patch_size is not None:
+            batch_size = x.size(0)
+            
+            # Reshape for patching: (B, F, T) -> (B, F, num_patches, patch_size)
+            x = x.reshape(batch_size, self.num_features, self.num_patches, self.patch_size)
+            
+            # Transpose to get (B, num_patches, F, patch_size)
+            x = x.permute(0, 2, 1, 3)
+            
+            # Flatten patches: (B, num_patches, F*patch_size)
+            x = x.reshape(batch_size, self.num_patches, self.num_features * self.patch_size)
+            
+            # Embed each patch
+            x = self.patch_embedding(x)  # (B, num_patches, latent_dim)
+        else:
+            x = x.transpose(1, 2)  # (B, F, T) -> (B, T, F)
+            if self.embed_first:
+                x = self.embedding(x)  # (B, T, latent_dim)
 
+        # Apply transformer layers
         for layer in self.attn_layers:
             x = layer(x)
 
@@ -927,7 +953,7 @@ class ClassAttentionBlock(nn.Module):
                  scale_attn:bool=True,
                  scale_fc:bool=True,
                  scale_resids:bool=True,
-                 ):
+                 patch_size:int=None):
         super().__init__()
         self.num_timesteps = num_timesteps
         self.dim = dim
@@ -937,6 +963,7 @@ class ClassAttentionBlock(nn.Module):
         self.scale_heads = scale_heads
         self.scale_attn = scale_attn
         self.head_dim = dim // nhead
+        self.patch_size = patch_size
 
         # self-attention
         self.attn = nn.MultiheadAttention(
@@ -961,12 +988,12 @@ class ClassAttentionBlock(nn.Module):
         self.w_resid = nn.Parameter(torch.ones(self.dim), requires_grad=True) if scale_resids else None
 
     def forward(self, x, x_cls):
-        # x has shape (B,T,F) where F = num features, T = num timesteps
+        # x has shape (B,T',F) where F = num features, T' = num timesteps or num patches
         # x_cls has shape (B,1,F) where F = num features
         
         # do self attention
         residual = x_cls
-        u = torch.cat([x_cls,x],dim=1) # shape (B,T+1,F)
+        u = torch.cat([x_cls,x],dim=1) # shape (B,T'+1,F)
         u = self.pre_attn_norm(u)
         x = self.attn(x_cls,u,u,key_padding_mask=None,attn_mask=None,need_weights=False,is_causal=False)[0]
 
@@ -1037,6 +1064,7 @@ class Tarantula(GwakBaseModelClass):
         min_lr: float = 1e-6,
         total_steps: int = None,
         warmup_fraction: float = 0.1,
+        patch_size: int = None,
         ):
 
         super().__init__()
@@ -1061,6 +1089,11 @@ class Tarantula(GwakBaseModelClass):
         self.min_lr = min_lr
         self.total_steps = total_steps
         self.warmup_fraction = warmup_fraction
+        self.patch_size = patch_size
+        
+        # Validate patch size if provided
+        if self.patch_size is not None:
+            assert num_timesteps % patch_size == 0, f"Patch size {patch_size} must divide the number of timesteps {num_timesteps}"
 
         # define the self attention blocks
         self.self_attn = EncoderTransformer(
@@ -1070,7 +1103,8 @@ class Tarantula(GwakBaseModelClass):
             nhead=self.num_head,
             latent_dim=self.latent_dim,
             dim_factor_feedforward=self.feedforward_factor,
-            embed_first=True
+            embed_first=True,
+            patch_size=self.patch_size
         )
 
         # define the class attention blocks
@@ -1078,14 +1112,15 @@ class Tarantula(GwakBaseModelClass):
         for i in range(self.num_cls_layers):
             class_attn_blocks.append(
                 ClassAttentionBlock(
-                    num_timesteps=self.num_timesteps,
+                    num_timesteps=self.num_timesteps if self.patch_size is None else self.num_timesteps // self.patch_size,
                     dim=self.latent_dim,
                     nhead=self.num_head,
                     dropout=self.cls_dropout,
-                    dim_factor_feedforward=self.feedforward_factor
+                    dim_factor_feedforward=self.feedforward_factor,
+                    patch_size=self.patch_size
                 )
             )
-        self.class_attn = ClassAttention(self.latent_dim,class_attn_blocks)
+        self.class_attn = ClassAttention(self.latent_dim, class_attn_blocks)
 
         # additional linear layer to project class token to d_output
         self.fc_out = MLP(d_input=self.latent_dim, hidden_dims=self.fc_output_dims, d_output=self.d_output)
@@ -1193,7 +1228,6 @@ class Tarantula(GwakBaseModelClass):
                 "frequency":1
             }
         }
-        
 
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
