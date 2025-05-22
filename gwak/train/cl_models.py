@@ -838,7 +838,7 @@ class Crayon(GwakBaseModelClass):
             self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
         else:
             return loss
-    
+
     def on_validation_epoch_end(self):
         if self.supervised_simclr:
             preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
