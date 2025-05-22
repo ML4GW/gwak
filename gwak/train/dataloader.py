@@ -29,8 +29,6 @@ class CleanGlitchPairedDataset(torch.utils.data.IterableDataset):
     def __init__(self, clean_ds, glitch_ds):
         self.clean_ds = clean_ds
         self.glitch_ds = glitch_ds
-
-        print("In GlitchCleanPairedDataset")
         
     def __iter__(self):
         for clean_x, glitch_x in zip(iter(self.clean_ds), iter(self.glitch_ds)):
@@ -293,6 +291,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
             "fduration": fduration,
             "fftlength": fftlength,
         }
+
+
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -574,13 +574,12 @@ class SignalDataloader(GwakBaseDataloader):
             sample_rate=self.sample_rate,
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
+            coincident=True,
             mode='glitch',
             glitch_root=self.glitch_root,
             ifos=self.ifos
         )
 
-        # Create glitch dataset (same config but with mode='glitch')
         val_glitch_dataset = Hdf5TimeSeriesDataset(
             self.val_fnames,
             channels=self.ifos,
@@ -590,7 +589,7 @@ class SignalDataloader(GwakBaseDataloader):
             sample_rate=self.sample_rate,
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
+            coincident=True,
             mode='glitch',
             glitch_root=self.glitch_root,
             ifos=self.ifos,
@@ -605,7 +604,7 @@ class SignalDataloader(GwakBaseDataloader):
             sample_rate=self.sample_rate,
             batch_size=self.batch_size,
             batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
+            coincident=True,
             mode='glitch',
             glitch_root=self.glitch_root,
             ifos=self.ifos,
@@ -702,8 +701,6 @@ class SignalDataloader(GwakBaseDataloader):
         if waveforms is not None:
             inj_len = waveforms.shape[-1]
             window_len = splits[1]
-            half = int((window_len - inj_len)/2)
-            first_half, second_half = half, window_len - half - inj_len
 
             # new implementation: center the window of length window_len
             # about the max amplitude point in the signal waveform
@@ -796,7 +793,6 @@ class SignalDataloader(GwakBaseDataloader):
             # unpack the batch
             # raw_batch, clean_batch, glitch_batch = batch
             clean_batch, glitch_batch = batch
-            # [batch] = batch
 
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
             waveforms, params, ras, decs, phics = self.generate_waveforms(clean_batch.shape[0])
@@ -819,7 +815,8 @@ class SignalDataloader(GwakBaseDataloader):
             clean_batch = _clean_batch
             labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
-            glitch_mask = (torch.where(labels == 11))[0] # glitch is at class 11
+
+            glitch_mask = (torch.where(labels == self.signal_classes.index("Glitch")+1))[0]
             clean_batch[glitch_mask] = glitch_batch[glitch_mask]
             perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
@@ -829,30 +826,26 @@ class SignalDataloader(GwakBaseDataloader):
                 # Set a warning that when the global_step exceed 1e6,
                 # the data will have duplications.
                 # Replace this with a data saving function.
-                idx_curr = 0
                 for i,cls in enumerate(self.signal_classes):
                     bk_step = f"Training/Step_{self.trainer.global_step:06d}_BK{cls}"
                     inj_step = f"Training/Step_{self.trainer.global_step:06d}_INJ{cls}"
                     label_step = f"Training/Step_{self.trainer.global_step:06d}_LABEL{cls}"
-                    data_range = slice(idx_curr,idx_curr+self.num_per_class[i])
-                    idx_curr += self.num_per_class[i]
+                    prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
 
-                    self.data_group.create_dataset(bk_step, data = batch[data_range].cpu())
-                    self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
+                    self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
+                    self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
                     if waveforms[i] is not None:
                         self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
 
             if self.trainer.validating and (self.data_saving_file is not None):
-                idx_curr = 0
                 for i,cls in enumerate(self.signal_classes):
                     bk_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_BK{cls}"
                     inj_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_INJ{cls}"
                     label_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_LAB{cls}"
-                    data_range = slice(idx_curr,idx_curr+self.num_per_class[i])
-                    idx_curr += self.num_per_class[i]
+                    prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
 
-                    self.data_group.create_dataset(bk_step, data = batch[data_range].cpu())
-                    self.data_group.create_dataset(label_step, data = labels[data_range].cpu())
+                    self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
+                    self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
                     if waveforms[i] is not None:
                         self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
 
@@ -1136,7 +1129,7 @@ class CCSN_Injector:
         sample_duration,
         buffer_duration = 4,
         off_set = 0.15,
-        time_shift = -0.15
+        time_shift = -0.2
     ):
 
         self.tensors, self.vertices = gw.get_ifo_geometry(*ifos)
@@ -1171,7 +1164,7 @@ class CCSN_Injector:
         for name, count in zip(self.ccsn_list, ccsn_counts):
 
             time = self.signals[name][0]
-            quad_moment = torch.Tensor(self.signals[name][1])
+            quad_moment = torch.Tensor(self.signals[name][1]) * 10
 
             theta = torch.Tensor(np.random.uniform(0, np.pi, count))
             phi = torch.Tensor(np.random.uniform(0, 2*np.pi, count))
