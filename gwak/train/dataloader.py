@@ -3,6 +3,7 @@ import yaml
 import logging
 import argparse
 import numpy as np
+from math import ceil
 from pathlib import Path
 from typing import Callable, List, Optional, Union
 
@@ -29,7 +30,10 @@ class CleanGlitchPairedDataset(torch.utils.data.IterableDataset):
     def __init__(self, clean_ds, glitch_ds):
         self.clean_ds = clean_ds
         self.glitch_ds = glitch_ds
-        
+
+    def __len__(self):
+        return len(self.clean_ds)
+    
     def __iter__(self):
         for clean_x, glitch_x in zip(iter(self.clean_ds), iter(self.glitch_ds)):
             yield clean_x, glitch_x
@@ -79,6 +83,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
+        all_files = sorted(all_files)
         n_all_files = len(all_files)
         # adding handling for the case where data_dir has subdirs for train/test/val
         if n_all_files == 0:
@@ -110,63 +115,86 @@ class TimeSlidesDataloader(pl.LightningDataModule):
             n_val_files = int(n_all_files * val_split)
             return all_files[:n_train_files], all_files[n_train_files:n_train_files+n_val_files], all_files[n_train_files+n_val_files:]
 
-    def train_dataloader(self):
+    def make_dataset(self, fnames, coincident, mode):
+        return Hdf5TimeSeriesDataset(
+            fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=coincident,
+            mode=mode,
+            glitch_root=self.glitch_root,
+            ifos=self.ifos,
+        )
 
-        dataset = Hdf5TimeSeriesDataset(
-                self.train_fnames,
-                channels=self.ifos,
-                kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate),#int(self.sample_rate * self.sample_length),
-                batch_size=self.batch_size,
-                batches_per_epoch=self.batches_per_epoch,
-                coincident=False,
-                glitch_root=self.glitch_root
+    def setup(self, stage=None):
+        if stage in ("fit", None):
+
+            train_clean_dataset = self. make_dataset(
+                self.train_fnames, 
+                coincident=False, 
+                mode="clean"
             )
 
-        pin_memory = isinstance(
-            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        )
-        dataloader = torch.utils.data.DataLoader(
-            dataset, num_workers=self.num_workers, pin_memory=False
-        )
-        return dataloader
+            val_clean_dataset = self. make_dataset(
+                self.val_fnames, 
+                coincident=False, 
+                mode="clean"
+            )
+
+            train_glitch_dataset = self. make_dataset(
+                self.train_fnames, 
+                coincident=True, 
+                mode="glitch"
+            )
+
+            val_glitch_dataset = self. make_dataset(
+                self.val_fnames, 
+                coincident=True, 
+                mode="glitch"
+            )
+
+            # Wrap both datasets in the paired dataset
+            self.train_paired_dataset = CleanGlitchPairedDataset(
+                train_clean_dataset, 
+                train_glitch_dataset
+            )
+
+            self.val_paired_dataset = CleanGlitchPairedDataset(
+                val_clean_dataset, 
+                val_glitch_dataset
+            )
+
+        if stage == "test":
+            test_clean_dataset = self. make_dataset(
+                self.test_fnames, 
+                coincident=False, 
+                mode="clean"
+            )
+
+            test_glitch_dataset = self. make_dataset(
+                self.test_fnames, 
+                coincident=True, 
+                mode="glitch"
+            )
+
+            self.test_paired_dataset = CleanGlitchPairedDataset(
+                test_clean_dataset, 
+                test_glitch_dataset
+            )
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(self.train_paired_dataset, batch_size=None)
 
     def val_dataloader(self):
-        dataset = Hdf5TimeSeriesDataset(
-            self.val_fnames,
-            channels=self.ifos,
-            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
-            glitch_root=self.glitch_root
-        )
-
-        pin_memory = isinstance(
-            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        )
-        dataloader = torch.utils.data.DataLoader(
-            dataset, num_workers=self.num_workers, pin_memory=False
-        )
-        return dataloader
+        return torch.utils.data.DataLoader(self.val_paired_dataset, batch_size=None)
 
     def test_dataloader(self):
-        dataset = Hdf5TimeSeriesDataset(
-            self.test_fnames,
-            channels=self.ifos,
-            kernel_size=int((self.psd_length + self.fduration + self.kernel_length) * self.sample_rate), # int(self.hparams.sample_rate * self.sample_length),
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
-            glitch_root=self.glitch_root
-        )
-
-        pin_memory = isinstance(
-            self.trainer.accelerator, pl.accelerators.CUDAAccelerator
-        )
-        dataloader = torch.utils.data.DataLoader(
-            dataset, num_workers=self.num_workers, pin_memory=False
-        )
-        return dataloader
+        return torch.utils.data.DataLoader(self.test_paired_dataset, batch_size=None)
 
     def get_logger(self):
         logger_name = 'GwakBaseDataloader'
@@ -213,10 +241,11 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
         if self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             # unpack the batch
-            [batch] = batch
-
+            clean_batch, glitch_batch = batch
+            # Mix the clean and glitch data
+            clean_batch[int(self.batch_size/2):] = glitch_batch[:int(self.batch_size/2)]
             # whiten
-            batch = self.whiten(batch)
+            batch = self.whiten(clean_batch)
 
             if self.trainer.training and (self.data_saving_file is not None):
 
@@ -518,102 +547,77 @@ class SignalDataloader(GwakBaseDataloader):
             buffer_duration=2.5
         )
 
+    def make_dataset(self, fnames, coincident, mode):
+        return Hdf5TimeSeriesDataset(
+            fnames,
+            channels=self.ifos,
+            kernel_length=self.kernel_length,
+            fduration=self.fduration,
+            psd_length=self.psd_length,
+            sample_rate=self.sample_rate,
+            batch_size=self.batch_size,
+            batches_per_epoch=self.batches_per_epoch,
+            coincident=coincident,
+            mode=mode,
+            glitch_root=self.glitch_root,
+            ifos=self.ifos,
+        )
+
     def setup(self, stage=None):
+        if stage in ("fit", None):
 
-        train_clean_dataset = Hdf5TimeSeriesDataset(
-            self.train_fnames,
-            channels=self.ifos,
-            kernel_length=self.kernel_length,
-            fduration=self.fduration,
-            psd_length=self.psd_length,
-            sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
-            mode='clean',
-            glitch_root=self.glitch_root,
-            ifos=self.ifos
-        )
+            train_clean_dataset = self. make_dataset(
+                self.train_fnames,
+                coincident=False,
+                mode="clean"
+            )
 
-        val_clean_dataset = Hdf5TimeSeriesDataset(
-            self.val_fnames,
-            channels=self.ifos,
-            kernel_length=self.kernel_length,
-            fduration=self.fduration,
-            psd_length=self.psd_length,
-            sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
-            mode='clean',
-            glitch_root=self.glitch_root,
-            ifos=self.ifos,
-        )
+            val_clean_dataset = self. make_dataset(
+                self.val_fnames,
+                coincident=False,
+                mode="clean"
+            )
 
-        test_clean_dataset = Hdf5TimeSeriesDataset(
-            self.test_fnames,
-            channels=self.ifos,
-            kernel_length=self.kernel_length,
-            fduration=self.fduration,
-            psd_length=self.psd_length,
-            sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=False,
-            mode='clean',
-            glitch_root=self.glitch_root,
-            ifos=self.ifos,
-        )
+            train_glitch_dataset = self. make_dataset(
+                self.train_fnames,
+                coincident=True,
+                mode="glitch"
+            )
 
-        train_glitch_dataset = Hdf5TimeSeriesDataset(
-            self.train_fnames,
-            channels=self.ifos,
-            kernel_length=self.kernel_length,
-            fduration=self.fduration,
-            psd_length=self.psd_length,
-            sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=True,
-            mode='glitch',
-            glitch_root=self.glitch_root,
-            ifos=self.ifos
-        )
+            val_glitch_dataset = self. make_dataset(
+                self.val_fnames,
+                coincident=True,
+                mode="glitch"
+            )
 
-        val_glitch_dataset = Hdf5TimeSeriesDataset(
-            self.val_fnames,
-            channels=self.ifos,
-            kernel_length=self.kernel_length,
-            fduration=self.fduration,
-            psd_length=self.psd_length,
-            sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=True,
-            mode='glitch',
-            glitch_root=self.glitch_root,
-            ifos=self.ifos,
-        )
+            # Wrap both datasets in the paired dataset
+            self.train_paired_dataset = CleanGlitchPairedDataset(
+                train_clean_dataset,
+                train_glitch_dataset
+            )
 
-        test_glitch_dataset = Hdf5TimeSeriesDataset(
-            self.test_fnames,
-            channels=self.ifos,
-            kernel_length=self.kernel_length,
-            fduration=self.fduration,
-            psd_length=self.psd_length,
-            sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
-            batches_per_epoch=self.batches_per_epoch,
-            coincident=True,
-            mode='glitch',
-            glitch_root=self.glitch_root,
-            ifos=self.ifos,
-        )
+            self.val_paired_dataset = CleanGlitchPairedDataset(
+                val_clean_dataset,
+                val_glitch_dataset
+            )
 
-        # Wrap both datasets in the paired dataset
-        self.train_paired_dataset = CleanGlitchPairedDataset(train_clean_dataset, train_glitch_dataset)
-        self.val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset, val_glitch_dataset)
-        self.test_paired_dataset = CleanGlitchPairedDataset(test_clean_dataset, test_glitch_dataset)
+        if stage == "test":
+            test_clean_dataset = self. make_dataset(
+                self.test_fnames,
+                coincident=False,
+                mode="clean"
+            )
+
+            test_glitch_dataset = self. make_dataset(
+                self.test_fnames,
+                coincident=True,
+                mode="glitch"
+            )
+
+            self.test_paired_dataset = CleanGlitchPairedDataset(
+                test_clean_dataset, 
+                test_glitch_dataset
+            )
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_paired_dataset, batch_size=None)
@@ -817,7 +821,8 @@ class SignalDataloader(GwakBaseDataloader):
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
 
             glitch_mask = (torch.where(labels == self.signal_classes.index("Glitch")+1))[0]
-            clean_batch[glitch_mask] = glitch_batch[glitch_mask]
+            glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
+            clean_batch[glitch_mask] = glitch_chunk
             perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
             labels = labels[perm]
