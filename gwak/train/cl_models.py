@@ -799,10 +799,6 @@ class Crayon(GwakBaseModelClass):
             loss_simclr = self.loss_function(z_embd,labels=labels)
             if self.use_classifier:
                 logits = self.classifier(x_embd)
-                #self.get_logger().info(f"Logits dtype: {logits.dtype}")
-                #self.get_logger().info(f"labels dtype: {labels.dtype}")
-                #self.get_logger().info(f"Logits shape: {logits.shape}")
-                #self.get_logger().info(f"labels shape: {labels.shape}")
                 loss_class = self.lambda_classifier * F.cross_entropy(logits, (labels-1).to(torch.long))
                 loss = loss_simclr + loss_class
             else:
@@ -838,7 +834,7 @@ class Crayon(GwakBaseModelClass):
             self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
         else:
             return loss
-    
+
     def on_validation_epoch_end(self):
         if self.supervised_simclr:
             preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
