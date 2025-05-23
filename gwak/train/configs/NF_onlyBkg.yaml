@@ -30,4 +30,5 @@ data:
     batch_size: 32
     batches_per_epoch: 4
     num_workers: 4
+    glitch_root: /home/hongyin.chen/Data/GWAK_data/examination/omicron/omicron/HL
     data_saving_file: null
