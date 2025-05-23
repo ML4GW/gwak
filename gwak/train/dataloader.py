@@ -22,6 +22,7 @@ from torch.distributions.uniform import Uniform
 from ml4gw.distributions import Cosine
 
 from gwak import data
+from gwak.data.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
@@ -498,6 +499,7 @@ class SignalDataloader(GwakBaseDataloader):
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         *args, 
         label_offset: int = 0, # if we want to put an offset on label numbers, otherwise class in signal_classes are labeled 1,2,3,...
+        fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -553,10 +555,10 @@ class SignalDataloader(GwakBaseDataloader):
         # make a list of signals we can use for "fake" glitch generation
         # i.e. where we populate one ifo with a signal and the other with nothing
         # use only signals for which waveforms/priors are easy
-        self.fake_glitch_candidate_inds = []
-        for i, sc in enumerate(self.signal_classes):
-            if sc not in ["Background","Glitch","CCSN","FakeGlitch"]:
-                self.fake_glitch_candidate_inds.append(i)
+        if "FakeGlitch" in self.signal_classes:
+            fakeGlitch_config = copy.deepcopy(self.config)
+            fakeGlitch_config['ringdown_duration'] = 0.9 # need to set this by hand if there are BBHs included in fake glitch set
+            self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
     
     def make_dataset(self, fnames, coincident, mode):
         return Hdf5TimeSeriesDataset(
@@ -667,27 +669,16 @@ class SignalDataloader(GwakBaseDataloader):
             elif signal_class in ["Background", "Glitch"]:
                 responses, params, ra, dec, phic = None, None, None, None, None
             elif signal_class == "FakeGlitch":
-                idx_sel = np.random.choice(self.fake_glitch_candidate_inds)
-                gen_fn = generate_waveforms_standard if self.signal_classes[idx_sel] != "BBH" else generate_waveforms_bbh
-                responses, params, ra, dec, phic = gen_fn(
-                    self.num_per_class[i],
-                    self.priors[idx_sel],
-                    self.waveforms[idx_sel],
-                    self,
-                    self.signal_configs[idx_sel],
-                    self.ifos,
-                    parameters=parameters[idx_sel] if parameters is not None else None,
-                    ra=ras[idx_sel] if ras is not None else None,
-                    dec=decs[idx_sel] if decs is not None else None
-                )
+                responses, params, ra, dec, phic = self.fakeGlitchMaker.generate_waveforms(self.num_per_class[i],self,self.ifos)
                 # responses: (B, F, T)
-                B, F, T = responses.shape
-                # for each waveform randomly select one ifo to be nonzero
-                random_features = torch.randint(0, F, (B,))
-                # Create a mask of zeros, then put 1s in selected ifo for each waveform
-                mask = torch.zeros_like(responses)
-                mask[torch.arange(B), random_features, :] = 1.0
-                responses = responses * mask
+                for i in range(len(responses)):
+                    B, F, T = responses[i].shape
+                    # for each waveform randomly select one ifo to be nonzero
+                    random_features = torch.randint(0, F, (B,))
+                    # Create a mask of zeros, then put 1s in selected ifo for each waveform
+                    mask = torch.zeros_like(responses[i])
+                    mask[torch.arange(B), random_features, :] = 1.0
+                    responses[i] = responses[i] * mask
             else:
                 responses, params, ra, dec, phic = generate_waveforms_standard(
                     self.num_per_class[i],
@@ -801,7 +792,16 @@ class SignalDataloader(GwakBaseDataloader):
         sub_batches = []
         idx_lo = 0
         for i in range(self.num_classes):
-            whitened = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i])
+            if type(waveforms[i]) == list:
+                # multiple waveforms for a given class: relevant for the fake glitch where it uses several classes
+                whitened = []
+                i1 = idx_lo
+                for wf in waveforms[i]:
+                    whitened.append(self.inject(batch[i1:i1+wf.shape[0]], wf))
+                    i1 += wf.shape[0]
+                whitened = torch.cat(whitened, dim=0)
+            else:
+                whitened = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i])
             sub_batches.append(whitened)
             idx_lo += self.num_per_class[i]
             if torch.any(torch.isnan(sub_batches[-1])):
@@ -836,8 +836,13 @@ class SignalDataloader(GwakBaseDataloader):
             for wf in waveforms:
                 if wf is None:
                     continue
-                if torch.any(torch.isnan(wf)):
-                    self._logger.info('waveforms fucked')
+                if type(wf) == list:
+                    for wff in wf:
+                        if torch.any(torch.isnan(wff)):
+                            self._logger.info('waveforms fucked')
+                else:
+                    if torch.any(torch.isnan(wf)):
+                        self._logger.info('waveforms fucked')
             if torch.any(torch.isnan(clean_batch)):
                 self._logger.info('batch fucked')
             # inject waveforms; maybe also whiten data preprocess etc..
@@ -1250,3 +1255,81 @@ class CCSN_Injector:
 
 
         return ht, dec, phi
+
+from ml4gw.waveforms import MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
+class FakeGlitchWaveform:
+    def __init__(self,config,selected_signals=None):
+        sample_rate = config['sample_rate']
+        duration = config['fduration'] + config['kernel_length']
+        all_wfs = {
+            "MultiSineGaussian":MultiSineGaussian(sample_rate=sample_rate,duration=duration),
+            "BBH":IMRPhenomPv2(),
+            "Gaussian":Gaussian(sample_rate=sample_rate,duration=duration),
+            "Cusp":GenerateString(sample_rate=sample_rate),
+            "Kink":GenerateString(sample_rate=sample_rate),
+            "Kinkkink":GenerateString(sample_rate=sample_rate),
+            "WhiteNoiseBurst":WhiteNoiseBurst(sample_rate=sample_rate,duration=duration),
+            "CCSN":WhiteNoiseBurst(sample_rate=sample_rate,duration=duration) # dummy value, not used for CCSN. we use Andy's custom implementation
+        }
+        if selected_signals is None:
+            self.selected_signals = all_wfs.keys()
+        else:
+            self.selected_signals = selected_signals
+        self.waveforms = {}
+        for s in self.selected_signals:
+            self.waveforms[s] = all_wfs[s]
+
+class FakeGlitchMaker:
+    def __init__(self, config, signals):
+        self.prior = FakeGlitchPrior(selected_signals=signals)
+        self.waveform = FakeGlitchWaveform(config,selected_signals=signals)
+        self.config = config
+        self.signals = self.prior.selected_signals
+
+    def generate_waveforms(self,batch_size,loader,ifos):
+        num_per = self.prior.num_per_signal(batch_size)
+        all_responses = []
+        all_params = []
+        all_ras = []
+        all_decs = []
+        all_phics = []
+        for i in range(len(self.signals)):
+            signal_class = self.signals[i]
+            num = num_per[i]
+            prior = self.prior.selected_priors[signal_class]
+            waveform = self.waveform.waveforms[signal_class]
+            if signal_class == 'BBH':
+                responses, params, ra, dec, phic = generate_waveforms_bbh(
+                    num,
+                    prior,
+                    waveform,
+                    loader,
+                    self.config,
+                    ifos,
+                    parameters=None,
+                    ra=None,
+                    dec=None
+                )
+            elif signal_class == "CCSN":
+                responses, dec, phic = loader.generate_waveforms_ccsn(
+                    total_counts=num
+                )
+                params, ra = None, None
+            else:
+                responses, params, ra, dec, phic = generate_waveforms_standard(
+                    num,
+                    prior,
+                    waveform,
+                    loader,
+                    self.config,
+                    ifos,
+                    parameters=None,
+                    ra=None,
+                    dec=None
+                )
+            all_responses.append(responses)
+            all_params.append(params)
+            all_ras.append(ra)
+            all_decs.append(dec)
+            all_phics.append(phic)
+        return all_responses, all_params, all_ras, all_decs, all_phics

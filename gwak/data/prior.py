@@ -387,9 +387,8 @@ class BBHPrior(BasePrior):
         return self.sampled_params
 
 class FakeGlitchPrior(BasePrior):
-    def __init__(self,selected_priors):
+    def __init__(self,selected_signals=None):
         super().__init__()
-        self.selected_priors = selected_priors
         all_priors = {
             "MultiSineGaussian":MultiSineGaussianBBC,
             "BBH":LAL_BBHPrior,
@@ -397,18 +396,33 @@ class FakeGlitchPrior(BasePrior):
             "Cusp":CuspBBC,
             "Kink":KinkBBC,
             "Kinkkink":KinkkinkBBC,
-            "WhiteNoiseBurst":WhiteNoiseBurstBBC
+            "WhiteNoiseBurst":WhiteNoiseBurstBBC,
+            "CCSN":MultiSineGaussianBBC # dummy value, not used for CCSN. we use Andy's custom implementation
         }
-        self.priors = [all_priors[p]() for p in selected_priors]
+        if selected_signals is None:
+            self.selected_signals = list(all_priors.keys())
+        else:
+            self.selected_signals = selected_signals
+        self.selected_priors = {}
+        for p in self.selected_signals:
+            if p not in all_priors.keys():
+                print(f"Unrecogized prior name {p}, skipping. Please modify the code to add it if needed.")
+            else:
+                self.selected_priors[p] = all_priors[p]()
 
+    def num_per_signal(self,batch_size):
+        num_per = batch_size//len(self.selected_signals)
+        rem = batch_size%len(self.selected_signals)
+        nums = [num_per for _ in range(len(self.selected_signals))]
+        for i in range(rem):
+            nums[i] += 1
+        return nums
+    
     def sample(self, batch_size):
-        self.sampled_params = {}
-        for prior in self.priors:
-            sampled = prior.sample(batch_size)
-            for k, v in sampled.items():
-                if k not in self.sampled_params:
-                    self.sampled_params[k] = v
-                else:
-                    self.sampled_params[k] = torch.cat((self.sampled_params[k], v), dim=0)
+        nums = self.num_per_signal(batch_size)
+        sampled_params = []
+        for nsample, signal in zip(nums,self.selected_signals):
+            sampled = self.selected_priors[signal].sample(nsample)
+            sampled_params.append(sampled)
         
-        return self.sampled_params
+        return sampled_params
