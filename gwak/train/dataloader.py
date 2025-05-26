@@ -964,12 +964,10 @@ def generate_waveforms_standard(
         dec = loader.dec_prior.sample((batch_size,))
     phic = loader.phic_prior.sample((batch_size,))
 
-    cross, plus = waveform(**parameters)
-
-    # waveforms are in frequency domain, convert to time domain!!
-    cross = torch.fft.irfft(cross) * config['sample_rate']
-    plus = torch.fft.irfft(plus) * config['sample_rate']
-
+    cross, plus = waveform(**parameters) 
+    print(loader.signal_classes)
+    if loader.signal_classes == ['BBH']:
+        cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)        
     # compute detector responses
     responses = compute_observed_strain(
         dec,
@@ -1018,6 +1016,9 @@ def generate_waveforms_bbh(
     ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
     cross = torch.roll(cross, -ringdown_size, dims=-1)
     plus = torch.roll(plus, -ringdown_size, dims=-1)
+    # crooss, plus: FD -> TD
+    cross = torch.fft.irfft(cross) * config['sample_rate']
+    plus = torch.fft.irfft(plus) * config['sample_rate']
 
     # compute detector responses
     responses = compute_observed_strain(
