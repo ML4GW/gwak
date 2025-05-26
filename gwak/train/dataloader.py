@@ -966,6 +966,9 @@ def generate_waveforms_standard(
 
     cross, plus = waveform(**parameters)
 
+    # waveforms are in frequency domain, convert to time domain!!
+    cross = torch.fft.irfft(cross) * config['sample_rate']
+    plus = torch.fft.irfft(plus) * config['sample_rate']
 
     # compute detector responses
     responses = compute_observed_strain(
