@@ -1016,9 +1016,7 @@ def generate_waveforms_bbh(
     ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
     cross = torch.roll(cross, -ringdown_size, dims=-1)
     plus = torch.roll(plus, -ringdown_size, dims=-1)
-    # crooss, plus: FD -> TD
-    cross = torch.fft.irfft(cross) * config['sample_rate']
-    plus = torch.fft.irfft(plus) * config['sample_rate']
+
 
     # compute detector responses
     responses = compute_observed_strain(
