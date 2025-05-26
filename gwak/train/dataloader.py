@@ -965,7 +965,7 @@ def generate_waveforms_standard(
     phic = loader.phic_prior.sample((batch_size,))
 
     cross, plus = waveform(**parameters) 
-    print(loader.signal_classes)
+
     if loader.signal_classes == ['BBH']:
         cross, plus = torch.fft.irfft(cross)* config['sample_rate'], torch.fft.irfft(plus) * config['sample_rate']       
     # compute detector responses
