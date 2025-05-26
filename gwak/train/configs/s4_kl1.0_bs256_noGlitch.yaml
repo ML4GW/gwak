@@ -1,0 +1,132 @@
+# lightning.pytorch==2.3.2
+seed_everything: 0
+trainer:
+  callbacks:
+    - class_path: callback.ValidationCallback
+  accelerator: gpu
+  devices: [0]
+  # accelerator: auto
+  # devices: auto
+  #strategy: ddp_find_unused_parameters_true
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: gwak2_embeddings
+      entity: gwak
+  log_every_n_steps: 1
+  max_epochs: 100
+  limit_val_batches: 10
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 1
+ckpt_path: null
+model:
+  class_path: cl_models.Crayon
+  init_args:
+    num_ifos: 2
+    num_timesteps: 8192
+    d_output: 10
+    d_contrastive_space: 10
+    temperature: 0.1
+    temperature_init: null # not annealing temp
+    n_temp_anneal: 10
+    supervised_simclr: true
+    lr_opt: 1e-3
+    lr_min: 1e-5
+    cos_anneal: false
+    cos_anneal_tmax: 50
+    use_classifier: true
+    num_classes: 9
+    lambda_classifier: 1.0
+    classifier_hidden_dims: [16, 16]
+    class_anneal_epochs: 20
+    s4_kwargs:
+      d_model: 256
+      d_state: 64
+      n_layers: 6
+      dropout: 0.1
+      prenorm: false
+      dt_min: 0.001
+      dt_max: 0.1
+      lr: 1e-4
+data:
+  class_path: dataloader.SignalDataloader
+  init_args:
+    signal_classes:
+      - "MultiSineGaussian"
+      - "BBH"
+      - "Gaussian"
+      - "Cusp"
+      - "Kink"
+      - "KinkKink"
+      - "WhiteNoiseBurst"
+      - "CCSN"
+      - "Background"
+      #- "Glitch"
+      #- "FakeGlitch"
+    priors:
+      - class_path: gwak.data.prior.MultiSineGaussianBBC # MultiSineGaussian
+      - class_path: gwak.data.prior.LAL_BBHPrior # BBH
+      - class_path: gwak.data.prior.GaussianBBC # Gaussian
+      - class_path: gwak.data.prior.CuspBBC # Cusp
+      - class_path: gwak.data.prior.KinkBBC # Kink
+      - class_path: gwak.data.prior.KinkkinkBBC # KinkKink
+      - class_path: gwak.data.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      #- null # Glitch
+      #- null # FakeGlitch
+    waveforms:
+      - class_path: ml4gw.waveforms.MultiSineGaussian # MultiSineGaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.IMRPhenomPv2 # BBH
+        init_args: {}
+      - class_path: ml4gw.waveforms.Gaussian # Gaussian
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - class_path: ml4gw.waveforms.GenerateString # Cusp
+        init_args:
+          sample_rate: 0
+      - class_path: ml4gw.waveforms.GenerateString # Kink
+        init_args:
+          sample_rate: 0
+      - class_path: ml4gw.waveforms.GenerateString # KinkKink
+        init_args:
+          sample_rate: 0
+      - class_path: ml4gw.waveforms.WhiteNoiseBurst # WhiteNoiseBurst
+        init_args:
+          sample_rate: 0
+          duration: 0
+      - null # CCSN
+      - null # Background
+      #- null # Glitch
+      #- null # FakeGlitch
+    extra_kwargs:
+      - null # MultiSineGaussian
+      - ringdown_duration: 0.9 # BBH
+      - null # Gaussian
+      - null # Cusp
+      - null # Kink
+      - null # KinkKink
+      - null # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      #- null # Glitch
+      #- null # FakeGlitch
+    glitch_root: /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/HL/
+    sample_rate: 4096
+    kernel_length: 1.0
+    psd_length: 64
+    fduration: 1
+    fftlength: 2
+    batch_size: 256
+    batches_per_epoch: 20
+    num_workers: 4
+    data_saving_file: null
+    anneal_snr: true
+    snr_init_factor: 100.0
+    snr_anneal_epochs: 20
+    loader_mode: "raw"
+    #remake_cache: true

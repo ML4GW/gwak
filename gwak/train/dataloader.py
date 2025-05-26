@@ -15,7 +15,7 @@ from lightning.pytorch.loggers import WandbLogger
 
 import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
-from ml4gw.transforms import SpectralDensity, Whiten
+from ml4gw.transforms import SpectralDensity, Whiten, SnrRescaler
 from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_network_snr
 
 from torch.distributions.uniform import Uniform
@@ -36,8 +36,12 @@ class CleanGlitchPairedDataset(torch.utils.data.IterableDataset):
         return len(self.clean_ds)
     
     def __iter__(self):
-        for clean_x, glitch_x in zip(iter(self.clean_ds), iter(self.glitch_ds)):
-            yield clean_x, glitch_x
+        if self.glitch_ds is None:
+            for clean_x in iter(self.clean_ds):
+                yield clean_x, None
+        else:
+            for clean_x, glitch_x in zip(iter(self.clean_ds), iter(self.glitch_ds)):
+                yield clean_x, glitch_x
 
 
 class TimeSlidesDataloader(pl.LightningDataModule):
@@ -502,9 +506,12 @@ class SignalDataloader(GwakBaseDataloader):
         priors, # priors for each class
         waveforms, # waveforms for each class
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
-        *args, 
-        label_offset: int = 0, # if we want to put an offset on label numbers, otherwise class in signal_classes are labeled 1,2,3,...
+        *args,
+        loader_mode: str = "clean",
         fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
+        anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning)
+        snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
+        snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -513,10 +520,14 @@ class SignalDataloader(GwakBaseDataloader):
         self.waveforms = waveforms if type(waveforms) == list else [waveforms]
         self.priors = priors if type(priors) == list else [priors]
         self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
-        self.label_offset = label_offset
+        self.loader_mode = loader_mode
         self._is_glitch = (self.signal_classes == ["Glitch"]
                            or (self.num_classes == 1
                                and self.signal_classes[0] == "Glitch"))
+        self.anneal_snr = anneal_snr
+        self.snr_init_factor = snr_init_factor
+        self.snr_anneal_epochs = snr_anneal_epochs
+        self.has_glitch = "Glitch" in self.signals_classes
 
         self.signal_configs = []
         for i in range(len(signal_classes)):
@@ -544,7 +555,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
-        class_labels = [self.label_offset+i+1 for i in range(self.num_classes)]
+        class_labels = [i+1 for i in range(self.num_classes)]
         if self.data_saving_file is not None:
             self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
             self.data_group["class_label_names"] = self.signal_classes
@@ -564,8 +575,20 @@ class SignalDataloader(GwakBaseDataloader):
             fakeGlitch_config = copy.deepcopy(self.config)
             fakeGlitch_config['ringdown_duration'] = 0.9 # need to set this by hand if there are BBHs included in fake glitch set
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
+
+    def get_snr_factor(self,current_epoch):
+        if current_epoch <= self.snr_anneal_epochs:
+            m = (1.0 - self.snr_init_factor)/self.snr_anneal_epochs
+            snr_factor = m*current_epoch + self.snr_init_factor
+        else:
+            snr_factor = 1.0
+        return snr_factor
     
     def make_dataset(self, fnames, coincident, mode):
+        if mode == "glitch":
+            batch_size = self.num_per_class[self.signal_classes.index("Glitch")]
+        else:
+            batch_size = self.batch_size
         return Hdf5TimeSeriesDataset(
             fnames,
             channels=self.ifos,
@@ -573,7 +596,7 @@ class SignalDataloader(GwakBaseDataloader):
             fduration=self.fduration,
             psd_length=self.psd_length,
             sample_rate=self.sample_rate,
-            batch_size=self.batch_size,
+            batch_size=batch_size,
             batches_per_epoch=self.batches_per_epoch,
             coincident=coincident,
             mode=mode,
@@ -588,55 +611,61 @@ class SignalDataloader(GwakBaseDataloader):
             train_clean_dataset = self. make_dataset(
                 self.train_fnames,
                 coincident=False,
-                mode="clean"
+                mode=self.loader_mode
             )
 
             val_clean_dataset = self. make_dataset(
                 self.val_fnames,
                 coincident=False,
-                mode="clean"
+                mode=self.loader_mode
             )
 
-            train_glitch_dataset = self. make_dataset(
-                self.train_fnames,
-                coincident=True,
-                mode="glitch"
-            )
+            if self.has_glitch:
+                train_glitch_dataset = self. make_dataset(
+                    self.train_fnames,
+                    coincident=True,
+                    mode="glitch"
+                )
 
-            val_glitch_dataset = self. make_dataset(
-                self.val_fnames,
-                coincident=True,
-                mode="glitch"
-            )
+                val_glitch_dataset = self. make_dataset(
+                    self.val_fnames,
+                    coincident=True,
+                    mode="glitch"
+                )
 
-            # Wrap both datasets in the paired dataset
-            self.train_paired_dataset = CleanGlitchPairedDataset(
-                train_clean_dataset,
-                train_glitch_dataset
-            )
+                # Wrap both datasets in the paired dataset
+                self.train_paired_dataset = CleanGlitchPairedDataset(
+                    train_clean_dataset,
+                    train_glitch_dataset
+                )
 
-            self.val_paired_dataset = CleanGlitchPairedDataset(
-                val_clean_dataset,
-                val_glitch_dataset
-            )
+                self.val_paired_dataset = CleanGlitchPairedDataset(
+                    val_clean_dataset,
+                    val_glitch_dataset
+                )
+            else:
+                self.train_paired_dataset = CleanGlitchPairedDataset(train_clean_dataset,None)
+                self.val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset,None)
 
         if stage == "test":
             test_clean_dataset = self. make_dataset(
                 self.test_fnames,
                 coincident=False,
-                mode="clean"
+                mode=self.loader_mode
             )
+            if self.has_glitch:
+                test_glitch_dataset = self. make_dataset(
+                    self.test_fnames,
+                    coincident=True,
+                    mode="glitch"
+                )
 
-            test_glitch_dataset = self. make_dataset(
-                self.test_fnames,
-                coincident=True,
-                mode="glitch"
-            )
-
-            self.test_paired_dataset = CleanGlitchPairedDataset(
-                test_clean_dataset, 
-                test_glitch_dataset
-            )
+                self.test_paired_dataset = CleanGlitchPairedDataset(
+                    test_clean_dataset, 
+                    test_glitch_dataset
+                )
+            else:
+                self.test_paired_dataset = CleanGlitchPairedDataset(test_clean_dataset,None)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_paired_dataset, batch_size=None)
@@ -654,7 +683,9 @@ class SignalDataloader(GwakBaseDataloader):
         output_decs = [] if decs is None else decs
         output_phics = []
         for i, signal_class in enumerate(self.signal_classes):
+            #self._logger.info(f"Generating {self.num_per_class[i]} waveforms for class {signal_class}")
             if signal_class == 'BBH':
+                #self._logger.info("Using BBH waveform generator")
                 responses, params, ra, dec, phic = generate_waveforms_bbh(
                     self.num_per_class[i],
                     self.priors[i],
@@ -666,15 +697,17 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
-            if signal_class == "CCSN":
+            elif signal_class == "CCSN":
+                #self._logger.info("Using CCSN waveform generator")
                 responses, dec, phic = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
                 params, ra = None, None
-
             elif signal_class in ["Background", "Glitch"]:
+                #self._logger.info("Using no waveform generator")
                 responses, params, ra, dec, phic = None, None, None, None, None
             elif signal_class == "FakeGlitch":
+                #self._logger.info("Using FakeGlitch waveform generator")
                 responses, params, ra, dec, phic = self.fakeGlitchMaker.generate_waveforms(self.num_per_class[i],self,self.ifos)
                 # responses: (B, F, T)
                 for i in range(len(responses)):
@@ -686,6 +719,7 @@ class SignalDataloader(GwakBaseDataloader):
                     mask[torch.arange(B), random_features, :] = 1.0
                     responses[i] = responses[i] * mask
             else:
+                #self._logger.info("Using standard waveform generator")
                 responses, params, ra, dec, phic = generate_waveforms_standard(
                     self.num_per_class[i],
                     self.priors[i],
@@ -729,6 +763,12 @@ class SignalDataloader(GwakBaseDataloader):
         psds = spectral_density(psd_data.double())
         if torch.any(torch.isnan(psds)):
             self._logger.info('psds fucked')
+
+        if self.anneal_snr:
+            # if we are annealing the SNR, we need to scale the waveforms
+            snr_factor = self.get_snr_factor(self.trainer.current_epoch)
+            if waveforms is not None:
+                waveforms = snr_factor * waveforms
 
         # Waveform padding
         if waveforms is not None:
@@ -853,7 +893,8 @@ class SignalDataloader(GwakBaseDataloader):
                 self._logger.info('batch fucked')
             # inject waveforms; maybe also whiten data preprocess etc..
             _clean_batch = self.multiInject(waveforms, clean_batch)
-            glitch_batch = self.multiInject(waveforms, glitch_batch)
+            if self.has_glitch:
+                glitch_batch = self.multiInject(waveforms, glitch_batch)
             while torch.any(torch.isnan(_clean_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
                 waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])
@@ -863,9 +904,10 @@ class SignalDataloader(GwakBaseDataloader):
             labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
 
-            glitch_mask = (torch.where(labels == self.signal_classes.index("Glitch")+1))[0]
-            glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
-            clean_batch[glitch_mask] = glitch_chunk
+            if "Glitch" in self.signal_classes:
+                glitch_mask = (torch.where(labels == self.signal_classes.index("Glitch")+1))[0]
+                #glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
+                clean_batch[glitch_mask] = glitch_batch # should now only load in exactly enough glitch events
             perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
             labels = labels[perm]
