@@ -650,7 +650,7 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
-            if signal_class == "CCSN":
+            elif signal_class == "CCSN":
                 responses, dec, phic = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
@@ -966,8 +966,8 @@ def generate_waveforms_standard(
 
     cross, plus = waveform(**parameters) 
 
-    if loader.signal_classes == ['BBH']:
-        cross, plus = torch.fft.irfft(cross)* config['sample_rate'], torch.fft.irfft(plus) * config['sample_rate']       
+    # if loader.signal_classes == ['BBH']:
+    #     cross, plus = torch.fft.irfft(cross)* config['sample_rate'], torch.fft.irfft(plus) * config['sample_rate']       
     # compute detector responses
     responses = compute_observed_strain(
         dec,
