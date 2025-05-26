@@ -496,6 +496,7 @@ class SignalDataloader(GwakBaseDataloader):
         priors, # priors for each class
         waveforms, # waveforms for each class
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
+        cache_dir: Optional[str] = None,
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -507,6 +508,7 @@ class SignalDataloader(GwakBaseDataloader):
         self._is_glitch = (self.signal_classes == ["Glitch"]
                            or (self.num_classes == 1
                                and self.signal_classes[0] == "Glitch"))
+        self.cache_dir = cache_dir
 
         self.signal_configs = []
         for i in range(len(signal_classes)):
@@ -561,6 +563,7 @@ class SignalDataloader(GwakBaseDataloader):
             mode=mode,
             glitch_root=self.glitch_root,
             ifos=self.ifos,
+            cache_dir=self.cache_dir,
         )
 
     def setup(self, stage=None):
@@ -602,21 +605,21 @@ class SignalDataloader(GwakBaseDataloader):
             )
 
         if stage == "test":
-            test_clean_dataset = self. make_dataset(
-                self.test_fnames,
-                coincident=False,
-                mode="clean"
-            )
-
-            test_glitch_dataset = self. make_dataset(
-                self.test_fnames,
-                coincident=True,
-                mode="glitch"
-            )
-
-            self.test_paired_dataset = CleanGlitchPairedDataset(
-                test_clean_dataset, 
-                test_glitch_dataset
+            if self.glitch_root is not None:
+                test_glitch_dataset = self.make_dataset(
+                    self.test_fnames, 
+                    coincident=True, 
+                    mode="glitch"
+                )
+                self.test_paired_dataset = CleanGlitchPairedDataset(
+                    test_clean_dataset, 
+                    test_glitch_dataset
+                )
+            else:
+                self.test_paired_dataset = self.make_dataset(
+                self.test_fnames, 
+                coincident=False, 
+                mode="raw"
             )
 
     def train_dataloader(self):
