@@ -282,7 +282,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
         num_workers: int,
         glitch_root: Path = None,
         data_saving_file: Path = None,
-        ifos: str = 'HL'
+        ifos: str = 'HL',
+        remake_cache: bool = False, # whether to remake the glitch cache file for the h5s
     ):
         super().__init__()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
@@ -296,6 +297,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.num_workers = num_workers
         self.glitch_root = glitch_root
         self.data_saving_file = data_saving_file
+        self.remake_cache = remake_cache
         if type(ifos) == list:
             self.ifos = ifos
         else:
@@ -373,7 +375,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
                 coincident=False,
                 mode='clean',
                 glitch_root=self.glitch_root,
-                ifos=self.ifos
+                ifos=self.ifos,
+                remake_cache=self.remake_cache
             )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -394,7 +397,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
             coincident=False,
             mode='clean',
             glitch_root=self.glitch_root,
-            ifos=self.ifos
+            ifos=self.ifos,
+            remake_cache=self.remake_cache
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -415,7 +419,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
             coincident=False,
             mode='clean',
             glitch_root=self.glitch_root,
-            ifos=self.ifos
+            ifos=self.ifos,
+            remake_cache=self.remake_cache
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, num_workers=self.num_workers, pin_memory=False
@@ -574,6 +579,7 @@ class SignalDataloader(GwakBaseDataloader):
             mode=mode,
             glitch_root=self.glitch_root,
             ifos=self.ifos,
+            remake_cache=self.remake_cache
         )
 
     def setup(self, stage=None):

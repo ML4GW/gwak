@@ -3,7 +3,9 @@ import os
 cl_configs = [
     'Transformer_SimCLR_multiSignal_all',
     'Transformer_SimCLR_multiSignalAndBkg_noSG',
-    'S4_SimCLR_multiSignalAndBkg'
+    'S4_SimCLR_multiSignalAndBkg',
+    'Transformer_patch_SimCLR_multiSignalAndBkg',
+    'Transformer_patch_noClass_SimCLR_multiSignalAndBkg',
     ]
 fm_configs = [
     'NF_onlyBkg',

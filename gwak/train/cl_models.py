@@ -654,7 +654,8 @@ class Crayon(GwakBaseModelClass):
         use_classifier: bool = False,
         lambda_classifier: float = 0.5,
         class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
-        s4_kwargs: Optional[dict] = {}
+        s4_kwargs: Optional[dict] = {},
+        classifier_hidden_dims: Optional[list[int]] = None,
         ):
 
         super().__init__()
@@ -675,6 +676,7 @@ class Crayon(GwakBaseModelClass):
         self.lambda_classifier = lambda_classifier
         self.lambda_classifier_original = lambda_classifier
         self.class_anneal_epochs = class_anneal_epochs
+        self.classifier_hidden_dims = classifier_hidden_dims
 
         self.model = S4Model(d_input=self.num_ifos,
                     length=self.num_timesteps,
@@ -683,7 +685,8 @@ class Crayon(GwakBaseModelClass):
 
         self.projection_head = MLP(d_input = self.d_output, hidden_dims=[self.d_output], d_output = self.d_contrastive_space)
         if self.use_classifier:
-            self.classifier = MLP(d_input = self.d_output, hidden_dims=[4*self.d_output for _ in range(2)], 
+            hidden_dims = self.classifier_hidden_dims if self.classifier_hidden_dims is not None else [4*self.d_output for _ in range(2)]
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
                                 d_output = self.num_classes)
         
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
@@ -1045,7 +1048,7 @@ class Tarantula(GwakBaseModelClass):
 
     def __init__(
         self,
-        num_ifos: int = 2,
+        num_ifos: Union[int,str] = 2,
         num_timesteps: int = 200,
         latent_dim: int = 64,
         num_layers: int = 4,
@@ -1065,12 +1068,19 @@ class Tarantula(GwakBaseModelClass):
         total_steps: int = None,
         warmup_fraction: float = 0.1,
         patch_size: int = None,
+        use_classifier: bool = False,
+        num_classes: int = 8,
+        lambda_classifier: float = 0.5,
+        class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
+        temperature_init: Optional[float] = None, # initial temperature to start with, if None then constant temp throughout
+        n_temp_anneal: int = 10, # number of epochs to anneal temperature
+        classifier_hidden_dims: Optional[list[int]] = None
         ):
 
         super().__init__()
         self.save_hyperparameters()
 
-        self.num_ifos = num_ifos
+        self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
         self.num_timesteps = num_timesteps
         self.latent_dim = latent_dim
         self.num_layers = num_layers
@@ -1090,6 +1100,15 @@ class Tarantula(GwakBaseModelClass):
         self.total_steps = total_steps
         self.warmup_fraction = warmup_fraction
         self.patch_size = patch_size
+        self.use_classifier = use_classifier
+        self.num_classes = num_classes
+        self.lambda_classifier = lambda_classifier
+        self.lambda_classifier_original = lambda_classifier
+        self.class_anneal_epochs = class_anneal_epochs
+        self.temperature = temperature
+        self.temperature_init = temperature_init
+        self.n_temp_anneal = n_temp_anneal
+        self.classifier_hidden_dims = classifier_hidden_dims
         
         # Validate patch size if provided
         if self.patch_size is not None:
@@ -1133,44 +1152,59 @@ class Tarantula(GwakBaseModelClass):
                                    hidden_dims=[self.d_output],
                                    d_output=self.d_contrastive_space
         )
-        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature,
-                                                  contrast_mode='all',
+        if self.use_classifier:
+            hidden_dims = [4*self.d_output for _ in range(2)] if self.classifier_hidden_dims is None else self.classifier_hidden_dims
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
+                                d_output = self.num_classes)
+            
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
+                                                  contrast_mode='all', 
                                                   base_temperature=self.temperature)
 
-    def training_step(self, batch, batch_idx):
-        if self.supervised_simclr:
-            x,labels = batch
-            x_embd = self.model(x) # shape (B,1,d_embd)
-            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd)
-            z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
-            self.metric = self.loss_function(z_embd,labels=labels)
+        self.val_outputs = []
+        self.save_hyperparameters()
+
+    def get_temperature(self,epoch):
+        if self.temperature_init is None:
+            return self.temperature
+        elif epoch < self.n_temp_anneal:
+            m = (self.temperature - self.temperature_init) / self.n_temp_anneal
+            return self.temperature_init + m * epoch
         else:
-            batch, labels = batch
-            aug_0, aug_1 = batch[0], batch[1]
-            z0 = self.model(aug_0)
-            z1 = self.model(aug_1)
-            embd_0 = self.projection_head(z0).unsqueeze(1)
-            embd_1 = self.projection_head(z1).unsqueeze(1)
-            embd_0 = F.normalize(embd_0,dim=-1)
-            embd_1 = F.normalize(embd_1,dim=-1)
-            embds = torch.cat((embd_0, embd_1), dim=1)
-            self.metric = self.loss_function(embds,labels=None)
+            return self.temperature
+        
+    def get_lambda_classifier(self,epoch):
+        if epoch < self.class_anneal_epochs:
+            return self.lambda_classifier_original * ((self.class_anneal_epochs - epoch) / self.class_anneal_epochs)
+        else:
+            return 0.0
+    
+    def on_train_epoch_start(self):
+        #self.get_logger().info(f"Train epoch start called, epoch {self.current_epoch}")
+        temp = self.get_temperature(self.current_epoch)
+        lambda_class = self.get_lambda_classifier(self.current_epoch)
+        self.log("train/temperature", temp)
+        self.log("train/lambda_class", lambda_class)
+        self.loss_function = SupervisedSimCLRLoss(temperature=temp,
+                                                  contrast_mode='all', 
+                                                  base_temperature=temp)
+        self.lambda_classifier = lambda_class
 
-        self.log(
-            'train/loss',
-            self.metric,
-            sync_dist=True)
-
-        return self.metric
-
-    @torch.no_grad
-    def validation_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx):
         if self.supervised_simclr:
             x,labels = batch
             x_embd = self.model(x)
             z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
             z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
-            loss = self.loss_function(z_embd,labels=labels)
+            loss_simclr = self.loss_function(z_embd,labels=labels)
+            if self.use_classifier:
+                logits = self.classifier(x_embd)
+                #self.get_logger().info(f"Logits dtype: {logits.dtype}")
+                #self.get_logger().info(f"labels dtype: {labels.dtype}")
+                loss_class = F.cross_entropy(logits, (labels-1).to(torch.long))
+                loss = loss_simclr + self.lambda_classifier * loss_class
+            else:
+                loss = loss_simclr
         else:
             batch, labels = batch
             aug_0, aug_1 = batch[0], batch[1]
@@ -1181,14 +1215,93 @@ class Tarantula(GwakBaseModelClass):
             embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
             embd_1 = F.normalize(embd_1,dim=-1)
             embds = torch.cat((embd_0, embd_1), dim=1)
-            loss = self.loss_function(embds,labels=None)
+            loss_simclr = self.loss_function(embds,labels=None)
+            loss = loss_simclr
+
+        self.metric = loss.detach()
+
+        self.log(
+            'train/loss',
+            loss,
+            sync_dist=True)
+        self.log(
+            'train/loss_simclr',
+            loss_simclr,
+            sync_dist=True)
+        if self.use_classifier:
+            self.log(
+                'train/loss_classifier',
+                loss_class,
+                sync_dist=True)
+
+        return loss
+
+    @torch.no_grad
+    def validation_step(self, batch, batch_idx):
+        if self.supervised_simclr:
+            x,labels = batch
+            x_embd = self.model(x)
+            z_embd = self.projection_head(x_embd).unsqueeze(1) # shape (B,1,d_embd), just one "view" (no augmentations)
+            z_embd = F.normalize(z_embd,dim=-1) # normalize for SimCLR loss
+            loss_simclr = self.loss_function(z_embd,labels=labels)
+            if self.use_classifier:
+                logits = self.classifier(x_embd)
+                #self.get_logger().info(f"Logits dtype: {logits.dtype}")
+                #self.get_logger().info(f"labels dtype: {labels.dtype}")
+                #self.get_logger().info(f"Logits shape: {logits.shape}")
+                #self.get_logger().info(f"labels shape: {labels.shape}")
+                loss_class = F.cross_entropy(logits, (labels-1).to(torch.long))
+                loss = loss_simclr + self.lambda_classifier * loss_class
+            else:
+                loss = loss_simclr
+        else:
+            batch, labels = batch
+            aug_0, aug_1 = batch[0], batch[1]
+            z0 = self.model(aug_0)
+            z1 = self.model(aug_1)
+            embd_0 = self.projection_head(z0).unsqueeze(1)
+            embd_1 = self.projection_head(z1).unsqueeze(1)
+            embd_0 = F.normalize(embd_0,dim=-1) # normalize for SimCLR loss
+            embd_1 = F.normalize(embd_1,dim=-1)
+            embds = torch.cat((embd_0, embd_1), dim=1)
+            loss_simclr = self.loss_function(embds,labels=None)
+            loss = loss_simclr
 
         self.log(
             'val/loss',
             loss,
             sync_dist=True)
+        self.log(
+            'val/loss_simclr',
+            loss_simclr,
+            sync_dist=True)
+        if self.use_classifier:
+            self.log(
+                'val/loss_classifier',
+                loss_class,
+                sync_dist=True)
 
-        return loss
+        if self.supervised_simclr:
+            self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
+        else:
+            return loss
+
+    def on_validation_epoch_end(self):
+        if self.supervised_simclr:
+            preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
+            labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
+            fig = make_corner(preds,labels,return_fig=True)
+
+            buf = BytesIO()
+            fig.savefig(buf,format='jpg',dpi=200)
+            buf.seek(0)
+            self.logger.log_image(
+                'val/space',
+                [Image.open(buf)],
+            )
+            plt.close(fig)
+
+            self.val_outputs.clear()
     
     @torch.no_grad
     def test_step(self,batch,batch_idx):
