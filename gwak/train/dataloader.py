@@ -967,7 +967,7 @@ def generate_waveforms_standard(
     cross, plus = waveform(**parameters) 
     print(loader.signal_classes)
     if loader.signal_classes == ['BBH']:
-        cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)        
+        cross, plus = torch.fft.irfft(cross)* config['sample_rate'], torch.fft.irfft(plus) * config['sample_rate']       
     # compute detector responses
     responses = compute_observed_strain(
         dec,
