@@ -23,10 +23,10 @@ model:
   class_path: cl_models.Crayon
   init_args:
     num_ifos: 2
-    num_timesteps: 2048
-    d_output: 4
-    d_contrastive_space: 4
-    temperature: 0.5
+    num_timesteps: 8192
+    d_output: 10
+    d_contrastive_space: 10
+    temperature: 0.1
     temperature_init: null # not annealing temp
     n_temp_anneal: 10
     supervised_simclr: true
@@ -36,13 +36,14 @@ model:
     cos_anneal_tmax: 50
     use_classifier: true
     num_classes: 11
-    lambda_classifier: 2.0
-    class_anneal_epochs: 50
+    lambda_classifier: 1.0
+    classifier_hidden_dims: [10, 10]
+    class_anneal_epochs: 30
     s4_kwargs:
       d_model: 256
       d_state: 64
-      n_layers: 4
-      dropout: 0.2
+      n_layers: 6
+      dropout: 0.1
       prenorm: false
       dt_min: 0.001
       dt_max: 0.1
@@ -51,7 +52,6 @@ data:
   class_path: dataloader.SignalDataloader
   init_args:
     signal_classes:
-      - "SineGaussian"
       - "MultiSineGaussian"
       - "BBH"
       - "Gaussian"
@@ -62,8 +62,8 @@ data:
       - "CCSN"
       - "Background"
       - "Glitch"
+      - "FakeGlitch"
     priors:
-      - class_path: gwak.data.prior.SineGaussianBBC # SineGaussian
       - class_path: gwak.data.prior.MultiSineGaussianBBC # MultiSineGaussian
       - class_path: gwak.data.prior.LAL_BBHPrior # BBH
       - class_path: gwak.data.prior.GaussianBBC # Gaussian
@@ -74,11 +74,8 @@ data:
       - null # CCSN
       - null # Background
       - null # Glitch
+      - null # FakeGlitch
     waveforms:
-      - class_path: ml4gw.waveforms.SineGaussian # SineGaussian
-        init_args:
-          sample_rate: 0
-          duration: 0
       - class_path: ml4gw.waveforms.MultiSineGaussian # MultiSineGaussian
         init_args:
           sample_rate: 0
@@ -105,8 +102,8 @@ data:
       - null # CCSN
       - null # Background
       - null # Glitch
+      - null # FakeGlitch
     extra_kwargs:
-      - null # SineGaussian
       - null # MultiSineGaussian
       - ringdown_duration: 0.9 # BBH
       - null # Gaussian
@@ -117,13 +114,14 @@ data:
       - null # CCSN
       - null # Background
       - null # Glitch
-    glitch_root: /home/hongyin.chen/Data/GWAK_data/examination/omicron/omicron/HL
+      - null # FakeGlitch
+    glitch_root: /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/HL/
     sample_rate: 4096
-    kernel_length: 0.5
+    kernel_length: 2.0
     psd_length: 64
     fduration: 1
     fftlength: 2
-    batch_size: 256
+    batch_size: 128
     batches_per_epoch: 20
     num_workers: 4
     data_saving_file: null

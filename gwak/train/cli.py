@@ -15,7 +15,7 @@ class GwakMultiSignalCLI(LightningCLI):
         kernel_length = self.config['fit.data.init_args.kernel_length']
         
         for i in range(len(self.config['fit.data.init_args.waveforms'])):
-            if self.config['fit.data.init_args.signal_classes'][i] in ["Background", "Glitch", "CCSN"]: continue
+            if self.config['fit.data.init_args.signal_classes'][i] in ["Background", "Glitch", "CCSN", "FakeGlitch"]: continue
             
             if "sample_rate" in self.config['fit.data.init_args.waveforms'][i]['init_args'].keys():
                 self.config['fit.data.init_args.waveforms'][i]['init_args']['sample_rate'] = sample_rate
@@ -24,13 +24,13 @@ class GwakMultiSignalCLI(LightningCLI):
                 self.config['fit.data.init_args.waveforms'][i]['init_args']['duration'] = fduration+kernel_length
 
         # harmonize lr between optimizer and scheduler if applicable
-        if self.config['fit.model.class_path'] == "models.Tarantula":
+        if self.config['fit.model.class_path'] == "cl_models.Tarantula":
             print("Making LR scheduling update for tarantula")
             tot_steps = self.config['fit.trainer.max_epochs'] * self.config['fit.data.init_args.batches_per_epoch']
             self.config['fit.model.init_args.total_steps'] = tot_steps
 
         # make sure length is right if we're using S4 SSM
-        if self.config['fit.model.class_path'] == "models.Crayon":
+        if self.config['fit.model.class_path'] == "cl_models.Crayon" or self.config['fit.model.class_path'] == "cl_models.Tarantula":
             self.config['fit.model.init_args.num_timesteps'] = int(sample_rate * kernel_length)
 
         return
