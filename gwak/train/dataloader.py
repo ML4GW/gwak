@@ -605,6 +605,7 @@ class SignalDataloader(GwakBaseDataloader):
             mode=mode,
             glitch_root=self.glitch_root,
             ifos=self.ifos,
+            remake_cache=self.remake_cache
             cache_dir=self.cache_dir,
         )
 
