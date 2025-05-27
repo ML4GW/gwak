@@ -1,4 +1,5 @@
-from deploy.infer_module import infer
+from deploy.slurm_handeler import slurm_infer_wrapper
+# from deploy.infer import infer_module
 
 from jsonargparse import ArgumentParser, ActionConfigFile
 
@@ -7,7 +8,7 @@ def build_parser():
     
     parser = ArgumentParser()
     parser.add_argument("--config", action=ActionConfigFile)
-    parser.add_function_arguments(infer)
+    parser.add_function_arguments(slurm_infer_wrapper)
     
     return parser
 
@@ -17,7 +18,7 @@ def main(args=None):
     args = parser.parse_args()
     args = args.as_dict()
 
-    infer(**args)
+    slurm_infer_wrapper(**args)
     
     
 if __name__ == "__main__":

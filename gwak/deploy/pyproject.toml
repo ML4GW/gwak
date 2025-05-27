@@ -12,7 +12,7 @@ python = ">=3.9,<3.12"
 ml4gw = {path = "../../ml4gw", develop = true}
 ml4gw-hermes = {path = "../../hermes", develop = true}
 
-spython = "0.2.14"
+spython = "0.3.14"
 nvidia-cudnn-cu11 = "8.9.6.50"
 tensorrt = "8.5.2.2"
 

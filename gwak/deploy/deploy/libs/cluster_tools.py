@@ -10,6 +10,83 @@ from typing import Union
 from pathlib import Path
 
 
+def write_infer_core_config(
+    **infer_core_kwargs
+):
+
+    yaml_file = Path(infer_core_kwargs["job_dir"]) / "config.yaml"
+
+    with open(yaml_file, "w") as f:
+        for key, value in infer_core_kwargs.items():
+            if key in ("fnames", "segments") and isinstance(value, list):
+                f.write(f"{key}:\n")
+                for item in value:
+                    f.write(f"  - {item}\n")
+
+            else:
+                f.write(f"{key}: {value}\n")
+                
+    return yaml_file
+
+
+def write_slurm_config(
+    kwargs,
+    job_dir,
+    project,
+    infer_config, 
+    cl_config,
+    fm_config,
+    export_cmd=None,
+    deploy_app_path=None,
+    infer_cmd=None
+):
+
+    file_path = Path(__file__).resolve()
+    filename = job_dir / "submit.slurm"
+    if deploy_app_path is None:    
+        deploy_app_path = file_path.parents[2]
+
+    # Snakemake command
+    export_cmd = export_cmd or f"poetry run python deploy/cli_export.py \
+    --config deploy/config/export.yaml \
+    --project {project} \
+    --output_dir {job_dir}/export" 
+
+    # The grpc_port is a bit tricky
+    infer_cmd = infer_cmd or f"poetry run python deploy/cli_infer.py \
+    --config {infer_config}"
+
+
+    # GPU setting
+    kwargs["gres"] = f"gpu:{kwargs['gpu_per_node']}"
+    if kwargs["gpu_card"] is not None:
+        kwargs["gres"] = f"gpu:{kwargs['gpu_card']}:{kwargs['gpu_per_node']}"
+
+    
+    config_content = ["#!/bin/bash"]
+    for item, key in kwargs.items():
+
+        if item in ("gpu_card", "gpu_per_node"):
+            continue
+        if item == "time":
+            # breakpoint()
+            pass
+        config_content.append(f"#SBATCH --{item}={key}")
+
+    config_content.append("")
+    config_content.append("module load apptainer")
+    config_content.append(f"cd {deploy_app_path}")
+    config_content.append(export_cmd)
+    config_content.append(infer_cmd)
+    config_content.append("")
+    
+    with open(filename, "w") as f:
+        f.write("\n".join(config_content))
+
+    print(f"SLURM script written to: {filename}")
+    return filename
+
+
 
 def make_subfile(
     job_dir,
@@ -49,13 +126,13 @@ def make_subfile(
 def make_infer_config(
     job_dir: Path,
     triton_server_ip,
+    grpc_port,
     gwak_streamer,
     sequence_id,
     strain_file: Union[str, Path],
     data_format: str,
     shifts:list,
     psd_length:float,
-    # batch_size:int,
     stride_batch_size:int,
     ifos:list,
     kernel_size:int,

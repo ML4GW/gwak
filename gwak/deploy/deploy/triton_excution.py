@@ -25,6 +25,7 @@ def run_infer(
     sequence_id: int,
     strain_file: Union[str, Path],
     data_format: str,
+    grpc_port: int = 9001,
     shifts: list=[0.0, 1.0],
     psd_length: float=64,
     # batch_size:int=1,
@@ -62,7 +63,7 @@ def run_infer(
 
     # Triton setup
     client = InferenceClient(
-        address=f"{triton_server_ip}:8001", 
+        address=f"{triton_server_ip}:{grpc_port}", 
         model_name=gwak_streamer,
         callback=sequence,
     )
