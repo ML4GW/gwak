@@ -3,7 +3,21 @@ import os
 cl_configs = [
     'Transformer_SimCLR_multiSignal_all',
     'Transformer_SimCLR_multiSignalAndBkg_noSG',
-    'S4_SimCLR_multiSignalAndBkg'
+    'S4_SimCLR_multiSignalAndBkg',
+    'Transformer_patch_SimCLR_multiSignalAndBkg',
+    'Transformer_patch_noClass_SimCLR_multiSignalAndBkg',
+    's4_kl0.5_bs512',
+    's4_kl1.0_bs512',
+    's4_kl2.0_bs512',
+    's4_kl0.5_bs256',
+    's4_kl1.0_bs256',
+    's4_kl2.0_bs256',
+    's4_kl1.0_bs256_noGlitch',
+    's4_kl1.0_bs256_noClassifier',
+    'transformer_patch64_kl0.5_bs512',
+    'transformer_patch64_kl1.0_bs512',
+    'transformer_patch64_kl2.0_bs512',
+    'transformer_patch64_kl1.0_bs512_noClassifier',
     ]
 fm_configs = [
     'NF_onlyBkg',
@@ -23,7 +37,7 @@ wildcard_constraints:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
+        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
@@ -33,7 +47,8 @@ rule train_cl:
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
-            --model.num_ifos {wildcards.ifos}'
+            --model.num_ifos {wildcards.ifos} \
+            --data.glitch_root /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{wildcards.ifos}/'
 
 rule train_fm:
     input:
@@ -41,7 +56,7 @@ rule train_fm:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         config = 'train/configs/{fm_config}.yaml',
-        data_dir = '/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/{ifos}/'
+        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     params:

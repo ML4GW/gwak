@@ -434,6 +434,9 @@ class BackgroundFlowModel(GwakBaseModelClass):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def training_step(self, batch, batch_idx):
+        # if labels are provided, disregard them
+        if len(batch)==2:
+            batch, _ = batch
         feats = self.graph(batch)
         if self.use_freq_correlation:
             freq_correlation = self.frequency_cos_similarity(batch)
@@ -445,6 +448,9 @@ class BackgroundFlowModel(GwakBaseModelClass):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
+        # if labels are provided, disregard them
+        if len(batch)==2:
+            batch, _ = batch
         feats = self.graph(batch)
         if self.use_freq_correlation:
             freq_correlation = self.frequency_cos_similarity(batch)
