@@ -47,7 +47,8 @@ rule train_cl:
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
-            --model.num_ifos {wildcards.ifos}'
+            --model.num_ifos {wildcards.ifos} \
+            --data.glitch_root /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{wildcards.ifos}/'
 
 rule train_fm:
     input:
