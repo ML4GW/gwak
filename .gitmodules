@@ -1,9 +1,13 @@
 [submodule "ml4gw"]
     path = ml4gw
     url = git@github.com:ML4GW/ml4gw.git
+    branch = gwak-dev
 [submodule "hermes"]
-	path = hermes
-	url = git@github.com:ML4GW/hermes.git
+    path = hermes
+    url = git@github.com:ML4GW/hermes.git
 [submodule "pyomicron"]
-	path = pyomicron
-	url = git@github.com:AndyC80297/pyomicron.git
+    path = pyomicron
+    url = git@github.com:AndyC80297/pyomicron.git
+[submodule "gwak-dlc"]
+    path = gwak-dlc
+    url = git@github.com:AndyC80297/gwak-dlc.git

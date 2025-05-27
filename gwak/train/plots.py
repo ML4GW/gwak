@@ -11,13 +11,34 @@ import lightning.pytorch as pl
 from sklearn.metrics import roc_curve, auc
 
 from ml4gw.transforms import SpectralDensity, Whiten
-from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
+from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
 from gwak.train.dataloader import SignalDataloader
-from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from gwak.data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from gwak.train.cl_models import Crayon
 
-device = torch.device('cuda:1') if torch.cuda.is_available() else 'cpu'
+device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
+
+def add_freq_corr(x, embedding):
+    # batch: (batch_size, 2, time_series_length)
+
+    # FFT along the last axis
+    H = np.fft.rfft(x[:, 0, :], axis=-1)  # Hanford
+    L = np.fft.rfft(x[:, 1, :], axis=-1)  # Livingston
+
+    # Complex dot product over frequency bins
+    numerator = np.sum(H * np.conj(L), axis=-1)
+
+    # Compute norms
+    norm_H = np.linalg.norm(H, axis=-1)
+    norm_L = np.linalg.norm(L, axis=-1)
+
+    # Normalize and take real part
+    rho_complex = numerator / (norm_H * norm_L + 1e-8)  # avoid division by zero
+    rho_real = np.real(rho_complex)[..., np.newaxis]    # shape: (batch_size, 1)
+
+    return np.concatenate((embedding, rho_real),axis=1)
+
 
 
 if __name__=='__main__':
@@ -34,6 +55,35 @@ if __name__=='__main__':
         help='Include frequency-domain correlation as an additional feature')
     args = parser.parse_args()
 
+    combined_model = torch.jit.load(args.combined_model)
+    combined_model.eval()
+    combined_model.to(device=device)
+
+    import torch
+    from pytorch_lightning import Trainer
+    import yaml
+
+    # Load feature extractor
+    if args.embedding_model:
+        embed_model = torch.jit.load(args.embedding_model)
+        embed_model.eval()
+        embed_model.to(device=device)
+        is_torchscript = True
+    else:
+        ckpt = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt"
+        cfg_path = "output/S4_SimCLR_multiSignalAndBkg/config.yaml"
+        with open(cfg_path, "r") as fin:
+            cfg = yaml.load(fin, yaml.FullLoader)
+        embed_model = Crayon.load_from_checkpoint(ckpt, **cfg['model']['init_args']).model
+        embed_model.eval()
+        embed_model.to(device=device)
+        is_torchscript = False
+
+    # Load metric model
+    metric_model = torch.jit.load(args.fm_model)
+    metric_model.eval()
+    metric_model.to(device=device)
+
     # Load the YAML config file
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
@@ -44,65 +94,39 @@ if __name__=='__main__':
     psd_length = config['data']['init_args']['psd_length']
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
-    batch_size = 512 # config['data']['init_args']['batch_size']
+    batch_size = 512*10 #config['data']['init_args']['batch_size']
     batches_per_epoch = config['data']['init_args']['batches_per_epoch']
     num_workers = config['data']['init_args']['num_workers']
     data_saving_file = config['data']['init_args']['data_saving_file']
+    signal_classes = config['data']['init_args']['signal_classes']
 
     # Computed variable
     duration = fduration + kernel_length
 
-    signal_classes = config['data']['init_args']['signal_classes']
+    # Signal setup
     priors = [
-        SineGaussianBBC(),
-        LAL_BBHPrior(),
-        GaussianBBC(),
-        CuspBBC(),
-        KinkBBC(),
-        KinkkinkBBC(),
-        WhiteNoiseBurstBBC(),
-        None
+        MultiSineGaussianBBC(), LAL_BBHPrior(), GaussianBBC(),
+        CuspBBC(), KinkBBC(), KinkkinkBBC(), WhiteNoiseBurstBBC(),
+        None, None, None, None
     ]
     waveforms = [
-        SineGaussian(
-            sample_rate=sample_rate,
-            duration=duration
-        ),
+        MultiSineGaussian(sample_rate=sample_rate, duration=duration),
         IMRPhenomPv2(),
-        Gaussian(
-            sample_rate=sample_rate,
-            duration=duration
-        ),
-        GenerateString(
-            sample_rate=sample_rate
-        ),
-        GenerateString(
-            sample_rate=sample_rate
-        ),
-        GenerateString(
-            sample_rate=sample_rate
-        ),
-        WhiteNoiseBurst(
-            sample_rate=sample_rate,
-            duration=duration
-        ),
-        None
+        Gaussian(sample_rate=sample_rate, duration=duration),
+        GenerateString(sample_rate=sample_rate),
+        GenerateString(sample_rate=sample_rate),
+        GenerateString(sample_rate=sample_rate),
+        WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
+        None, None, None, None,
     ]
     extra_kwargs = [
-        None,
-        {"ringdown_duration":0.9},
-        None,
-        None,
-        None,
-        None,
-        None,
-        None
+        None, {"ringdown_duration": 0.9}, None, None, None, None, None,
+        None, None, None, None
     ]
 
-    loader = SignalDataloader(signal_classes,
-        priors,
-        waveforms,
-        extra_kwargs,
+    # DataLoader
+    loader = SignalDataloader(
+        signal_classes, priors, waveforms, extra_kwargs,
         data_dir=args.data_dir,
         sample_rate=sample_rate,
         kernel_length=kernel_length,
@@ -112,120 +136,22 @@ if __name__=='__main__':
         batch_size=batch_size,
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
-        data_saving_file=data_saving_file
+        data_saving_file=data_saving_file,
+        glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
     )
     test_loader = loader.test_dataloader()
+    clean_batch, glitch_batch = next(iter(test_loader))
+    clean_batch = clean_batch.to(device)
+    glitch_batch = glitch_batch.to(device)
 
-    for batch in test_loader:
-        [batch] = batch
-        waveforms, params, ras, decs, phics = loader.generate_waveforms(batch.shape[0])
-        batch = batch.to(device)
-        x,snr = loader.multiInject_SNR(waveforms, batch)
-        labels = torch.cat([(i+1)*torch.ones(loader.num_per_class[i]) for i in range(loader.num_classes)])
-        break
+    processed, all_labels = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
 
-    combined_model = torch.jit.load(args.combined_model)
-    combined_model.eval()
-    combined_model.to(device=device)
+    all_embeddings = embed_model(processed)
+    all_scores = metric_model(all_embeddings).detach().cpu().numpy()
+    all_embeddings = all_embeddings.detach().cpu().numpy()
 
-    # Load feature extractor
-    if args.embedding_model:
-        embed_model = torch.jit.load(args.embedding_model)
-        embed_model.eval()
-        embed_model.to(device=device)
-    else:
-        ckpt = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt"
-        cfg_path = "output/S4_SimCLR_multiSignalAndBkg/config.yaml"
-        with open(cfg_path, "r") as fin:
-            cfg = yaml.load(fin, yaml.FullLoader)
-        embed_model = Crayon.load_from_checkpoint(ckpt, **cfg['model']['init_args']).model
-        embed_model.eval()
-        embed_model.to(device=device)
-
-    metric_model = torch.jit.load(args.fm_model)
-    metric_model.eval()
-    metric_model.to(device=device)
-
-
-    def add_freq_corr(x, embedding):
-        # batch: (batch_size, 2, time_series_length)
-
-        # FFT along the last axis
-        H = np.fft.rfft(x[:, 0, :], axis=-1)  # Hanford
-        L = np.fft.rfft(x[:, 1, :], axis=-1)  # Livingston
-
-        # Complex dot product over frequency bins
-        numerator = np.sum(H * np.conj(L), axis=-1)
-
-        # Compute norms
-        norm_H = np.linalg.norm(H, axis=-1)
-        norm_L = np.linalg.norm(L, axis=-1)
-
-        # Normalize and take real part
-        rho_complex = numerator / (norm_H * norm_L + 1e-8)  # avoid division by zero
-        rho_real = np.real(rho_complex)[..., np.newaxis]    # shape: (batch_size, 1)
-
-        return np.concatenate((embedding, rho_real),axis=1)
-
-
-    # Containers to store anomaly scores and binary labels
-    all_scores = []
-    all_binary_labels = []
-    all_labels = []
-    all_snrs = []
-    all_embeddings = []
-
-    # Iterate over the test data loader
-    niter = 1
-    for ib in range(niter):
-        print(f"iter {ib+1}/{niter}")
-        for batch in tqdm(test_loader):
-            [batch] = batch
-            # Generate the corresponding waveforms
-            waveforms_, params, ras, decs, phics = loader.generate_waveforms(batch.shape[0])
-            batch = batch.to(device)
-            waveforms=[]
-            for w in waveforms:
-                waveforms.append(w.to(device))
-
-            # Process the waveforms into the required input format
-            x, snrs = loader.multiInject_SNR(waveforms, batch)
-            snrs = snrs/sample_rate # TODO: why is this necessary lmao
-
-            # Reconstruct the ground truth multi-class labels
-            labels = torch.cat([(i+1)*torch.ones(loader.num_per_class[i]) for i in range(loader.num_classes)]).to(device)
-
-            with torch.no_grad():
-                z = embed_model(x.to(device))
-                if args.use_freq_correlation: z = add_freq_corr(x, z)
-                scores = metric_model(z).squeeze().cpu().numpy()
-                # The combined model directly outputs the anomaly score
-                #scores = combined_model(x.to(device)).squeeze()  # (batch_size,)
-                #scores = scores.cpu().numpy()
-                # Invert the scores so that higher values correspond to more anomalous behavior
-                scores = -scores
-
-            # Convert the multi-class labels to binary labels:
-            # Treat "Background" (assumed to be label 8) as 0 (normal) and all other classes as 1 (anomaly)
-            binary_labels = (labels != 8).cpu().numpy()
-
-            all_scores.append(scores)
-            all_binary_labels.append(binary_labels)
-            all_labels.append(labels.cpu().numpy())
-            all_snrs.append(snrs.cpu().numpy())
-            all_embeddings.append(z.cpu().numpy())
-
-    # Concatenate scores and labels across batches
-    all_scores = np.concatenate(all_scores)
-    all_binary_labels = np.concatenate(all_binary_labels)
-    all_labels = np.concatenate(all_labels)
-    all_snrs = np.concatenate(all_snrs)
-    all_embeddings = np.concatenate(all_embeddings)
-
-    np.save(f'{args.output}/nf_scores.npy',all_scores)
-    np.save(f'{args.output}/labels.npy',all_labels)
-    np.save(f'{args.output}/snrs.npy',all_snrs)
-    np.save(f'{args.output}/embeddings.npy',all_embeddings)
+    all_labels = all_labels.detach().cpu().numpy()
+    all_binary_labels = ((all_labels != 9) & (all_labels != 10) & (all_labels != 11)).astype(int)
 
     # Compute the ROC curve and AUC using scikit-learn
     fpr, tpr, thresholds = roc_curve(all_binary_labels, all_scores)
@@ -252,7 +178,7 @@ if __name__=='__main__':
         # The anomaly class numeric label is i+1.
         anomaly_val = i + 1
         # Filter to only examples that are either the current anomaly class or Background (label 8).
-        idx = np.where((all_labels == anomaly_val) | (all_labels == 8))[0]
+        idx = np.where((all_labels == anomaly_val) | (all_labels == 9) | (all_labels == 10) | (all_labels == 11))[0]
         if idx.size == 0:
             continue  # skip if no examples
         scores_i = all_scores[idx]
@@ -263,7 +189,9 @@ if __name__=='__main__':
         fpr, tpr, thresholds = roc_curve(binary_labels, scores_i)
         roc_auc = auc(fpr, tpr)
 
-        plt.plot(fpr, tpr, color=colors[i % len(colors)], lw=2,
+        plt.plot(fpr, tpr,
+            # color=colors[i % len(colors)],
+            lw=2,
                  label=f'{anomaly_class} (AUC = {roc_auc:.2f})')
 
     # Plot reference line (diagonal)
@@ -281,7 +209,7 @@ if __name__=='__main__':
 
     fraction_1yr = (1.0 / year_sec) * segment_duration
     # Extract background-only data
-    bg_mask = (all_labels == 8)
+    bg_mask = ((all_labels == 9) | (all_labels == 10) | (all_labels == 11))
     bg_scores = all_scores[bg_mask]
     threshold_1yr = np.quantile(bg_scores,1-fraction_1yr)
 

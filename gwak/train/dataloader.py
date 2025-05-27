@@ -34,7 +34,7 @@ class CleanGlitchPairedDataset(torch.utils.data.IterableDataset):
 
     def __len__(self):
         return len(self.clean_ds)
-    
+
     def __iter__(self):
         if self.glitch_ds is None:
             for clean_x in iter(self.clean_ds):
@@ -140,55 +140,55 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         if stage in ("fit", None):
 
             train_clean_dataset = self. make_dataset(
-                self.train_fnames, 
-                coincident=False, 
+                self.train_fnames,
+                coincident=False,
                 mode="clean"
             )
 
             val_clean_dataset = self. make_dataset(
-                self.val_fnames, 
-                coincident=False, 
+                self.val_fnames,
+                coincident=False,
                 mode="clean"
             )
 
             train_glitch_dataset = self. make_dataset(
-                self.train_fnames, 
-                coincident=True, 
+                self.train_fnames,
+                coincident=True,
                 mode="glitch"
             )
 
             val_glitch_dataset = self. make_dataset(
-                self.val_fnames, 
-                coincident=True, 
+                self.val_fnames,
+                coincident=True,
                 mode="glitch"
             )
 
             # Wrap both datasets in the paired dataset
             self.train_paired_dataset = CleanGlitchPairedDataset(
-                train_clean_dataset, 
+                train_clean_dataset,
                 train_glitch_dataset
             )
 
             self.val_paired_dataset = CleanGlitchPairedDataset(
-                val_clean_dataset, 
+                val_clean_dataset,
                 val_glitch_dataset
             )
 
         if stage == "test":
             test_clean_dataset = self. make_dataset(
-                self.test_fnames, 
-                coincident=False, 
+                self.test_fnames,
+                coincident=False,
                 mode="clean"
             )
 
             test_glitch_dataset = self. make_dataset(
-                self.test_fnames, 
-                coincident=True, 
+                self.test_fnames,
+                coincident=True,
                 mode="glitch"
             )
 
             self.test_paired_dataset = CleanGlitchPairedDataset(
-                test_clean_dataset, 
+                test_clean_dataset,
                 test_glitch_dataset
             )
 
@@ -521,9 +521,6 @@ class SignalDataloader(GwakBaseDataloader):
         self.priors = priors if type(priors) == list else [priors]
         self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
         self.loader_mode = loader_mode
-        self._is_glitch = (self.signal_classes == ["Glitch"]
-                           or (self.num_classes == 1
-                               and self.signal_classes[0] == "Glitch"))
         self.anneal_snr = anneal_snr
         self.snr_init_factor = snr_init_factor
         self.snr_anneal_epochs = snr_anneal_epochs
@@ -545,7 +542,10 @@ class SignalDataloader(GwakBaseDataloader):
         file_path = Path(__file__).resolve()
         self.ccsn_dict = load_h5_as_dict(
             chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
-            source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
+            # if sam:
+            # source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
+            # else:
+            source_file=Path("../gwak-dlc/Resampled") # path to submodule
         )
 
         # compute number of events to generate per class per batch
@@ -585,7 +585,7 @@ class SignalDataloader(GwakBaseDataloader):
         else:
             snr_factor = 1.0
         return snr_factor
-    
+
     def make_dataset(self, fnames, coincident, mode):
         if mode == "glitch":
             batch_size = self.num_per_class[self.signal_classes.index("Glitch")]
@@ -608,7 +608,7 @@ class SignalDataloader(GwakBaseDataloader):
         )
 
     def setup(self, stage=None):
-        if stage in ("fit", None):
+        if stage in ("fit"):
 
             train_clean_dataset = self. make_dataset(
                 self.train_fnames,
@@ -663,7 +663,7 @@ class SignalDataloader(GwakBaseDataloader):
                 )
 
                 self.test_paired_dataset = CleanGlitchPairedDataset(
-                    test_clean_dataset, 
+                    test_clean_dataset,
                     test_glitch_dataset
                 )
             else:
@@ -676,6 +676,23 @@ class SignalDataloader(GwakBaseDataloader):
         return torch.utils.data.DataLoader(self.val_paired_dataset, batch_size=None)
 
     def test_dataloader(self):
+
+        test_clean_dataset = self. make_dataset(
+            self.test_fnames,
+            coincident=False,
+            mode="clean"
+        )
+
+        test_glitch_dataset = self. make_dataset(
+            self.test_fnames,
+            coincident=True,
+            mode="glitch"
+        )
+
+        self.test_paired_dataset = CleanGlitchPairedDataset(
+            test_clean_dataset,
+            test_glitch_dataset
+        )
         return torch.utils.data.DataLoader(self.test_paired_dataset, batch_size=None)
 
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
@@ -862,20 +879,33 @@ class SignalDataloader(GwakBaseDataloader):
         sub_batches_snr = []
         idx_lo = 0
         for i in range(self.num_classes):
-            whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i], output_snrs=True)
+            if type(waveforms[i]) == list:
+                # multiple waveforms for a given class: relevant for the fake glitch where it uses several classes
+                whitened = []
+                snrs = []
+                i1 = idx_lo
+                for wf in waveforms[i]:
+                    iw_, isnr_ = self.inject(batch[i1:i1+wf.shape[0]], wf, output_snrs=True)
+                    whitened.append(iw_)
+                    snrs.append(isnr_)
+                    i1 += wf.shape[0]
+                whitened = torch.cat(whitened, dim=0)
+                snrs = torch.cat(snrs, dim=0)
+            else:
+                whitened, snrs = self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i], output_snrs=True)
             sub_batches.append(whitened)
             sub_batches_snr.append(snrs)
-            #sub_batches.append(self.inject(batch[idx_lo:idx_lo+self.num_per_class[i]], waveforms[i]))
             idx_lo += self.num_per_class[i]
+            if torch.any(torch.isnan(sub_batches[-1])):
+                self._logger.info(f'had a nan batch with class {self.signal_classes[i]}')
         batch = torch.cat(sub_batches)
         snrs = torch.cat(sub_batches_snr)
         return batch, snrs
 
-    def on_after_batch_transfer(self, batch, dataloader_idx):
 
-        if self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
-            # unpack the batch
-            # raw_batch, clean_batch, glitch_batch = batch
+    def on_after_batch_transfer(self, batch, dataloader_idx, local_test=False):
+
+        if local_test or self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             clean_batch, glitch_batch = batch
 
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
@@ -902,7 +932,7 @@ class SignalDataloader(GwakBaseDataloader):
                 self._logger.info('batch fucked after inject, regenerating')
                 waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])
                 _clean_batch = self.multiInject(waveforms, clean_batch)
-                
+
             clean_batch = _clean_batch
             labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
@@ -915,34 +945,37 @@ class SignalDataloader(GwakBaseDataloader):
             batch = clean_batch[perm]
             labels = labels[perm]
 
-            if self.trainer.training and (self.data_saving_file is not None):
-                # Set a warning that when the global_step exceed 1e6,
-                # the data will have duplications.
-                # Replace this with a data saving function.
-                for i,cls in enumerate(self.signal_classes):
-                    bk_step = f"Training/Step_{self.trainer.global_step:06d}_BK{cls}"
-                    inj_step = f"Training/Step_{self.trainer.global_step:06d}_INJ{cls}"
-                    label_step = f"Training/Step_{self.trainer.global_step:06d}_LABEL{cls}"
-                    prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
+        # a hack to use this function for plotting, outside of the plotting script
+        if local_test: return batch, labels
 
-                    self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
-                    self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
-                    if waveforms[i] is not None:
-                        self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
+        if self.trainer.training and (self.data_saving_file is not None):
+            # Set a warning that when the global_step exceed 1e6,
+            # the data will have duplications.
+            # Replace this with a data saving function.
+            for i,cls in enumerate(self.signal_classes):
+                bk_step = f"Training/Step_{self.trainer.global_step:06d}_BK{cls}"
+                inj_step = f"Training/Step_{self.trainer.global_step:06d}_INJ{cls}"
+                label_step = f"Training/Step_{self.trainer.global_step:06d}_LABEL{cls}"
+                prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
 
-            if self.trainer.validating and (self.data_saving_file is not None):
-                for i,cls in enumerate(self.signal_classes):
-                    bk_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_BK{cls}"
-                    inj_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_INJ{cls}"
-                    label_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_LAB{cls}"
-                    prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
+                self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
+                self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
+                if waveforms[i] is not None:
+                    self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
 
-                    self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
-                    self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
-                    if waveforms[i] is not None:
-                        self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
+        if self.trainer.validating and (self.data_saving_file is not None):
+            for i,cls in enumerate(self.signal_classes):
+                bk_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_BK{cls}"
+                inj_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_INJ{cls}"
+                label_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_LAB{cls}"
+                prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
 
-            return batch, labels
+                self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
+                self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
+                if waveforms[i] is not None:
+                    self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
+
+        return batch, labels
 
 
 class AugmentationSignalDataloader(SignalDataloader):
