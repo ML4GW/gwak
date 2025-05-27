@@ -521,9 +521,12 @@ class SignalDataloader(GwakBaseDataloader):
         self.waveforms = waveforms if type(waveforms) == list else [waveforms]
         self.priors = priors if type(priors) == list else [priors]
         self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
-        self._is_glitch = (self.signal_classes == ["Glitch"]
-                           or (self.num_classes == 1
-                               and self.signal_classes[0] == "Glitch"))
+        self.loader_mode = loader_mode
+        self.anneal_snr = anneal_snr
+        self.snr_init_factor = snr_init_factor
+        self.snr_anneal_epochs = snr_anneal_epochs
+        self.has_glitch = "Glitch" in self.signal_classes
+        self.cache_dir = cache_dir
 
         self.signal_configs = []
         for i in range(len(signal_classes)):
@@ -537,16 +540,6 @@ class SignalDataloader(GwakBaseDataloader):
         self.dec_prior = Cosine(-np.pi/2, torch.pi/2)
         self.phic_prior = Uniform(0, 2 * torch.pi)
 
-        # CCSN second-derivitive waveform data
-        file_path = Path(__file__).resolve()
-        self.ccsn_dict = load_h5_as_dict(
-            chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
-            # if sam:
-            # source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
-            # else:
-            source_file=Path("../gwak-dlc/Resampled") # path to submodule
-        )
-
         # compute number of events to generate per class per batch
         self.num_per_class = self.num_classes * [self.batch_size//self.num_classes]
         for i in range(self.batch_size % self.num_classes):
@@ -559,14 +552,23 @@ class SignalDataloader(GwakBaseDataloader):
             self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
             self.data_group["class_label_names"] = self.signal_classes
 
-        self.generate_waveforms_ccsn = CCSN_Injector(
-            ifos=self.ifos,
-            signals_dict=self.ccsn_dict,
-            sample_rate=self.sample_rate,
-            sample_duration=0.5,
-            buffer_duration=2.5
-        )
-
+        # CCSN second-derivitive waveform data
+        file_path = Path(__file__).resolve()
+        if "CCSN" in self.signal_classes:
+            self.ccsn_dict = load_h5_as_dict(
+                chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
+                # if sam:
+                # source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
+                # else:
+                source_file=Path("../gwak-dlc/Resampled") # path to submodule
+            )
+            self.generate_waveforms_ccsn = CCSN_Injector(
+                ifos=self.ifos,
+                signals_dict=self.ccsn_dict,
+                sample_rate=self.sample_rate,
+                sample_duration=0.5,
+                buffer_duration=2.5
+            )
         # make a list of signals we can use for "fake" glitch generation
         # i.e. where we populate one ifo with a signal and the other with nothing
         # use only signals for which waveforms/priors are easy
@@ -603,6 +605,7 @@ class SignalDataloader(GwakBaseDataloader):
             mode=mode,
             glitch_root=self.glitch_root,
             ifos=self.ifos,
+            cache_dir=self.cache_dir,
         )
 
     def setup(self, stage=None):
@@ -648,21 +651,21 @@ class SignalDataloader(GwakBaseDataloader):
                 self.val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset,None)
 
         if stage == "test":
-            test_clean_dataset = self. make_dataset(
-                self.test_fnames,
-                coincident=False,
-                mode="clean"
-            )
-
-            test_glitch_dataset = self. make_dataset(
-                self.test_fnames,
-                coincident=True,
-                mode="glitch"
-            )
-
-            self.test_paired_dataset = CleanGlitchPairedDataset(
-                test_clean_dataset, 
-                test_glitch_dataset
+            if self.glitch_root is not None:
+                test_glitch_dataset = self.make_dataset(
+                    self.test_fnames, 
+                    coincident=True, 
+                    mode="glitch"
+                )
+                self.test_paired_dataset = CleanGlitchPairedDataset(
+                    test_clean_dataset, 
+                    test_glitch_dataset
+                )
+            else:
+                self.test_paired_dataset = self.make_dataset(
+                self.test_fnames, 
+                coincident=False, 
+                mode="raw"
             )
 
     def train_dataloader(self):
@@ -672,23 +675,22 @@ class SignalDataloader(GwakBaseDataloader):
         return torch.utils.data.DataLoader(self.val_paired_dataset, batch_size=None)
 
     def test_dataloader(self):
-
-        test_clean_dataset = self. make_dataset(
-            self.test_fnames,
-            coincident=False,
-            mode="clean"
-        )
-
-        test_glitch_dataset = self. make_dataset(
-            self.test_fnames,
-            coincident=True,
-            mode="glitch"
-        )
-
-        self.test_paired_dataset = CleanGlitchPairedDataset(
-            test_clean_dataset,
-            test_glitch_dataset
-        )
+        if self.glitch_root is not None:
+                test_glitch_dataset = self.make_dataset(
+                    self.test_fnames, 
+                    coincident=True, 
+                    mode="glitch"
+                )
+                self.test_paired_dataset = CleanGlitchPairedDataset(
+                    test_clean_dataset, 
+                    test_glitch_dataset
+                )
+        else:
+            self.test_paired_dataset = self.make_dataset(
+            self.test_fnames, 
+            coincident=False, 
+            mode="raw"
+            )
         return torch.utils.data.DataLoader(self.test_paired_dataset, batch_size=None)
 
     def generate_waveforms(self, batch_size, parameters=None, ras=None, decs=None):
@@ -698,9 +700,9 @@ class SignalDataloader(GwakBaseDataloader):
         output_decs = [] if decs is None else decs
         output_phics = []
         for i, signal_class in enumerate(self.signal_classes):
-            #self._logger.info(f"Generating {self.num_per_class[i]} waveforms for class {signal_class}")
+
             if signal_class == 'BBH':
-                #self._logger.info("Using BBH waveform generator")
+                
                 responses, params, ra, dec, phic = generate_waveforms_bbh(
                     self.num_per_class[i],
                     self.priors[i],
@@ -712,7 +714,7 @@ class SignalDataloader(GwakBaseDataloader):
                     ra=ras[i] if ras is not None else None,
                     dec=decs[i] if decs is not None else None
                 )
-            if signal_class == "CCSN":
+            elif signal_class == "CCSN":
                 responses, dec, phic = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
