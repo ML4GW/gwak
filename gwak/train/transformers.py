@@ -33,7 +33,7 @@ from io import BytesIO
 import shutil
 
 class EncoderTransformer(nn.Module):
-    def __init__(self, num_timesteps:int=200,
+    def __init__(self,
                  num_features:int=2,
                  num_layers: int=4,
                  nhead: int=2,
@@ -43,7 +43,6 @@ class EncoderTransformer(nn.Module):
                  embed_first:bool=True,
                  patch_size:int=None):
         super().__init__()
-        self.num_timesteps = num_timesteps
         self.num_features = num_features
         self.latent_dim = latent_dim
         self.dim_feedforward = dim_factor_feedforward*latent_dim
@@ -54,8 +53,6 @@ class EncoderTransformer(nn.Module):
 
         # Check if patching is enabled and validate patch size
         if self.patch_size is not None:
-            assert num_timesteps % patch_size == 0, f"Patch size {patch_size} must divide the number of timesteps {num_timesteps}"
-            self.num_patches = num_timesteps // patch_size
             # Patch embedding layer (maps each patch to latent_dim)
             self.patch_embedding = nn.Linear(num_features * patch_size, latent_dim)
         elif self.embed_first:
@@ -77,15 +74,17 @@ class EncoderTransformer(nn.Module):
         
         if self.patch_size is not None:
             batch_size = x.size(0)
+            num_timesteps = x.size(2)
+            num_patches = num_timesteps // self.patch_size
             
             # Reshape for patching: (B, F, T) -> (B, F, num_patches, patch_size)
-            x = x.reshape(batch_size, self.num_features, self.num_patches, self.patch_size)
+            x = x.reshape(batch_size, self.num_features, num_patches, self.patch_size)
             
             # Transpose to get (B, num_patches, F, patch_size)
             x = x.permute(0, 2, 1, 3)
             
             # Flatten patches: (B, num_patches, F*patch_size)
-            x = x.reshape(batch_size, self.num_patches, self.num_features * self.patch_size)
+            x = x.reshape(batch_size, num_patches, self.num_features * self.patch_size)
             
             # Embed each patch
             x = self.patch_embedding(x)  # (B, num_patches, latent_dim)
@@ -101,7 +100,7 @@ class EncoderTransformer(nn.Module):
         return x
     
 class ClassAttentionBlock(nn.Module):
-    def __init__(self, num_timesteps:int=200,
+    def __init__(self,
                  dim:int=2,
                  nhead: int=2,
                  dropout:float=0.1,
@@ -112,7 +111,6 @@ class ClassAttentionBlock(nn.Module):
                  scale_resids:bool=True,
                  patch_size:int=None):
         super().__init__()
-        self.num_timesteps = num_timesteps
         self.dim = dim
         self.dim_feedforward = dim_factor_feedforward * dim
         self.nhead = nhead

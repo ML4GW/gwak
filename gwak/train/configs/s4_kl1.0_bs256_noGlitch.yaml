@@ -23,7 +23,7 @@ model:
   class_path: cl_models.Crayon
   init_args:
     num_ifos: 2
-    num_timesteps: 8192
+    num_timesteps: 4096
     d_output: 10
     d_contrastive_space: 10
     temperature: 0.1

@@ -488,7 +488,6 @@ class Tarantula(SimCLRBase):
     def __init__(
         self,
         num_ifos: Union[int,str] = 2,
-        num_timesteps: int = 200,
         latent_dim: int = 64,
         num_layers: int = 4,
         num_head: int = 2,
@@ -520,7 +519,6 @@ class Tarantula(SimCLRBase):
         self.save_hyperparameters()
 
         self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
-        self.num_timesteps = num_timesteps
         self.latent_dim = latent_dim
         self.num_layers = num_layers
         self.num_head = num_head
@@ -549,13 +547,8 @@ class Tarantula(SimCLRBase):
         self.n_temp_anneal = n_temp_anneal
         self.classifier_hidden_dims = classifier_hidden_dims
         
-        # Validate patch size if provided
-        if self.patch_size is not None:
-            assert num_timesteps % patch_size == 0, f"Patch size {patch_size} must divide the number of timesteps {num_timesteps}"
-
         # define the self attention blocks
         self.self_attn = EncoderTransformer(
-            num_timesteps=self.num_timesteps,
             num_features=self.num_ifos,
             num_layers=self.num_layers,
             nhead=self.num_head,
@@ -570,7 +563,6 @@ class Tarantula(SimCLRBase):
         for i in range(self.num_cls_layers):
             class_attn_blocks.append(
                 ClassAttentionBlock(
-                    num_timesteps=self.num_timesteps if self.patch_size is None else self.num_timesteps // self.patch_size,
                     dim=self.latent_dim,
                     nhead=self.num_head,
                     dropout=self.cls_dropout,

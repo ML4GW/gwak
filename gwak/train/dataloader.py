@@ -527,7 +527,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.anneal_snr = anneal_snr
         self.snr_init_factor = snr_init_factor
         self.snr_anneal_epochs = snr_anneal_epochs
-        self.has_glitch = "Glitch" in self.signals_classes
+        self.has_glitch = "Glitch" in self.signal_classes
 
         self.signal_configs = []
         for i in range(len(signal_classes)):
@@ -577,9 +577,11 @@ class SignalDataloader(GwakBaseDataloader):
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
 
     def get_snr_factor(self,current_epoch):
+        f = (1.0/self.snr_init_factor)**(1.0/self.snr_anneal_epochs)
         if current_epoch <= self.snr_anneal_epochs:
-            m = (1.0 - self.snr_init_factor)/self.snr_anneal_epochs
-            snr_factor = m*current_epoch + self.snr_init_factor
+            #m = (1.0 - self.snr_init_factor)/self.snr_anneal_epochs
+            #snr_factor = m*current_epoch + self.snr_init_factor
+            snr_factor = (f**current_epoch)*self.snr_init_factor
         else:
             snr_factor = 1.0
         return snr_factor
@@ -894,7 +896,8 @@ class SignalDataloader(GwakBaseDataloader):
             # inject waveforms; maybe also whiten data preprocess etc..
             _clean_batch = self.multiInject(waveforms, clean_batch)
             if self.has_glitch:
-                glitch_batch = self.multiInject(waveforms, glitch_batch)
+                #glitch_batch = self.multiInject(waveforms, glitch_batch)
+                glitch_batch = self.inject(glitch_batch, waveforms[self.signal_classes.index("Glitch")])
             while torch.any(torch.isnan(_clean_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
                 waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])

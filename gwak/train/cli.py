@@ -30,7 +30,7 @@ class GwakMultiSignalCLI(LightningCLI):
             self.config['fit.model.init_args.total_steps'] = tot_steps
 
         # make sure length is right if we're using S4 SSM
-        if self.config['fit.model.class_path'] == "cl_models.Crayon" or self.config['fit.model.class_path'] == "cl_models.Tarantula":
+        if self.config['fit.model.class_path'] == "cl_models.Crayon":
             self.config['fit.model.init_args.num_timesteps'] = int(sample_rate * kernel_length)
 
         return
