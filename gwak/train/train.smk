@@ -14,10 +14,12 @@ cl_configs = [
     's4_kl2.0_bs256',
     's4_kl1.0_bs256_noGlitch',
     's4_kl1.0_bs256_noClassifier',
+    's4_kl1.0_bs256_noAnnealClassifier_noMultiSG',
     'transformer_patch64_kl0.5_bs512',
     'transformer_patch64_kl1.0_bs512',
     'transformer_patch64_kl2.0_bs512',
     'transformer_patch64_kl1.0_bs512_noClassifier',
+    'resnet_kl1.0_bs512_noAnnealClassifier_noMultiSG'
     ]
 fm_configs = [
     'NF_onlyBkg',
