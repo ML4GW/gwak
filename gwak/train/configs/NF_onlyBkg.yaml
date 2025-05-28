@@ -39,12 +39,12 @@ data:
       - null # Glitch
       - null # FakeGlitch
     sample_rate: 4096
-    kernel_length: 0.5
+    kernel_length: 1.0
     psd_length: 64
     fduration: 1
     fftlength: 2
     batch_size: 256
     batches_per_epoch: 20
     num_workers: 4
-    glitch_root: /home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/
     data_saving_file: null
+    remake_cache: true
