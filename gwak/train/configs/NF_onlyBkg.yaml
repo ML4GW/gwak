@@ -47,4 +47,3 @@ data:
     batches_per_epoch: 20
     num_workers: 4
     data_saving_file: null
-    remake_cache: true
