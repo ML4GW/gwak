@@ -115,7 +115,6 @@ data:
       - null # Background
       - null # Glitch
       - null # FakeGlitch
-    glitch_root: /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/HL/
     sample_rate: 4096
     kernel_length: 2.0
     psd_length: 64

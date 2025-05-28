@@ -46,5 +46,4 @@ data:
     batch_size: 256
     batches_per_epoch: 20
     num_workers: 4
-    glitch_root: /home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/
     data_saving_file: null
