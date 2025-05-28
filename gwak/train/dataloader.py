@@ -506,6 +506,7 @@ class SignalDataloader(GwakBaseDataloader):
         priors, # priors for each class
         waveforms, # waveforms for each class
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
+        cache_dir: Optional[str] = None,
         *args,
         loader_mode: str = "clean",
         fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
@@ -525,6 +526,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_init_factor = snr_init_factor
         self.snr_anneal_epochs = snr_anneal_epochs
         self.has_glitch = "Glitch" in self.signal_classes
+        self.cache_dir = cache_dir
 
         self.signal_configs = []
         for i in range(len(signal_classes)):
@@ -605,7 +607,8 @@ class SignalDataloader(GwakBaseDataloader):
             mode=mode,
             glitch_root=self.glitch_root,
             ifos=self.ifos,
-            remake_cache=self.remake_cache
+            remake_cache=self.remake_cache,
+            cache_dir=self.cache_dir,
         )
 
     def train_dataloader(self):
@@ -666,9 +669,9 @@ class SignalDataloader(GwakBaseDataloader):
         output_decs = [] if decs is None else decs
         output_phics = []
         for i, signal_class in enumerate(self.signal_classes):
-            #self._logger.info(f"Generating {self.num_per_class[i]} waveforms for class {signal_class}")
+
             if signal_class == 'BBH':
-                #self._logger.info("Using BBH waveform generator")
+                
                 responses, params, ra, dec, phic = generate_waveforms_bbh(
                     self.num_per_class[i],
                     self.priors[i],
@@ -681,7 +684,6 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             elif signal_class == "CCSN":
-                #self._logger.info("Using CCSN waveform generator")
                 responses, dec, phic = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
@@ -1096,6 +1098,7 @@ def generate_waveforms_bbh(
     ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
     cross = torch.roll(cross, -ringdown_size, dims=-1)
     plus = torch.roll(plus, -ringdown_size, dims=-1)
+
 
     # compute detector responses
     responses = compute_observed_strain(
