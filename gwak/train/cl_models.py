@@ -36,6 +36,7 @@ from transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention
 from ssm import DropoutNd, S4DKernel, S4D, S4Model
 from nets import MLP, Encoder, Decoder
 from callback import ModelCheckpoint
+from resnet_1d import ResNet1D
 
 
 class GwakBaseModelClass(pl.LightningModule):
@@ -240,17 +241,21 @@ class SimCLRBase(GwakBaseModelClass):
     def get_temperature(self,epoch):
         if self.temperature_init is None:
             return self.temperature
-        elif epoch < self.n_temp_anneal:
-            m = (self.temperature - self.temperature_init) / self.n_temp_anneal
-            return self.temperature_init + m * epoch
         else:
-            return self.temperature
+            if epoch < self.n_temp_anneal:
+                m = (self.temperature - self.temperature_init) / self.n_temp_anneal
+                return self.temperature_init + m * epoch
+            else:
+                return self.temperature
         
     def get_lambda_classifier(self,epoch):
-        if epoch < self.class_anneal_epochs:
-            return self.lambda_classifier_original * ((self.class_anneal_epochs - epoch) / self.class_anneal_epochs)
+        if self.anneal_classifier:
+            if epoch < self.class_anneal_epochs:
+                return self.lambda_classifier_original * ((self.class_anneal_epochs - epoch) / self.class_anneal_epochs)
+            else:
+                return 0.0
         else:
-            return 0.0
+            return self.lambda_classifier_original
     
     def on_train_epoch_start(self):
         #self.get_logger().info(f"Train epoch start called, epoch {self.current_epoch}")
@@ -417,6 +422,7 @@ class Crayon(SimCLRBase):
         use_classifier: bool = False,
         lambda_classifier: float = 0.5,
         class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
+        anneal_classifier: bool = True, # whether to anneal classifier loss
         s4_kwargs: Optional[dict] = {},
         classifier_hidden_dims: Optional[list[int]] = None,
         ):
@@ -439,6 +445,7 @@ class Crayon(SimCLRBase):
         self.lambda_classifier = lambda_classifier
         self.lambda_classifier_original = lambda_classifier
         self.class_anneal_epochs = class_anneal_epochs
+        self.anneal_classifier = anneal_classifier
         self.classifier_hidden_dims = classifier_hidden_dims
 
         self.model = S4Model(d_input=self.num_ifos,
@@ -510,6 +517,7 @@ class Tarantula(SimCLRBase):
         num_classes: int = 8,
         lambda_classifier: float = 0.5,
         class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
+        anneal_classifier: bool = True, # whether to anneal classifier loss
         temperature_init: Optional[float] = None, # initial temperature to start with, if None then constant temp throughout
         n_temp_anneal: int = 10, # number of epochs to anneal temperature
         classifier_hidden_dims: Optional[list[int]] = None
@@ -542,6 +550,7 @@ class Tarantula(SimCLRBase):
         self.lambda_classifier = lambda_classifier
         self.lambda_classifier_original = lambda_classifier
         self.class_anneal_epochs = class_anneal_epochs
+        self.anneal_classifier = anneal_classifier
         self.temperature = temperature
         self.temperature_init = temperature_init
         self.n_temp_anneal = n_temp_anneal
@@ -606,3 +615,81 @@ class Tarantula(SimCLRBase):
                 "frequency":1
             }
         }
+    
+class Contour(SimCLRBase):
+
+    def __init__(
+        self,
+        num_ifos: Union[int,str] = 2,
+        d_output:int = 10,
+        d_contrastive_space: int = 20,
+        resnet_layers: list[int] = [3, 4, 6, 3], # ResNet-18
+        resnet_kernel_size: int = 3, # kernel size for ResNet-1D
+        temperature: float = 0.1,
+        temperature_init: float = None, # initial temperature to start with, if None then constant temp throughout
+        n_temp_anneal: int = 10, # number of epochs to anneal temperature
+        supervised_simclr: bool = False,
+        lr: float = 1e-4,
+        lr_min: float = 1e-5,
+        cos_anneal: bool = False,
+        cos_anneal_tmax: int = 50,
+        num_classes: int = 8,
+        use_classifier: bool = False,
+        lambda_classifier: float = 0.5,
+        class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
+        anneal_classifier: bool = True, # whether to anneal classifier loss
+        classifier_hidden_dims: Optional[list[int]] = None,
+        projector_hidden_dims: Optional[list[int]] = [64,64],
+        ):
+
+        super().__init__()
+        self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
+        self.d_output = d_output
+        self.d_contrastive_space = d_contrastive_space
+        self.resnet_layers = resnet_layers
+        self.resnet_kernel_size = resnet_kernel_size
+        self.temperature = temperature
+        self.temperature_init = temperature_init
+        self.n_temp_anneal = n_temp_anneal
+        self.supervised_simclr = supervised_simclr
+        self.lr = lr
+        self.lr_min = lr_min
+        self.cos_anneal = cos_anneal
+        self.cos_anneal_tmax = cos_anneal_tmax
+        self.num_classes = num_classes
+        self.use_classifier = use_classifier
+        self.lambda_classifier = lambda_classifier
+        self.lambda_classifier_original = lambda_classifier
+        self.class_anneal_epochs = class_anneal_epochs
+        self.anneal_classifier = anneal_classifier
+        self.classifier_hidden_dims = classifier_hidden_dims
+
+        self.model = ResNet1D(
+            in_channels=self.num_ifos,
+            classes=self.d_output,
+            layers=self.resnet_layers,
+            kernel_size=self.resnet_kernel_size
+        )
+
+        self.projector_hidden_dims = projector_hidden_dims if projector_hidden_dims is not None else [4*self.d_output, 4*self.d_output]
+        self.projection_head = MLP(d_input = self.d_output, hidden_dims=self.projector_hidden_dims, d_output = self.d_contrastive_space)
+        if self.use_classifier:
+            hidden_dims = self.classifier_hidden_dims if self.classifier_hidden_dims is not None else [4*self.d_output for _ in range(2)]
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
+                                d_output = self.num_classes)
+        
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
+                                                  contrast_mode='all', 
+                                                  base_temperature=self.temperature)
+
+        self.val_outputs = []
+
+        self.save_hyperparameters()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
+        if self.cos_anneal:
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.lr_min)
+            return {"optimizer": optimizer, "lr_scheduler": sched}
+        else:
+            return optimizer

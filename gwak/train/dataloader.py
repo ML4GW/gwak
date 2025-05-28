@@ -541,23 +541,22 @@ class SignalDataloader(GwakBaseDataloader):
         self.phic_prior = Uniform(0, 2 * torch.pi)
 
         # CCSN second-derivitive waveform data if using
-        if "CCSN" in self.signal_classes:
-            file_path = Path(__file__).resolve()
-            self.ccsn_dict = load_h5_as_dict(
-                chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
-                # if sam:
-                # source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
-                # else:
-                #source_file=Path("../gwak-dlc/Resampled") # path to submodule
-                source_file=Path(file_path.parents[2] / "gwak-dlc/Resampled/")
-            )
-            self.generate_waveforms_ccsn = CCSN_Injector(
-                ifos=self.ifos,
-                signals_dict=self.ccsn_dict,
-                sample_rate=self.sample_rate,
-                sample_duration=0.5,
-                buffer_duration=2.5
-            )
+        file_path = Path(__file__).resolve()
+        self.ccsn_dict = load_h5_as_dict(
+            chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
+            # if sam:
+            # source_file=Path("/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/gwak-dlc/Resampled/")
+            # else:
+            #source_file=Path("../gwak-dlc/Resampled") # path to submodule
+            source_file=Path(file_path.parents[2] / "gwak-dlc/Resampled/")
+        )
+        self.generate_waveforms_ccsn = CCSN_Injector(
+            ifos=self.ifos,
+            signals_dict=self.ccsn_dict,
+            sample_rate=self.sample_rate,
+            sample_duration=0.5,
+            buffer_duration=2.5
+        )
 
         # compute number of events to generate per class per batch
         self.num_per_class = self.num_classes * [self.batch_size//self.num_classes]
