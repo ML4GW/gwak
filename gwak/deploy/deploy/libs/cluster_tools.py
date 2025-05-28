@@ -24,6 +24,7 @@ def write_infer_core_config(
                     f.write(f"  - {item}\n")
 
             else:
+                value = value or "null"
                 f.write(f"{key}: {value}\n")
                 
     return yaml_file
@@ -33,29 +34,25 @@ def write_slurm_config(
     kwargs,
     job_dir,
     project,
-    infer_config, 
-    cl_config,
-    fm_config,
-    export_cmd=None,
-    deploy_app_path=None,
-    infer_cmd=None
+    infer_config,
 ):
 
     file_path = Path(__file__).resolve()
-    filename = job_dir / "submit.slurm"
-    if deploy_app_path is None:    
-        deploy_app_path = file_path.parents[2]
+    filename = job_dir / "submit.slurm" 
+    deploy_app_path = file_path.parents[2]
 
-    # Snakemake command
-    export_cmd = export_cmd or f"poetry run python deploy/cli_export.py \
-    --config deploy/config/export.yaml \
-    --project {project} \
-    --output_dir {job_dir}/export" 
-
-    # The grpc_port is a bit tricky
-    infer_cmd = infer_cmd or f"poetry run python deploy/cli_infer.py \
-    --config {infer_config}"
-
+    # Deploy commands
+    export_cmd = (
+        f"{kwargs['deploy_cmd']['export'][0]} "
+        "--config deploy/config/export.yaml "
+        f"--project {project} "
+        f"--output_dir {job_dir}/export"
+    )
+    
+    infer_cmd = (
+        f"{kwargs['deploy_cmd']['infer'][0]} "
+        f"--config {infer_config}"
+    )
 
     # GPU setting
     kwargs["gres"] = f"gpu:{kwargs['gpu_per_node']}"
@@ -66,16 +63,21 @@ def write_slurm_config(
     config_content = ["#!/bin/bash"]
     for item, key in kwargs.items():
 
-        if item in ("gpu_card", "gpu_per_node"):
+        if item in (
+            "gpu_card", 
+            "gpu_per_node", 
+            "cmd", 
+            "deploy_cmd"
+        ):
             continue
-        if item == "time":
-            # breakpoint()
-            pass
+
         config_content.append(f"#SBATCH --{item}={key}")
 
     config_content.append("")
-    config_content.append("module load apptainer")
     config_content.append(f"cd {deploy_app_path}")
+    cmds = kwargs.get("cmd") or []
+    for cmd in cmds:
+        config_content.append(cmd)
     config_content.append(export_cmd)
     config_content.append(infer_cmd)
     config_content.append("")
@@ -125,6 +127,7 @@ def make_subfile(
 
 def make_infer_config(
     job_dir: Path,
+    result_dir: Path,
     triton_server_ip,
     grpc_port,
     gwak_streamer,

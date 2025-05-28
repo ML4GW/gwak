@@ -20,6 +20,7 @@ EXTREME_CCSN = [
 
 def run_infer(
     job_dir: Path,
+    result_dir: Path,
     triton_server_ip: str,
     gwak_streamer: str,
     sequence_id: int,
@@ -28,7 +29,6 @@ def run_infer(
     grpc_port: int = 9001,
     shifts: list=[0.0, 1.0],
     psd_length: float=64,
-    # batch_size:int=1,
     stride_batch_size:int=256,
     ifos:list=["H1", "L1"],
     kernel_size:int=2048,
@@ -38,14 +38,11 @@ def run_infer(
 ):
 
     # File and Path management
-    
-    # result_dir = gwak_loc / f"gwak/output/infer/{arch_name}/{job_id}"
     gwak_logger(job_dir / "log.log")
-    result_dir = job_dir.resolve().parents[1]
-    saving_dir =  result_dir / "inference_result"
-    saving_dir.mkdir(parents=True, exist_ok=True)
+    # result_dir =  job_dir.resolve().parents[1] / "inference_result"
+    result_dir.mkdir(parents=True, exist_ok=True)
     seg_start, seg_end = get_seg_start_end(strain_file)
-    result_file = saving_dir / f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
+    result_file = result_dir / f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
     
     logging.info(f"Applying shifts = {shifts} to {strain_file}")
     sequence = Sequence(

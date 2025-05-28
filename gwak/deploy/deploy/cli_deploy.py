@@ -1,5 +1,4 @@
 from deploy.slurm_handeler import slurm_infer_wrapper
-# from deploy.infer import infer_module
 
 from jsonargparse import ArgumentParser, ActionConfigFile
 

@@ -1,5 +1,6 @@
 import time
 import logging
+from typing import Optional
 from hermes.aeriel.serve import serve
 from deploy.libs import gwak_logger
 from deploy.libs.infer_utils import get_ip_address
@@ -31,6 +32,7 @@ def infer(
     sample_rate: int,
     inference_sampling_rate: int,
     job_rate_limit: int,
+    singularity_path: Optional[str]=None,
     **kwargs
 ):
 
@@ -47,7 +49,7 @@ def infer(
         grpc_port,
         log_file=triton_log,
         wait=False,
-        singularity_path="/apps/system/software/apptainer/latest/bin/singularity"
+        singularity_path=singularity_path
     )
 
     # The Triton excution to run
@@ -55,8 +57,9 @@ def infer(
 
     with serve_context:
 
-        logging.info(f"Waiting {patients} seconds to recieve connetion to port {grpc_port}!")
-        time.sleep(patients)
+        if patients is not None:
+            logging.info(f"Waiting {patients} seconds to recieve connetion to port {grpc_port}!")
+            time.sleep(patients)
 
         start = time.time()
         bash_cmds = client_action(
@@ -65,7 +68,7 @@ def infer(
             num_shifts=num_shifts,
             shifts=shifts,
             Tb=Tb,
-            result_dir=job_dir,
+            job_dir=job_dir,
             ip=ip,
             grpc_port=grpc_port,
             gwak_streamer=gwak_streamer,
@@ -88,4 +91,4 @@ def infer(
                 except Exception as e:
                     logging.error(f"Thread crashed: {e}")
 
-        print(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")
+        print(f"Time spent for inference: {(time.time() - start)/3600:.02f} hrs")

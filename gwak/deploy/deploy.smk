@@ -33,6 +33,17 @@ rule infer:
         --project {params.cli} | tee ../{output.artefact}'
         # --result_dir {params.output} 
 
+rule deploy:
+    input:
+        config = 'deploy/deploy/config/deploy.yaml',
+    output:
+        artefact = directory('output/Slurm_Job/')
+    shell:
+        'set -x; cd deploy; poetry run python \
+        ../deploy/deploy/cli_deploy.py \
+        --config ../{input.config}'
+
+
 rule export_all:
     input: expand(rules.export.output, deploymodels='combination')
 
