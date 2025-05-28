@@ -32,10 +32,10 @@ from PIL import Image
 from io import BytesIO
 import shutil
 
-from transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention
-from ssm import DropoutNd, S4DKernel, S4D, S4Model
-from nets import MLP, Encoder, Decoder
-from callback import ModelCheckpoint
+from gwak.train.transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention
+from gwak.train.ssm import DropoutNd, S4DKernel, S4D, S4Model
+from gwak.train.nets import MLP, Encoder, Decoder
+from gwak.train.callback import ModelCheckpoint
 
 
 class GwakBaseModelClass(pl.LightningModule):
