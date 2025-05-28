@@ -9,26 +9,17 @@ The deploy application provides two major utilities:
 - Export
 ```
 $ cd gwak/gwak
-$ snakemake -c1 export_all 
+$ snakemake -c1 export_all -F
 ```
 - Inference
 ```
 $ cd gwak/gwak
-$ snakemake -c1 infer_all 
+$ snakemake -c1 infer_all -F
 ```
 
-### Via ```Poetry``` ###
-
-- Export white_noise_burst
+- Deploy: (Export + Inference using Slurm)
 ```
-$ cd gwak/gwak/deploy
-$ poetry run python deploy/cli_export.py --config deploy/config/export.yaml --project white_noise_burst
-``` 
-
-- Infernce on white_noise_burst
-
+$ cd gwak/gwak
+$ snakemake -c1 deploy -F
 ```
-$ cd gwak/gwak/deploy
-$ poetry run python deploy/cli_infer.py --config deploy/config/infer.yaml --project white_noise_burst
-``` 
-
+ 

@@ -109,7 +109,6 @@ def infer(
     # Sequence preperation
     logging.info(f"Estimating required time slide to apply.")
     num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts, data_format)
-    # breakpoint()
     kernel_size = int(sample_rate * stride_batch_size / inference_sampling_rate)
     
     # Triton server setup
@@ -217,10 +216,3 @@ def infer(
 
 
         logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")
-
-
-
-
-# def infer(
-# ):
-#     infer_core()

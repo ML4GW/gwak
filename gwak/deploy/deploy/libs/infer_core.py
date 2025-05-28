@@ -29,7 +29,7 @@ def client_action(
     num_shifts,
     shifts:list,
     Tb: int,
-    result_dir,
+    job_dir,
     ip,
     grpc_port,
     gwak_streamer,
@@ -44,15 +44,14 @@ def client_action(
     job_tag=None
 ):
     
-    
-    # prefix = f"{cl_config}_{fm_config}_{ifo_str}"
-    submit_num = 0
+
+    submit_count = 0
     bash_files = []
 
     # Make config
     for fname, (seg_start, seg_end) in zip(fnames, segments):
         for shift in range(num_shifts):
-            # print(fname, shift)
+
             fingerprint = f"{seg_start}{seg_end}{shift}".encode()
             if job_tag is not None:
                 fingerprint = f"{seg_start}{seg_end}{shift}{job_tag}".encode()
@@ -60,11 +59,13 @@ def client_action(
             _shifts = [s * (shift + 1) for s in shifts]
             if Tb == 0: 
                 _shifts = [0, 0]
-            job_dir = result_dir / f"batch_job/job_{submit_num:07d}" # Make this to flexable
+            resolved_job_dir = job_dir / f"batch_job/job_{submit_count:07d}" # Make this to flexable
+            result_dir = job_dir.parents[1] / "inference_result"
             job_dir.mkdir(parents=True, exist_ok=True)
-            logging.info(f"Creating config at {job_dir}.")
+            logging.info(f"Creating config at {resolved_job_dir}.")
             config_file = make_infer_config(
-                job_dir=job_dir, #local
+                job_dir=resolved_job_dir, #local
+                result_dir=result_dir,#local 
                 triton_server_ip=ip,
                 grpc_port=grpc_port,
                 gwak_streamer=gwak_streamer,
@@ -79,13 +80,10 @@ def client_action(
                 sample_rate=sample_rate,
                 inference_sampling_rate=inference_sampling_rate,
             )
-            
-            
-            
-            cmd = f"python {str(arguments)} --config {config_file}"
-            bash_files.append(bash_commnad_files(job_dir, cmd))
 
-            
-            submit_num += 1
+            cmd = f"python {str(arguments)} --config {config_file}"
+            bash_files.append(bash_commnad_files(resolved_job_dir, cmd))
+
+            submit_count += 1
             
     return bash_files
