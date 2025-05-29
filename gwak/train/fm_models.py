@@ -349,6 +349,7 @@ class BackgroundFlowModel(GwakBaseModelClass):
             n_dims=8,
             n_flow_steps=4,
             hidden_dim=64,
+            num_bins=50,
             learning_rate=1e-3,
             conditioning=False
     ):
