@@ -20,66 +20,83 @@ model:
     backgrounds: /home/hongyin.chen/whiten_timeslide.h5
     ckpt: /home/katya.govorkova/gwak2/gwak/output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/33-1700.ckpt
     cfg_path: /home/katya.govorkova/gwak2/gwak/output/test_S4_fixedSignals_0p5sec_v2/config.yaml
-    n_dims: 8
+    n_dims: 10
 data:
   class_path: dataloader.SignalDataloader
   init_args:
     signal_classes:
-      - "SineGaussian"
+      - "MultiSineGaussian"
       - "BBH"
       - "Gaussian"
       - "Cusp"
       - "Kink"
       - "KinkKink"
       - "WhiteNoiseBurst"
+      - "CCSN"
+      - "Background"
+      - "Glitch"
+      - "FakeGlitch"
     priors:
-      - class_path: gwak.data.prior.SineGaussianBBC
-      - class_path: gwak.data.prior.LAL_BBHPrior
-      - class_path: gwak.data.prior.GaussianBBC
-      - class_path: gwak.data.prior.CuspBBC
-      - class_path: gwak.data.prior.KinkBBC
-      - class_path: gwak.data.prior.KinkkinkBBC
-      - class_path: gwak.data.prior.WhiteNoiseBurstBBC
+      - class_path: gwak.data.prior.MultiSineGaussianBBC # MultiSineGaussian
+      - class_path: gwak.data.prior.LAL_BBHPrior # BBH
+      - class_path: gwak.data.prior.GaussianBBC # Gaussian
+      - class_path: gwak.data.prior.CuspBBC # Cusp
+      - class_path: gwak.data.prior.KinkBBC # Kink
+      - class_path: gwak.data.prior.KinkkinkBBC # KinkKink
+      - class_path: gwak.data.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      - null # Glitch
+      - null # FakeGlitch
     waveforms:
-      - class_path: ml4gw.waveforms.SineGaussian
+      - class_path: ml4gw.waveforms.MultiSineGaussian # MultiSineGaussian
         init_args:
           sample_rate: 0
           duration: 0
-      - class_path: ml4gw.waveforms.IMRPhenomPv2
+      - class_path: ml4gw.waveforms.IMRPhenomPv2 # BBH
         init_args: {}
-      - class_path: ml4gw.waveforms.Gaussian
+      - class_path: ml4gw.waveforms.Gaussian # Gaussian
         init_args:
           sample_rate: 0
           duration: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # Cusp
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # Kink
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.GenerateString
+      - class_path: ml4gw.waveforms.GenerateString # KinkKink
         init_args:
           sample_rate: 0
-      - class_path: ml4gw.waveforms.WhiteNoiseBurst
+      - class_path: ml4gw.waveforms.WhiteNoiseBurst # WhiteNoiseBurst
         init_args:
           sample_rate: 0
           duration: 0
+      - null # CCSN
+      - null # Background
+      - null # Glitch
+      - null # FakeGlitch
     extra_kwargs:
-      - null
-      - ringdown_duration: 0.9
-      - null
-      - null
-      - null
-      - null
-      - null
-    # data_dir: /home/katya.govorkova/gwak2_background/train
-    data_dir: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_background/train
-    sample_rate: 2048
-    kernel_length: 0.5
+      - null # MultiSineGaussian
+      - ringdown_duration: 0.9 # BBH
+      - null # Gaussian
+      - null # Cusp
+      - null # Kink
+      - null # KinkKink
+      - null # WhiteNoiseBurst
+      - null # CCSN
+      - null # Background
+      - null # Glitch
+      - null # FakeGlitch
+    sample_rate: 4096
+    kernel_length: 1.0
     psd_length: 64
     fduration: 1
     fftlength: 2
-    batch_size: 128
-    batches_per_epoch: 10
-    num_workers: 2
+    batch_size: 256
+    batches_per_epoch: 20
+    num_workers: 4
     data_saving_file: null
+    anneal_snr: true
+    snr_init_factor: 10.0
+    snr_anneal_epochs: 20
