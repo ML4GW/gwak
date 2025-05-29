@@ -25,7 +25,7 @@ cl_configs = [
     'resnet_kl1.0_bs512_noAnnealClassifier_noMultiSG',
     'resnet_kl1.0_bs512_noClassifier_noMultiSG',
     'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus',
-    'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim'
+    'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
     ]
 fm_configs = [
     'NF_onlyBkg',
@@ -150,6 +150,6 @@ rule make_plots_i:
 rule make_plots:
     input:
         expand(rules.make_plots_i.output,
-            cl_config='s4_kl1.0_bs256',
+            cl_config='resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
             fm_config='NF_from_file_conditioning',
             ifos='HL')
