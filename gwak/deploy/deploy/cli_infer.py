@@ -1,4 +1,4 @@
-from deploy.infer import infer
+from deploy.infer_module import infer
 
 from jsonargparse import ArgumentParser, ActionConfigFile
 

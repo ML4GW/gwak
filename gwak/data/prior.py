@@ -150,10 +150,16 @@ class GaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = LogUniform(8.5e-19, 4e-18), 
+            #hrss = LogUniform(8.5e-19, 4e-18), 
+            hrss = Uniform(2.2e-20, 2.4e-20),
             polarization = Uniform(0, torch.pi),
-            eccentricity = Uniform(0, 1)
+            eccentricity = Uniform(0, 1),
+            #duration = Uniform(0.001, 0.1)
+            duration = Uniform(0.001, 0.02) # this is the duration of the gaussian in seconds
         )
+        #hrss = LogUniform(2e-20, 9e-20),
+        #hrss = Uniform(1e-20, 2.5e-20),
+        #duration = Uniform(0.001, 0.02)
 
 class WhiteNoiseBurstBBC(BasePrior):
 
@@ -164,7 +170,8 @@ class WhiteNoiseBurstBBC(BasePrior):
             bandwidth = Uniform(32, 2048),
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
-            int_hdot_squared = LogUniform(1e-37, 1e-36)
+            int_hdot_squared = LogUniform(1e-37, 1e-36),
+            duration = LogUniform(2e-2,2)
         )
 
 class CuspBBC(BasePrior):

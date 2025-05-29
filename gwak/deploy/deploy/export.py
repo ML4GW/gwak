@@ -35,7 +35,7 @@ def export(
     fm_config: str='NF_onlyBkg',
     **kwargs,
 ):
-    
+
     file_path = Path(__file__).resolve()
     if model_dir is None: 
         model_dir = file_path.parents[2] / "output"

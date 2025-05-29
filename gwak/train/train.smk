@@ -15,11 +15,17 @@ cl_configs = [
     's4_kl1.0_bs256_noGlitch',
     's4_kl1.0_bs256_noClassifier',
     's4_kl1.0_bs256_noAnnealClassifier_noMultiSG',
+    's4_kl1.0_bs256_noClassifier_noMultiSG_fixedWNBGaus',
+    's4_kl1.0_bs256_noClassifier_noMultiSG_fixedWNBGaus_t0.01',
+    's4_kl1.0_bs256_noClassifier_noMultiSG_fixedWNBGaus_t0.5',
     'transformer_patch64_kl0.5_bs512',
     'transformer_patch64_kl1.0_bs512',
     'transformer_patch64_kl2.0_bs512',
     'transformer_patch64_kl1.0_bs512_noClassifier',
-    'resnet_kl1.0_bs512_noAnnealClassifier_noMultiSG'
+    'resnet_kl1.0_bs512_noAnnealClassifier_noMultiSG',
+    'resnet_kl1.0_bs512_noClassifier_noMultiSG',
+    'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus',
+    'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim'
     ]
 fm_configs = [
     'NF_onlyBkg',

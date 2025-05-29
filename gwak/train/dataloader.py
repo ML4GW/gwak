@@ -3,7 +3,7 @@ import yaml
 import logging
 import argparse
 import numpy as np
-from math import ceil
+from math import ceil, floor
 from pathlib import Path
 from typing import Callable, List, Optional, Union
 
@@ -563,6 +563,30 @@ class SignalDataloader(GwakBaseDataloader):
         self.has_glitch = "Glitch" in self.signal_classes
         self.cache_dir = cache_dir
 
+        self.all_signal_labels = {
+            "SineGaussian":1,
+            "BBH":2,
+            "Gaussian":3,
+            "Cusp":4,
+            "Kink":4,
+            "KinkKink":4,
+            "WhiteNoiseBurst":5,
+            "CCSN":6,
+            "Background":7,
+            "Glitch":7,
+            "FakeGlitch":8
+        }
+        self.all_signal_label_names = {
+            1:"SineGaussian",
+            2:"BBH",
+            3:"Gaussian",
+            4:"Strings (Cusp/Kink/2Kink)",
+            5:"WhiteNoiseBurst",
+            6:"CCSN",
+            7:"Bkg/Glitch",
+            8:"FakeGlitch"
+        }
+
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
@@ -598,12 +622,30 @@ class SignalDataloader(GwakBaseDataloader):
         for i in range(self.batch_size % self.num_classes):
             self.num_per_class[i] += 1
 
+        # new computation for when several classes have the same label (e.g. merging strings)
+        uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
+        frac_per_label = 1.0/len(uniq)
+        counts_per_label = {}
+        for label,ct in zip(uniq,counts):
+            frac = 1.0 / ct
+            counts_per_label[label] = floor(frac*frac_per_label*self.batch_size)
+        self.num_per_class = [counts_per_label[self.all_signal_labels[signal_class]] for signal_class in self.signal_classes]
+        if np.sum(self.num_per_class) != self.batch_size:
+            if np.sum(self.num_per_class) > self.batch_size:
+                extra = np.sum(self.num_per_class) - self.batch_size
+                for i in range(extra):
+                    self.num_per_class[i] -= 1
+            else:
+                deficit = self.batch_size - np.sum(self.num_per_class)
+                for i in range(deficit):
+                    self.num_per_class[i] += 1
+        
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
-        class_labels = [i+1 for i in range(self.num_classes)]
-        if self.data_saving_file is not None:
-            self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
-            self.data_group["class_label_names"] = self.signal_classes
+        #class_labels = [i+1 for i in range(self.num_classes)]
+        #if self.data_saving_file is not None:
+        #    self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
+        #    self.data_group["class_label_names"] = self.signal_classes
 
         # make a list of signals we can use for "fake" glitch generation
         # i.e. where we populate one ifo with a signal and the other with nothing
@@ -703,7 +745,7 @@ class SignalDataloader(GwakBaseDataloader):
         output_decs = [] if decs is None else decs
         output_phics = []
         for i, signal_class in enumerate(self.signal_classes):
-
+            #print("Generating waveforms for class:", signal_class)
             if signal_class == 'BBH':
 
                 responses, params, ra, dec, phic = generate_waveforms_bbh(
@@ -833,7 +875,7 @@ class SignalDataloader(GwakBaseDataloader):
         psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
         psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
 
-        snrs = torch.zeros(len(whitened)).to('cuda')
+        snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
         if waveforms is not None:
             snrs = compute_network_snr(waveforms, psds_resampled, self.sample_rate)
 
@@ -941,17 +983,21 @@ class SignalDataloader(GwakBaseDataloader):
 
 
             clean_batch = _clean_batch
-            labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)]).to('cuda')
+            # new labeling scheme
+            labels = torch.cat([self.all_signal_labels[c]*torch.ones(self.num_per_class[i]) for i,c in zip(np.arange(self.num_classes),self.signal_classes)])
+            indexed_labels = torch.cat([(i+1)*torch.ones(self.num_per_class[i]) for i in range(self.num_classes)])
             labels = labels.to('cuda') if torch.cuda.is_available() else labels
 
             if "Glitch" in self.signal_classes:
-                glitch_mask = (torch.where(labels == self.signal_classes.index("Glitch")+1))[0]
+                glitch_mask = (torch.where(indexed_labels == self.signal_classes.index("Glitch")+1))[0]
                 #glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
                 clean_batch[glitch_mask] = glitch_batch # should now only load in exactly enough glitch events
             perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
             snrs = _snrs[perm]
             labels = labels[perm]
+            indexed_labels = indexed_labels.to('cuda') if torch.cuda.is_available() else indexed_labels
+            indexed_labels = indexed_labels[perm]
 
         # a hack to use this function for plotting, outside of the plotting script
         if local_test:

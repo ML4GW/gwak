@@ -262,7 +262,8 @@ class SimCLRBase(GwakBaseModelClass):
         temp = self.get_temperature(self.current_epoch)
         lambda_class = self.get_lambda_classifier(self.current_epoch)
         self.log("train/temperature", temp)
-        self.log("train/lambda_class", lambda_class)
+        if self.use_classifier:
+            self.log("train/lambda_class", lambda_class)
         self.loss_function = SupervisedSimCLRLoss(temperature=temp,
                                                   contrast_mode='all', 
                                                   base_temperature=temp)
@@ -368,8 +369,9 @@ class SimCLRBase(GwakBaseModelClass):
         if self.supervised_simclr:
             preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
             labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
-            sig_classes = self.trainer.datamodule.signal_classes
-            label_names = {i+1:c for i,c in enumerate(sig_classes)}
+            #sig_classes = self.trainer.datamodule.signal_classes
+            #label_names = {i+1:c for i,c in enumerate(sig_classes)}
+            label_names = self.trainer.datamodule.all_signal_label_names
             fig = make_corner(preds,labels,return_fig=True,label_names=label_names)
 
             buf = BytesIO()
