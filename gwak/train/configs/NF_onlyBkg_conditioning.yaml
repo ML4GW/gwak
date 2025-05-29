@@ -19,8 +19,27 @@ model:
   init_args:
     n_dims: 10
     conditioning: True
-
 data:
-  class_path: dataloader.EmbeddingLoader
+  class_path: dataloader.SignalDataloader
   init_args:
-    batch_size: 32
+    signal_classes:
+      - "Background"
+      - "Glitch"
+    priors:
+      - null # Background
+      - null # Glitch
+    waveforms:
+      - null # Background
+      - null # Glitch
+    extra_kwargs:
+      - null # Background
+      - null # Glitch
+    sample_rate: 4096
+    kernel_length: 1.0
+    psd_length: 64
+    fduration: 1
+    fftlength: 2
+    batch_size: 256
+    batches_per_epoch: 20
+    num_workers: 4
+    data_saving_file: null

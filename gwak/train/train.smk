@@ -29,7 +29,7 @@ cl_configs = [
     ]
 fm_configs = [
     'NF_onlyBkg',
-    'NF_onlyBkg_conditioning',
+    'NF_from_file_conditioning',
     'FM_multiSignalAndBkg',
     ]
 ifo_configs = [
@@ -151,5 +151,5 @@ rule make_plots:
     input:
         expand(rules.make_plots_i.output,
             cl_config='s4_kl1.0_bs256',
-            fm_config='NF_onlyBkg_conditioning',
+            fm_config='NF_from_file_conditioning',
             ifos='HL')
