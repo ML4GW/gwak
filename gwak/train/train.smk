@@ -23,6 +23,7 @@ cl_configs = [
     ]
 fm_configs = [
     'NF_onlyBkg',
+    'NF_onlyBkg_conditioning',
     'FM_multiSignalAndBkg',
     ]
 ifo_configs = [
@@ -39,7 +40,7 @@ wildcard_constraints:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
+        data_dir = 'output/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
@@ -52,25 +53,52 @@ rule train_cl:
             --model.num_ifos {wildcards.ifos} \
             --data.glitch_root /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{wildcards.ifos}/'
 
-rule train_fm:
-    input:
+rule precompute_embeddings:
+    params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
+        data_dir = 'output/O4_MDC_background/{ifos}/',
+        config = 'train/configs/{cl_config}.yaml'
+    output:
+        means = 'output/{cl_config}_{ifos}/means.npy',
+        stds = 'output/{cl_config}_{ifos}/stds.npy',
+        embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
+        labels = 'output/{cl_config}_{ifos}/labels.npy',
+        correlations = 'output/{cl_config}_{ifos}/correlations.npy'
+    shell:
+        'python train/precompute_embeddings.py \
+            --embedding-model {params.embedding_model} \
+            --data-dir {params.data_dir} \
+            --config {params.config} \
+            --embeddings {output.embeddings} \
+            --labels {output.labels} \
+            --correlations {output.correlations} \
+            --means {output.means} \
+            --stds {output.stds} \
+            --nevents 1000000 '
+
+rule train_fm:
+    params:
+        artefact = directory('output/{cl_config}_{fm_config}_{ifos}/'),
         config = 'train/configs/{fm_config}.yaml',
-        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
+        means = 'output/{cl_config}_{ifos}/means.npy',
+        stds = 'output/{cl_config}_{ifos}/stds.npy',
+        embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
+        correlations = 'output/{cl_config}_{ifos}/correlations.npy'
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
-    params:
-        artefact = directory('output/{cl_config}_{fm_config}_{ifos}/')
     shell:
-        'python train/cli_fm.py fit --config {input.config} \
+        'python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
-            --data.init_args.data_dir {input.data_dir} \
-            --data.ifos {wildcards.ifos} \
-            --model.embedding_model {input.embedding_model}'
+            --data.embedding_path {params.embeddings} \
+            --data.c_path {params.correlations} \
+            --model.means {params.means} \
+            --model.stds {params.stds} '
 
 rule combine_models:
+    input:
+        config = 'train/configs/{fm_config}.yaml',
     params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
@@ -85,37 +113,37 @@ rule combine_models:
         'python train/combine_models.py \
             {params.embedding_model} \
             {params.fm_model} \
-            --batch_size 512 \
-            --kernel_length 0.5 \
-            --sample_rate 4096 \
-            --num_ifos 2 \
+            --config {input.config} \
             --outfile {output} '
 
-rule make_plots:
-    input:
-        combined_model = expand(rules.combine_models.output,
-            cl_config='S4_SimCLR_multiSignalAndBkg',
-            fm_config='NF_onlyBkg',
-            ifos='HV'),
+rule make_plots_i:
     params:
         embedding_model = expand(rules.train_cl.output.model,
-            cl_config='S4_SimCLR_multiSignalAndBkg',
-            ifos='HV'),
+            cl_config='{cl_config}',
+            ifos='{ifos}'),
         fm_model = expand(rules.train_fm.output.model,
-            fm_config='NF_onlyBkg',
-            cl_config='S4_SimCLR_multiSignalAndBkg',
-            ifos='HV'),
-        data_dir = 'output/O4_MDC_background/HV/',
-        config = 'train/configs/S4_SimCLR_multiSignalAndBkg.yaml'
+            fm_config='{fm_config}',
+            cl_config='{cl_config}',
+            ifos='{ifos}'),
+        data_dir = 'output/O4_MDC_background/{ifos}/',
+        config = 'train/configs/{cl_config}.yaml',
+        conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
-        directory('output/plots/')
+        directory('output/plots/{cl_config}_{fm_config}_{ifos}/'),
     shell:
-        'mkdir {output}; '
+        'mkdir -p {output}; '
         'python train/plots.py \
-            --combined-model {input.combined_model} \
             --embedding-model {params.embedding_model} \
             --fm-model {params.fm_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
-            --output {output} '
-            # '--use-freq-correlation '
+            --output {output} \
+            --conditioning {params.conditioning} \
+            --threshold-1yr 0 '
+
+rule make_plots:
+    input:
+        expand(rules.make_plots_i.output,
+            cl_config='s4_kl1.0_bs256',
+            fm_config='NF_onlyBkg_conditioning',
+            ifos='HL')
