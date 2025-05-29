@@ -23,10 +23,10 @@ from pytorch_lightning.callbacks import EarlyStopping
 from einops import rearrange, repeat
 
 from nflows.flows.base import Flow
-from nflows.distributions.normal import StandardNormal
+from nflows.distributions.normal import StandardNormal, ConditionalDiagonalNormal
 from nflows.transforms.base import CompositeTransform
 from nflows.transforms.permutations import ReversePermutation
-from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform
+from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform, MaskedPiecewiseRationalQuadraticAutoregressiveTransform
 
 from gwak.train.losses import SupervisedSimCLRLoss
 from gwak.train.schedulers import WarmupCosineAnnealingLR
