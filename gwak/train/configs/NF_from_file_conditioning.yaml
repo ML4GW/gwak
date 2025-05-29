@@ -1,0 +1,24 @@
+# lightning.pytorch==2.3.2
+seed_everything: 0
+trainer:
+  callbacks:
+    - class_path: callback.ValidationCallback
+  accelerator: gpu
+  devices: [0]
+  # accelerator: auto
+  # devices: auto
+  strategy: ddp_find_unused_parameters_true
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+  max_epochs: 1
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 1
+ckpt_path: null
+model:
+  class_path: fm_models.BackgroundFlowModel
+  init_args:
+    n_dims: 6
+data:
+  class_path: dataloader.EmbeddingLoader
+  init_args:
+    batch_size: 32

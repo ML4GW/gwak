@@ -55,20 +55,33 @@ if __name__ == "__main__":
     )
     parser.add_argument('folder_embedder', type=str, help='Path to the folder containing JIT embedder model.')
     parser.add_argument('folder_metric', type=str, help='Path to the folder containing JIT metric model.')
-    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for inference (default: 256).')
-    parser.add_argument('--kernel_length', type=float, default=0.5, help='Kernel length in seconds (default: 0.5).')
-    parser.add_argument('--sample_rate', type=float, default=4096, help='Sample rate in Hz (default: 4096).')
-    parser.add_argument('--num_ifos', type=int, default=2, help='Number of interferometers (default: 2).')
+    parser.add_argument('--config', type=str)
     parser.add_argument('--outfile', type=str, default='Output folder for JIT combined model', help='Output file name for the NumPy array (default: far_metrics.npy).')
-    
+
     args = parser.parse_args()
+
+    # Load the YAML config file
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Extract values
+    sample_rate = config['data']['init_args']['sample_rate']
+    kernel_length = config['data']['init_args']['kernel_length']
+    psd_length = config['data']['init_args']['psd_length']
+    fduration = config['data']['init_args']['fduration']
+    fftlength = config['data']['init_args']['fftlength']
+    batch_size = 64 #config['data']['init_args']['batch_size']
+    batches_per_epoch = config['data']['init_args']['batches_per_epoch']
+    num_workers = config['data']['init_args']['num_workers']
+    data_saving_file = config['data']['init_args']['data_saving_file']
+    signal_classes = config['data']['init_args']['signal_classes']
 
     main(
         embedder_model_file=args.folder_embedder,
         metric_model_file=args.folder_metric,
-        batch_size=args.batch_size,
-        kernel_length=args.kernel_length,
-        sample_rate=args.sample_rate,
-        num_ifos=args.num_ifos,
+        batch_size=batch_size,
+        kernel_length=kernel_length,
+        sample_rate=sample_rate,
+        num_ifos=2,
         output_path=args.outfile
     )
