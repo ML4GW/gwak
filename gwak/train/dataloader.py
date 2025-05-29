@@ -1001,7 +1001,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # a hack to use this function for plotting, outside of the plotting script
         if local_test:
-            return batch, labels, snrs
+            return batch, indexed_labels, snrs
 
         if self.trainer.training and (self.data_saving_file is not None):
             # Set a warning that when the global_step exceed 1e6,
