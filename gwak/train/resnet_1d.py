@@ -425,3 +425,161 @@ class BottleneckResNet1D(ResNet1D):
     """A version of ResNet that uses bottleneck blocks"""
 
     block = Bottleneck
+
+class ResNetEncoder(nn.Module):
+    """ResNet-based encoder for the autoencoder"""
+    
+    def __init__(
+        self,
+        in_channels: int,
+        layers: List[int],
+        latent_dim: int,
+        kernel_size: int = 3,
+        zero_init_residual: bool = False,
+        groups: int = 1,
+        width_per_group: int = 64,
+        stride_type: Optional[List[Literal["stride", "dilation"]]] = None,
+        norm_layer: Optional[NormLayer] = None,
+    ) -> None:
+        super().__init__()
+        
+        # Use the ResNet1D architecture but replace the classification head
+        self.resnet = ResNet1D(
+            in_channels=in_channels,
+            layers=layers,
+            classes=latent_dim,  # Output dimension is latent_dim
+            kernel_size=kernel_size,
+            zero_init_residual=zero_init_residual,
+            groups=groups,
+            width_per_group=width_per_group,
+            stride_type=stride_type,
+            norm_layer=norm_layer
+        )
+        
+    def forward(self, x: Tensor) -> Tensor:
+        return self.resnet(x)
+
+
+class ResNetDecoder(nn.Module):
+    """ResNet-based decoder for the autoencoder"""
+    
+    def __init__(
+        self,
+        latent_dim: int,
+        out_channels: int,
+        layers: List[int],
+        kernel_size: int = 3,
+        zero_init_residual: bool = False,
+        groups: int = 1,
+        width_per_group: int = 64,
+        norm_layer: Optional[NormLayer] = None,
+    ) -> None:
+        super().__init__()
+        
+        block = BasicBlock
+        self._norm_layer = norm_layer or GroupNorm1DGetter()
+        self.groups = groups
+        self.base_width = width_per_group
+        
+        # Initial feature size
+        initial_size = 64 * 2**(len(layers)-1) * block.expansion
+        
+        # Project from latent space to initial feature maps
+        self.fc = nn.Linear(latent_dim, initial_size)
+        self.unflatten = nn.Unflatten(1, (initial_size, 1))
+        
+        # Upsampling layers
+        self.upsample_layers = nn.ModuleList()
+        
+        # Build layers in reverse order compared to encoder
+        current_channels = initial_size
+        for i in range(len(layers)-1, 0, -1):
+            out_channels_block = 64 * 2**(i-1)
+            self.upsample_layers.append(
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode='linear', align_corners=False),
+                    convN(current_channels, out_channels_block, kernel_size),
+                    self._norm_layer(out_channels_block),
+                    nn.ReLU(inplace=True),
+                    *[block(
+                        out_channels_block, 
+                        out_channels_block, 
+                        kernel_size, 
+                        groups=groups,
+                        base_width=width_per_group,
+                        norm_layer=self._norm_layer
+                    ) for _ in range(layers[i-1])]
+                )
+            )
+            current_channels = out_channels_block
+        
+        # Final upsampling and output layer
+        self.final_upsample = nn.Sequential(
+            nn.Upsample(scale_factor=4, mode='linear', align_corners=False),  # Account for initial max pooling and stride
+            convN(current_channels, 64, kernel_size),
+            self._norm_layer(64),
+            nn.ReLU(inplace=True),
+            convN(64, out_channels, kernel_size=1),
+        )
+        
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.fc(x)
+        x = self.unflatten(x)
+        
+        for layer in self.upsample_layers:
+            x = layer(x)
+            
+        x = self.final_upsample(x)
+        return x
+
+
+class ResNetAutoencoder(nn.Module):
+    """1D ResNet-based Autoencoder"""
+    
+    def __init__(
+        self,
+        in_channels: int,
+        layers: List[int],
+        latent_dim: int,
+        kernel_size: int = 3,
+        zero_init_residual: bool = False,
+        groups: int = 1,
+        width_per_group: int = 64,
+        stride_type: Optional[List[Literal["stride", "dilation"]]] = None,
+        norm_layer: Optional[NormLayer] = None,
+    ) -> None:
+        super().__init__()
+        
+        self.encoder = ResNetEncoder(
+            in_channels=in_channels,
+            layers=layers,
+            latent_dim=latent_dim,
+            kernel_size=kernel_size,
+            zero_init_residual=zero_init_residual,
+            groups=groups,
+            width_per_group=width_per_group,
+            stride_type=stride_type,
+            norm_layer=norm_layer
+        )
+        
+        self.decoder = ResNetDecoder(
+            latent_dim=latent_dim,
+            out_channels=in_channels,
+            layers=layers,
+            kernel_size=kernel_size,
+            zero_init_residual=zero_init_residual,
+            groups=groups,
+            width_per_group=width_per_group,
+            norm_layer=norm_layer
+        )
+        
+    def forward(self, x: Tensor) -> Tensor:
+        latent = self.encoder(x)
+        reconstruction = self.decoder(latent)
+        return reconstruction
+    
+    def encode(self, x: Tensor) -> Tensor:
+        return self.encoder(x)
+    
+    def decode(self, x: Tensor) -> Tensor:
+        return self.decoder(x)
