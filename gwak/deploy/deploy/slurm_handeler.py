@@ -8,6 +8,7 @@ from typing import Optional
 def slurm_infer_wrapper(
     slurm_batch: int,
     slurm_kwargs: dict,
+    run_name: str,
     ifos: list,
     Tb: int,
     fname: Path, 
@@ -18,6 +19,7 @@ def slurm_infer_wrapper(
     grpc_port: int,
     patients: int,
     image: str,
+    result_dir: Path,
     shifts: list[float],
     data_format: str,
     inference_sampling_rate: int,
@@ -45,7 +47,7 @@ def slurm_infer_wrapper(
 
     for batch in range(slurm_batch):
         
-        job_dir = output_dir / "Slurm_Job" / f"Node_{batch:02d}"
+        job_dir = output_dir / f"Slurm_Job_{run_name}" / f"Node_{batch:02d}"
         export_job_dir = job_dir / "export"
         infer_job_dir = job_dir / "infer"
 
@@ -61,6 +63,7 @@ def slurm_infer_wrapper(
             deploy_dir=deploy_dir,
             output_dir=output_dir,
             job_dir=infer_job_dir,
+            result_dir=result_dir,
             project=project,
             model_repo_dir=model_repo_dir or export_job_dir / prefix / project, # Can be null, cause we export at node level=# model_repo_dir, # Can be null, cause we export at node level.
             image=image,
@@ -89,9 +92,4 @@ def slurm_infer_wrapper(
             infer_config=infer_config,
         )
         
-        # subprocess.run(["sbatch", f"{slurm_file}"])
-        
-        
-
-
-
+        subprocess.run(["sbatch", f"{slurm_file}"])
