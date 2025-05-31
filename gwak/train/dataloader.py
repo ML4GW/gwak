@@ -574,7 +574,8 @@ class SignalDataloader(GwakBaseDataloader):
             "CCSN":6,
             "Background":7,
             "Glitch":7,
-            "FakeGlitch":8
+            "FakeGlitch":8,
+            "MultiSineGaussian":9
         }
         self.all_signal_label_names = {
             1:"SineGaussian",
@@ -584,7 +585,8 @@ class SignalDataloader(GwakBaseDataloader):
             5:"WhiteNoiseBurst",
             6:"CCSN",
             7:"Bkg/Glitch",
-            8:"FakeGlitch"
+            8:"FakeGlitch",
+            9:"MultiSineGaussian"
         }
 
         self.signal_configs = []
