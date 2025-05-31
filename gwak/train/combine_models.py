@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import argparse
+import yaml
 
 class CombinedModel(nn.Module):
     def __init__(self, embedder_model, metric_model):
@@ -12,9 +13,20 @@ class CombinedModel(nn.Module):
     def forward(self, x):
         # Get the embedding from the embedder model.
         embedding = self.embedder_model(x)
+        c = self.frequency_cos_similarity(x)
         # Pass the embedding to the metric model to get final classification.
-        out = self.metric_model(embedding)
+        out = self.metric_model(embedding, c)
         return out
+
+    def frequency_cos_similarity(self, batch):
+        H = torch.fft.rfft(batch[:, 0, :], dim=-1)
+        L = torch.fft.rfft(batch[:, 1, :], dim=-1)
+        numerator = torch.sum(H * torch.conj(L), dim=-1)
+        norm_H = torch.linalg.norm(H, dim=-1)
+        norm_L = torch.linalg.norm(L, dim=-1)
+        rho_complex = numerator / (norm_H * norm_L + 1e-8)
+        rho_real = torch.real(rho_complex).unsqueeze(-1)
+        return rho_real
 
 def main(embedder_model_file,
          metric_model_file,
