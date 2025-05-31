@@ -42,6 +42,7 @@ if __name__=='__main__':
     parser.add_argument('--embedding-model', type=str, default=None)
     parser.add_argument('--data-dir', type=str)
     parser.add_argument('--config', type=str)
+    parser.add_argument('--ifos', type=str)
     parser.add_argument('--embeddings', type=str)
     parser.add_argument('--labels', type=str)
     parser.add_argument('--correlations', type=str)
@@ -91,7 +92,8 @@ if __name__=='__main__':
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
         data_saving_file=data_saving_file,
-        glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
+        ifos=args.ifos,
+        glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
     )
 
     all_labels = []

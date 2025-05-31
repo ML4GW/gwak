@@ -47,6 +47,8 @@ if __name__=='__main__':
     parser.add_argument('--fm-model', type=str)
     parser.add_argument('--data-dir', type=str)
     parser.add_argument('--config', type=str)
+    parser.add_argument('--nevents', type=int)
+    parser.add_argument('--ifos', type=str)
     parser.add_argument('--output', type=str)
     parser.add_argument('--threshold-1yr', type=float)
     parser.add_argument('--conditioning', type=str2bool, default=False)
@@ -72,32 +74,46 @@ if __name__=='__main__':
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
     batch_size = 128 #config['data']['init_args']['batch_size']
-    batches_per_epoch = config['data']['init_args']['batches_per_epoch']
+    batches_per_epoch = 2000000
     num_workers = config['data']['init_args']['num_workers']
     data_saving_file = config['data']['init_args']['data_saving_file']
-    signal_classes = config['data']['init_args']['signal_classes']
+    signal_classes = [
+        "MultiSineGaussian",
+        "SineGaussian",
+        "BBH",
+        "Gaussian",
+        "Cusp",
+        "Kink",
+        "KinkKink",
+        "WhiteNoiseBurst",
+        "CCSN",
+        "Background",
+        "Glitch",
+        "FakeGlitch"
+        ]
 
     # Computed variable
     duration = fduration + kernel_length
 
     # Signal setup
     priors = [
-        MultiSineGaussianBBC(), LAL_BBHPrior(), GaussianBBC(),
+        MultiSineGaussianBBC(), SineGaussianBBC(), LAL_BBHPrior(), GaussianBBC(),
         CuspBBC(), KinkBBC(), KinkkinkBBC(), WhiteNoiseBurstBBC(),
         None, None, None, None
     ]
     waveforms = [
         MultiSineGaussian(sample_rate=sample_rate, duration=duration),
+        SineGaussian(sample_rate=sample_rate, duration=duration),
         IMRPhenomPv2(),
         Gaussian(sample_rate=sample_rate, duration=duration),
         GenerateString(sample_rate=sample_rate),
         GenerateString(sample_rate=sample_rate),
         GenerateString(sample_rate=sample_rate),
         WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
-        None, None, None, None,
+        None, None, None, None
     ]
     extra_kwargs = [
-        None, {"ringdown_duration": 0.9}, None, None, None, None, None,
+        None, None, {"ringdown_duration": 0.9}, None, None, None, None, None,
         None, None, None, None
     ]
 
@@ -114,10 +130,10 @@ if __name__=='__main__':
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
         data_saving_file=data_saving_file,
-        glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
+        glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
     )
 
-    all_background_classes = ['Background', 'Glitch', 'FakeGlitch']
+    all_background_classes = ['Background', 'Glitch'] #, 'FakeGlitch']
     all_classes = signal_classes
     background_classes = [cls for cls in all_classes if cls in all_background_classes]
     signal_classes = [cls for cls in all_classes if cls not in background_classes]
@@ -134,10 +150,10 @@ if __name__=='__main__':
     all_context = []
     all_snrs = []
 
-    n_iter = 20
+    n_iter = int(args.nevents/batch_size)
     test_loader = loader.test_dataloader()
     test_iter = iter(test_loader)
-    for i in range(n_iter):
+    for i in tqdm(range(n_iter), desc="Processing batches"):
         clean_batch, glitch_batch = next(test_iter)
         clean_batch = clean_batch.to(device)
         glitch_batch = glitch_batch.to(device)
@@ -150,7 +166,7 @@ if __name__=='__main__':
         if args.conditioning:
             context = frequency_cos_similarity(processed)
             all_context.append(context.detach().cpu().numpy())
-            scores = metric_model(embeddings, context).detach().cpu().numpy() * (-1)
+            scores = metric_model(embeddings, context=context).detach().cpu().numpy() * (-1)
         else:
             scores = metric_model(embeddings).detach().cpu().numpy() * (-1)
         embeddings = embeddings.detach().cpu().numpy()
@@ -175,6 +191,24 @@ if __name__=='__main__':
     all_scores = np.concatenate(all_scores, axis=0)
     all_embeddings = np.concatenate(all_embeddings, axis=0)
     all_snrs = np.concatenate(all_snrs, axis=0)
+
+    np.save(f'{args.output}/context_{args.nevents}.npy', all_context)
+    np.save(f'{args.output}/binary_labels_{args.nevents}.npy', all_binary_labels)
+    np.save(f'{args.output}/labels_{args.nevents}.npy', all_labels)
+    np.save(f'{args.output}/scores_{args.nevents}.npy', all_scores)
+    np.save(f'{args.output}/embeddings_{args.nevents}.npy', all_embeddings)
+    np.save(f'{args.output}/snrs_{args.nevents}.npy', all_snrs)
+
+    # # Create mask where SNR > 4
+    # snr_mask = all_snrs > 4
+    # print('Passed hte SNR cut', 100 * np.mean(all_snrs > 4))
+    # # Apply mask
+    # all_context = all_context[snr_mask]
+    # all_binary_labels = all_binary_labels[snr_mask]
+    # all_labels = all_labels[snr_mask]
+    # all_scores = all_scores[snr_mask]
+    # all_embeddings = all_embeddings[snr_mask]
+    # all_snrs = all_snrs[snr_mask]
 
     ########### PLOT CONTEXT
     # Mask based on label
@@ -248,12 +282,34 @@ if __name__=='__main__':
     fig = make_corner(all_embeddings, (all_labels-1).astype(int), return_fig=True, label_names=all_classes)
     fig.savefig(f'{args.output}/corner_plot.png')
 
-    ####
-    # Check the performance of the NF
+    # Define custom colors
+    custom_colors = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
+        '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#393b79', '#637939',
+        '#8c6d31', '#843c39', '#7b4173', '#5254a3', '#9c9ede', '#637939',
+        '#e7ba52', '#ad494a'
+    ]
+
+    #####
+    # Stack histograms properly
     plt.figure()
+
+    # Collect all scores in a list
+    score_list = []
     for i, c in enumerate(all_classes):
-        scores_sel = all_scores[all_labels==i+1]
-        plt.hist(scores_sel, bins=100, label=c, density=True, alpha=0.8, range=(0,500))
+        scores_sel = all_scores[all_labels == i + 1]
+        score_list.append(scores_sel)
+
+    # Plot all at once
+    plt.hist(
+        score_list,
+        bins=100,
+        label=all_classes,
+        alpha=0.8,
+        range=(0, 500),
+        stacked=True,
+        color=custom_colors[:len(all_classes)]  # trim color list if needed
+    )
 
     plt.xlabel("NF log probability")
     plt.legend()
@@ -320,3 +376,5 @@ if __name__=='__main__':
     plt.xscale('log')
     plt.xlabel("SNR")
     plt.legend()
+    plt.savefig(f'{args.output}/snr_histograms.png')
+    plt.clf()
