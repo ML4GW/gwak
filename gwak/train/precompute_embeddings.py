@@ -21,9 +21,9 @@ from gwak.train.cl_models import Crayon
 
 from gwak.train.plotting import make_corner
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
-device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
+device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 
 def frequency_cos_similarity(batch):
     H = torch.fft.rfft(batch[:, 0, :], dim=-1)

@@ -994,7 +994,8 @@ class SignalDataloader(GwakBaseDataloader):
                 glitch_mask = (torch.where(indexed_labels == self.signal_classes.index("Glitch")+1))[0]
                 #glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
                 clean_batch[glitch_mask] = glitch_batch # should now only load in exactly enough glitch events
-            perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
+            perm = torch.randperm(clean_batch.size(0)).to('cuda')
+            perm = perm.to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
             snrs = _snrs[perm]
             labels = labels[perm]

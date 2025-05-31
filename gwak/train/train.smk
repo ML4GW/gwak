@@ -46,7 +46,7 @@ wildcard_constraints:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        data_dir = 'output/O4_MDC_background/{ifos}/'
+        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
@@ -64,7 +64,7 @@ rule precompute_embeddings:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = 'output/O4_MDC_background/{ifos}/',
+        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/',
         config = 'train/configs/{cl_config}.yaml'
     output:
         means = 'output/{cl_config}_{ifos}/means.npy',
@@ -134,7 +134,7 @@ rule make_plots_i:
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = 'output/O4_MDC_background/{ifos}/',
+        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
