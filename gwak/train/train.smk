@@ -77,12 +77,13 @@ rule precompute_embeddings:
             --embedding-model {params.embedding_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
+            --ifos {wildcards.ifos} \
             --embeddings {output.embeddings} \
             --labels {output.labels} \
             --correlations {output.correlations} \
             --means {output.means} \
             --stds {output.stds} \
-            --nevents 1000000 '
+            --nevents 100000 '
 
 rule train_fm:
     params:
@@ -91,7 +92,8 @@ rule train_fm:
         means = 'output/{cl_config}_{ifos}/means.npy',
         stds = 'output/{cl_config}_{ifos}/stds.npy',
         embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
-        correlations = 'output/{cl_config}_{ifos}/correlations.npy'
+        correlations = 'output/{cl_config}_{ifos}/correlations.npy',
+        conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     shell:
@@ -100,11 +102,12 @@ rule train_fm:
             --data.embedding_path {params.embeddings} \
             --data.c_path {params.correlations} \
             --model.means {params.means} \
-            --model.stds {params.stds} '
+            --model.stds {params.stds} \
+            --model.conditioning {params.conditioning} '
 
 rule combine_models:
     input:
-        config = 'train/configs/{fm_config}.yaml',
+        config = 'train/configs/{cl_config}.yaml',
     params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
@@ -142,14 +145,17 @@ rule make_plots_i:
             --embedding-model {params.embedding_model} \
             --fm-model {params.fm_model} \
             --data-dir {params.data_dir} \
+            --ifos {wildcards.ifos} \
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --threshold-1yr 0 '
+            --nevents 500000 \
+            --threshold-1yr 57 ' #\
+            # --averaging_kernel 1 '
 
 rule make_plots:
     input:
         expand(rules.make_plots_i.output,
             cl_config='resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
             fm_config='NF_from_file_conditioning',
-            ifos='HL')
+            ifos=['HV', 'LV'])
