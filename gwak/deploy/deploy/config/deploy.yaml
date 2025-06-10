@@ -1,4 +1,4 @@
-slurm_batch: 5
+slurm_batch: 2
 # Slurm arguments
 slurm_kwargs:
   job-name: null
@@ -17,15 +17,15 @@ slurm_kwargs:
     - module load apptainer # Sever dependent
   deploy_cmd:
     export: 
-      - poetry run python deploy/cli_export.py
+      - poetry run python deploy/cli.py export
     infer:
-      - poetry run python deploy/cli_infer.py
+      - poetry run python deploy/cli.py infer
 
 run_name: null
 # Data arguments
 ifos: ["H1", "L1"]
 Tb: 1 # Tb = 0 will run zero-lag
-fname: /fred/oz994/andy/Data/gwak/HL # Sever dependent
+fname: /fred/oz994/andy/Data/gwak/HL_test # Sever dependent
 psd_length: 64
 stride_batch_size: 256
 sample_rate: 4096
