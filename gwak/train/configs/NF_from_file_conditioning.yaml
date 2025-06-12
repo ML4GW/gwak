@@ -10,7 +10,7 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
-  max_epochs: 1
+  max_epochs: 50
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
 ckpt_path: null

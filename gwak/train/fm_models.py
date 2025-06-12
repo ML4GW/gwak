@@ -51,18 +51,14 @@ class Standardizer(nn.Module):
         return (x-self.mean.to(x))/self.std.to(x)
 
 class FlowWrapper(nn.Module):
-    def __init__(self, flow, standardizer=None):
+    def __init__(self, flow, standardizer):
         super().__init__()
         self.flow = flow
         self.standardizer = standardizer
 
-    def forward(self, x, context=None):
-        if self.standardizer is not None:
-            x = self.standardizer(x)
-        if context is not None:
-            return self.flow.log_prob(inputs=x,context=context)
-        else:
-            return self.flow.log_prob(inputs=x)
+    def forward(self, x, context):
+        x = self.standardizer(x)
+        return self.flow.log_prob(inputs=x,context=context)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
@@ -78,15 +74,18 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         module.model.eval()
 
         # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model,standardizer=module.standardizer).to("cuda:0")
+        wrapper = FlowWrapper(module.model, module.standardizer).to("cuda:0")
         wrapper.eval()
-        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
-        if module.conditioning:
-            example_context = torch.randn(1, 1).to("cuda:0")
-            # Trace the wrapped model
-            traced = torch.jit.trace(wrapper, (example_input, example_context))
-        else:
-            traced = torch.jit.trace(wrapper, (example_input))
+        # this is for spline
+        example_input = torch.randn(1, module.model._transform._transforms[0].autoregressive_net.initial_layer.in_features).to("cuda:0")
+        # example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
+        # if module.conditioning:
+        example_context = torch.randn(1, 1).to("cuda:0")
+        traced = torch.jit.trace(wrapper, (example_input, example_context))
+        # traced = torch.jit.script(wrapper)
+
+        # else:
+        #     traced = torch.jit.trace(wrapper, (example_input))
 
         # Save the traced model
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
@@ -248,31 +247,23 @@ class MLPModel(nn.Module):
 class NonLinearClassifier(GwakBaseModelClass):
     def __init__(
             self,
-            backgrounds: str = '/home/hongyin.chen/whiten_timeslide.h5',
-            ckpt: str = "../output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/33-1700.ckpt",
-            cfg_path: str = "../output/test_S4_fixedSignals_0p5sec_v2/config.yaml",
+            embedding_path: str=None,
+            embedding_model: str=None,
             new_shape=128,
             n_dims=16,
+            c_path=None,
+            means=None,
+            stds=None,
+            conditioning=None,
             learning_rate=1e-3,
             hidden_dim=32):
         super().__init__()
         self.model = MLPModel(n_dims, hidden_dim)
 
-        with h5py.File(backgrounds, "r") as h:
-            data = h["data"][:128*10*20, :, :1024]
-
-        self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
-        self.backgrounds = torch.tensor(self.backgrounds, dtype=torch.float32).to("cpu")
-        self.val_backgrounds = torch.tensor(self.val_backgrounds, dtype=torch.float32).to("cpu")
-
-        self.ckpt = ckpt
-        self.cfg_path = cfg_path
-
-        with open(self.cfg_path, "r") as fin:
-            cfg = yaml.load(fin, yaml.FullLoader)
-        self.graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        self.graph = torch.jit.load(embedding_model)
         self.graph.eval()
         self.graph.to(device=self.device)
+        self.get_logger().info(f"Loaded embedding model from {embedding_model}")
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
@@ -286,12 +277,16 @@ class NonLinearClassifier(GwakBaseModelClass):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def training_step(self, batch, batch_idx):
-        i = batch_idx
-        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
+
+        batch, labels = batch
+        # 7 and 8 are background labels fixed from the dataset
+        # Create masks
+        background_mask = (labels == 7) | (labels == 8)
+        signal_mask = ~background_mask  # everything else
 
         # Feature extraction
-        signal_feats = self.graph.model(batch[0])
-        background_feats = self.graph.model(small_bkgs)
+        signal_feats = self.graph(batch[signal_mask])
+        background_feats = self.graph(batch[background_mask])
 
         # Predictions
         signal_preds = self.forward(signal_feats)
@@ -312,10 +307,16 @@ class NonLinearClassifier(GwakBaseModelClass):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        small_bkgs = self.val_backgrounds.to(self.device)
 
-        signal_feats = self.graph.model(batch[0])
-        background_feats = self.graph.model(small_bkgs)
+        batch, labels = batch
+        # 7 and 8 are background labels fixed from the dataset
+        # Create masks
+        background_mask = (labels == 7) | (labels == 8)
+        signal_mask = ~background_mask  # everything else
+
+        # Feature extraction
+        signal_feats = self.graph(batch[signal_mask])
+        background_feats = self.graph(batch[background_mask])
 
         signal_preds = self.forward(signal_feats)
         background_preds = self.forward(background_feats)
