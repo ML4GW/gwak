@@ -542,12 +542,11 @@ class SignalDataloader(GwakBaseDataloader):
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         cache_dir: Optional[str] = None,
         *args,
-        snr_prior: TransformedDistribution,
+
         loader_mode: str = "clean",
         fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
         anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning
-        # snr_low: float = 8, 
-        # snr_high: float = 12, 
+        snr_prior: TransformedDistribution,
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         **kwargs
