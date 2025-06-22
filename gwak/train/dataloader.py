@@ -21,6 +21,7 @@ from ml4gw.transforms import SpectralDensity, Whiten, SnrRescaler
 from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_network_snr
 
 from torch.distributions.uniform import Uniform
+from torch.distributions import TransformedDistribution
 from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 
 from gwak import data
@@ -541,11 +542,12 @@ class SignalDataloader(GwakBaseDataloader):
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         cache_dir: Optional[str] = None,
         *args,
+        snr_prior: TransformedDistribution,
         loader_mode: str = "clean",
         fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
-        anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning)
-        snr_low: float = 8, 
-        snr_high: float = 12, 
+        anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning
+        # snr_low: float = 8, 
+        # snr_high: float = 12, 
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         **kwargs
@@ -657,7 +659,8 @@ class SignalDataloader(GwakBaseDataloader):
             fakeGlitch_config['ringdown_duration'] = 0.9 # need to set this by hand if there are BBHs included in fake glitch set
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
 
-        self.snr_prior = PowerLaw(snr_low, snr_high, index=3)
+        self.snr_prior = snr_prior
+        # PowerLaw(snr_low, snr_high, index=3)
         rescaler = SnrRescaler(
             num_channels = len(self.ifos), 
             sample_rate = self.sample_rate,
@@ -844,8 +847,10 @@ class SignalDataloader(GwakBaseDataloader):
         if torch.any(torch.isnan(psds)):
             self._logger.info('psds fucked')
             
+        # This part is preserved for reviewing SNR rescalser PR,
+        # will remove after the PR been accepted. 
         # if self.anneal_snr:
-        if False:
+        if self.snr_prior is None: 
             # if we are annealing the SNR, we need to scale the waveforms
             snr_factor = self.get_snr_factor(self.trainer.current_epoch)
             if waveforms is not None:
