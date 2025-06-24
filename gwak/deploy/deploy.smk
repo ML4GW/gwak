@@ -13,7 +13,7 @@ rule export:
     shell:
         'mkdir -p tmp; '
         'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
-        ../deploy/deploy/cli_export.py \
+        deploy/cli_export.py export \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
 
@@ -28,7 +28,7 @@ rule infer:
     shell:
         'mkdir -p tmp; '
         'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
-        ../deploy/deploy/cli_infer.py \
+        deploy/cli.py infer \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
         # --result_dir {params.output} 
@@ -37,11 +37,12 @@ rule deploy:
     input:
         config = 'deploy/deploy/config/deploy.yaml',
     output:
-        artefact = directory('output/Slurm_Job/')
+        artefact = directory('output/Slurm_Job_{run_name}/')
     shell:
         'set -x; cd deploy; poetry run python \
-        ../deploy/deploy/cli_deploy.py \
-        --config ../{input.config}'
+        deploy/cli.py deploy \
+        --config ../{input.config} \
+        --run_name {wildcards.run_name}'
 
 
 rule export_all:
@@ -49,6 +50,9 @@ rule export_all:
 
 rule infer_all:
     input: expand(rules.infer.output, deploymodels='combination')
+
+rule deploy_all:
+    input: expand(rules.deploy.output, run_name=['first_run', 'second_run'])
 
 rule estimate_far:
     input:

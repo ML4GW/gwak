@@ -2,7 +2,7 @@ import time
 import logging
 import subprocess
 from zlib import adler32
-
+from pathlib import Path
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 from deploy.libs.infer_utils import get_ip_address
@@ -30,6 +30,7 @@ def client_action(
     shifts:list,
     Tb: int,
     job_dir,
+    result_dir,
     ip,
     grpc_port,
     gwak_streamer,
@@ -60,7 +61,7 @@ def client_action(
             if Tb == 0: 
                 _shifts = [0, 0]
             resolved_job_dir = job_dir / f"batch_job/job_{submit_count:07d}" # Make this to flexable
-            result_dir = job_dir.parents[1] / "inference_result"
+            result_dir = Path(result_dir) / "inference_result" # infer_result_dir
             job_dir.mkdir(parents=True, exist_ok=True)
             logging.info(f"Creating config at {resolved_job_dir}.")
             config_file = make_infer_config(
