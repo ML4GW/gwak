@@ -134,7 +134,7 @@ rule make_plots_i:
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/',
+        data_dir = 'output/O4_MDC_background/{ifos}/',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
@@ -149,13 +149,12 @@ rule make_plots_i:
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 500000 \
-            --threshold-1yr 57 ' #\
-            # --averaging_kernel 1 '
+            --nevents 100000 \
+            --threshold-1yr 20 '
 
 rule make_plots:
     input:
         expand(rules.make_plots_i.output,
             cl_config='resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
             fm_config='NF_from_file_conditioning',
-            ifos=['HV', 'LV'])
+            ifos=['HL', 'HV', 'LV'])
