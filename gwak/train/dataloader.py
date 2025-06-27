@@ -21,7 +21,7 @@ from ml4gw.transforms import SpectralDensity, Whiten, SnrRescaler
 from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_network_snr
 
 from torch.distributions.uniform import Uniform
-from torch.distributions import TransformedDistribution
+from torch.distributions import TransformedDistribution, Distribution
 from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 
 from gwak import data
@@ -546,7 +546,7 @@ class SignalDataloader(GwakBaseDataloader):
         loader_mode: str = "clean",
         fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
         anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning
-        snr_prior: TransformedDistribution,
+        snr_prior: Union[TransformedDistribution,Distribution],
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         **kwargs
