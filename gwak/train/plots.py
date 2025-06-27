@@ -51,7 +51,9 @@ if __name__=='__main__':
     parser.add_argument('--ifos', type=str)
     parser.add_argument('--output', type=str)
     parser.add_argument('--threshold-1yr', type=float)
+    parser.add_argument('--snr-cut', type=float, default=0)
     parser.add_argument('--conditioning', type=str2bool, default=False)
+    parser.add_argument('--averaging-kernel', type=int, default=1)
     args = parser.parse_args()
 
     embed_model = torch.jit.load(args.embedding_model)
@@ -130,6 +132,7 @@ if __name__=='__main__':
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
         data_saving_file=data_saving_file,
+        ifos=args.ifos,
         glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
     )
 
@@ -143,72 +146,115 @@ if __name__=='__main__':
     print('The background classes are ', background_classes)
     print('and the background labels are ', background_labels)
 
-    all_binary_labels = []
-    all_scores = []
-    all_embeddings = []
-    all_labels = []
-    all_context = []
-    all_snrs = []
+    filenames = {
+        'all_context': f'{args.output}_precomputed/context_{args.nevents}.npy',
+        'all_binary_labels': f'{args.output}_precomputed/binary_labels_{args.nevents}.npy',
+        'all_labels': f'{args.output}_precomputed/labels_{args.nevents}.npy',
+        'all_scores': f'{args.output}_precomputed/scores_{args.nevents}.npy',
+        'all_embeddings': f'{args.output}_precomputed/embeddings_{args.nevents}.npy',
+        'all_snrs': f'{args.output}_precomputed/snrs_{args.nevents}.npy'
+    }
+    datasets = {}
+    for key, filepath in filenames.items():
+        if os.path.exists(filepath):
+            print(f"Loading {filepath}...")
+            datasets[key] = np.load(filepath)
 
-    n_iter = int(args.nevents/batch_size)
-    test_loader = loader.test_dataloader()
-    test_iter = iter(test_loader)
-    for i in tqdm(range(n_iter), desc="Processing batches"):
-        clean_batch, glitch_batch = next(test_iter)
-        clean_batch = clean_batch.to(device)
-        glitch_batch = glitch_batch.to(device)
+    if datasets:
+        all_binary_labels = datasets['all_binary_labels']
+        all_scores = datasets['all_scores']
+        all_embeddings = datasets['all_embeddings']
+        all_labels = datasets['all_labels']
+        all_context = datasets['all_context']
+        all_snrs = datasets['all_snrs']
 
-        processed, labels, snrs = loader.on_after_batch_transfer([clean_batch, glitch_batch], None,
-            local_test=True)
+    else:
+        all_binary_labels = []
+        all_scores = []
+        all_embeddings = []
+        all_labels = []
+        all_context = []
+        all_snrs = []
 
-        embeddings = embed_model(processed)
+        n_iter = int(args.nevents/batch_size)
+        test_loader = loader.test_dataloader()
+        test_iter = iter(test_loader)
+        for i in tqdm(range(n_iter), desc="Processing batches"):
+            clean_batch, glitch_batch = next(test_iter)
+            clean_batch = clean_batch.to(device)
+            glitch_batch = glitch_batch.to(device)
+
+            processed, labels, snrs = loader.on_after_batch_transfer([clean_batch, glitch_batch], None,
+                local_test=True)
+
+            embeddings = embed_model(processed)
+
+            if args.conditioning:
+                context = frequency_cos_similarity(processed)
+                all_context.append(context.detach().cpu().numpy())
+                scores = metric_model(embeddings, context=context).detach().cpu().numpy() * (-1)
+            else:
+                scores = metric_model(embeddings).detach().cpu().numpy() * (-1)
+
+                # add averaging kernel
+            if args.averaging_kernel > 1:
+                kernel = np.ones((args.averaging_kernel,)) / args.averaging_kernel
+                scores = np.convolve(scores.flatten(), kernel, mode='valid').reshape(-1, scores.shape[1])
+
+            embeddings = embeddings.detach().cpu().numpy()
+
+            labels = labels.detach().cpu().numpy()
+            binary_labels = (~np.isin(labels, background_labels)).astype(int)
+
+
+            all_binary_labels.append(binary_labels)
+            all_labels.append(labels)
+            all_scores.append(scores)
+            all_embeddings.append(embeddings)
+            all_snrs.append(snrs.detach().cpu().numpy())
+
+            del clean_batch, glitch_batch, processed, embeddings, binary_labels, labels, scores, snrs
+            torch.cuda.empty_cache()
 
         if args.conditioning:
-            context = frequency_cos_similarity(processed)
-            all_context.append(context.detach().cpu().numpy())
-            scores = metric_model(embeddings, context=context).detach().cpu().numpy() * (-1)
-        else:
-            scores = metric_model(embeddings).detach().cpu().numpy() * (-1)
-        embeddings = embeddings.detach().cpu().numpy()
+            all_context = np.concatenate(all_context, axis=0)
+        all_binary_labels = np.concatenate(all_binary_labels, axis=0)
+        all_labels = np.concatenate(all_labels, axis=0)
+        all_scores = np.concatenate(all_scores, axis=0)
+        all_embeddings = np.concatenate(all_embeddings, axis=0)
+        all_snrs = np.concatenate(all_snrs, axis=0)
 
-        labels = labels.detach().cpu().numpy()
-        binary_labels = (~np.isin(labels, background_labels)).astype(int)
+        os.makedirs(f"{args.output}_precomputed", exist_ok=True)
+        np.save(f'{args.output}_precomputed/context_{args.nevents}.npy', all_context)
+        np.save(f'{args.output}_precomputed/binary_labels_{args.nevents}.npy', all_binary_labels)
+        np.save(f'{args.output}_precomputed/labels_{args.nevents}.npy', all_labels)
+        np.save(f'{args.output}_precomputed/scores_{args.nevents}.npy', all_scores)
+        np.save(f'{args.output}_precomputed/embeddings_{args.nevents}.npy', all_embeddings)
+        np.save(f'{args.output}_precomputed/snrs_{args.nevents}.npy', all_snrs)
 
+    # Define labels you do NOT want to apply SNR cut to
+    special_labels = [10, 11, 12]
 
-        all_binary_labels.append(binary_labels)
-        all_labels.append(labels)
-        all_scores.append(scores)
-        all_embeddings.append(embeddings)
-        all_snrs.append(snrs.detach().cpu().numpy())
+    # Mask for labels 10,11,12
+    special_mask = np.isin(all_labels, special_labels)
 
-        del clean_batch, glitch_batch, processed, embeddings, binary_labels, labels, scores, snrs
-        torch.cuda.empty_cache()
+    # Mask for SNR > 4
+    snr_mask = all_snrs > args.snr_cut
 
-    if args.conditioning:
-        all_context = np.concatenate(all_context, axis=0)
-    all_binary_labels = np.concatenate(all_binary_labels, axis=0)
-    all_labels = np.concatenate(all_labels, axis=0)
-    all_scores = np.concatenate(all_scores, axis=0)
-    all_embeddings = np.concatenate(all_embeddings, axis=0)
-    all_snrs = np.concatenate(all_snrs, axis=0)
+    # Combined mask:
+    # - Keep all special labels (10,11,12) without SNR cut
+    # - Apply SNR > 4 cut only to the others
+    final_mask = special_mask | (~special_mask & snr_mask)
 
-    np.save(f'{args.output}/context_{args.nevents}.npy', all_context)
-    np.save(f'{args.output}/binary_labels_{args.nevents}.npy', all_binary_labels)
-    np.save(f'{args.output}/labels_{args.nevents}.npy', all_labels)
-    np.save(f'{args.output}/scores_{args.nevents}.npy', all_scores)
-    np.save(f'{args.output}/embeddings_{args.nevents}.npy', all_embeddings)
-    np.save(f'{args.output}/snrs_{args.nevents}.npy', all_snrs)
+    print('Passed the SNR cut (for NOT 10/11/12)', 100 * np.mean(~special_mask & snr_mask))
 
-    # # Create mask where SNR > 4
-    # snr_mask = all_snrs > 4
-    # print('Passed hte SNR cut', 100 * np.mean(all_snrs > 4))
-    # # Apply mask
-    # all_context = all_context[snr_mask]
-    # all_binary_labels = all_binary_labels[snr_mask]
-    # all_labels = all_labels[snr_mask]
-    # all_scores = all_scores[snr_mask]
-    # all_embeddings = all_embeddings[snr_mask]
-    # all_snrs = all_snrs[snr_mask]
+    # Apply the final mask
+    all_context = all_context[final_mask]
+    all_binary_labels = all_binary_labels[final_mask]
+    all_labels = all_labels[final_mask]
+    all_scores = all_scores[final_mask]
+    all_embeddings = all_embeddings[final_mask]
+    all_snrs = all_snrs[final_mask]
 
     ########### PLOT CONTEXT
     # Mask based on label
@@ -241,7 +287,7 @@ if __name__=='__main__':
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC (All Signals)')
+    plt.title(f'{args.ifos} ROC (All Signals)')
     plt.legend(loc='lower right')
     plt.savefig(f'{args.output}/roc_combined.png')
     plt.clf()
@@ -273,7 +319,7 @@ if __name__=='__main__':
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('ROC Curves by Anomaly Class')
+    plt.title(f'{args.ifos} ROC Curves by Anomaly Class')
     plt.legend(loc='lower right')
     plt.savefig(f'{args.output}/rocs_bySignal.png')
 
@@ -311,7 +357,7 @@ if __name__=='__main__':
         color=custom_colors[:len(all_classes)]  # trim color list if needed
     )
 
-    plt.xlabel("NF log probability")
+    plt.xlabel(f"{args.ifos} NF log probability")
     plt.legend()
     plt.savefig(f'{args.output}/metric.png')
     plt.clf()
@@ -331,7 +377,7 @@ if __name__=='__main__':
         raise ValueError("No anomaly samples found in the test set!")
 
     num_bins = 10
-    bin_edges = np.logspace(-2, 3, num_bins + 1)
+    bin_edges = np.linspace(4, 100, num_bins + 1)  # 10 bins between 4 and 100
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
     plt.figure(figsize=(8,6))
@@ -363,18 +409,18 @@ if __name__=='__main__':
 
     plt.xlabel("SNR")
     plt.ylabel("Fraction of events detected")
-    plt.title("Fraction of Events Detected at 1/Year FAR vs. SNR")
+    plt.title(f"{args.ifos} Fraction of Events Detected at 1/10 Years FAR vs. SNR")
     plt.ylim([0, 1.05])
-    plt.xscale('log')
+    # plt.xscale('log')
     plt.legend()
     plt.grid(True)
     plt.savefig(f'{args.output}/fraction_1overYearFAR_SNR.png')
 
-    bins = np.logspace(1,7,100)
-    for i,sig in enumerate(signal_classes):
-        h=plt.hist(all_snrs[all_labels==i+1],bins=np.logspace(-3,3,100),label=sig,histtype='step')
-    plt.xscale('log')
-    plt.xlabel("SNR")
-    plt.legend()
-    plt.savefig(f'{args.output}/snr_histograms.png')
-    plt.clf()
+    # bins = np.logspace(1,7,100)
+    # for i,sig in enumerate(signal_classes):
+    #     h=plt.hist(all_snrs[all_labels==i+1],bins=np.logspace(-3,3,100),label=sig,histtype='step')
+    # plt.xscale('log')
+    # plt.xlabel("SNR")
+    # plt.legend()
+    # plt.savefig(f'{args.output}/snr_histograms.png')
+    # plt.clf()
