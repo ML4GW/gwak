@@ -51,6 +51,7 @@ if __name__=='__main__':
     parser.add_argument('--ifos', type=str)
     parser.add_argument('--output', type=str)
     parser.add_argument('--threshold-1yr', type=float)
+    parser.add_argument('--snr-cut', type=float, default=0)
     parser.add_argument('--conditioning', type=str2bool, default=False)
     parser.add_argument('--averaging-kernel', type=int, default=1)
     args = parser.parse_args()
@@ -238,7 +239,7 @@ if __name__=='__main__':
     special_mask = np.isin(all_labels, special_labels)
 
     # Mask for SNR > 4
-    snr_mask = all_snrs > 4
+    snr_mask = all_snrs > args.snr_cut
 
     # Combined mask:
     # - Keep all special labels (10,11,12) without SNR cut

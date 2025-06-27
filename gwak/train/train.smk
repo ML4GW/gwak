@@ -150,6 +150,7 @@ rule make_plots_i:
             --output {output} \
             --conditioning {params.conditioning} \
             --nevents 100000 \
+            --snr-cut 4 \
             --threshold-1yr 20 '
 
 rule make_plots:
