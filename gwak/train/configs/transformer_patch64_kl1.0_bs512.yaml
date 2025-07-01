@@ -31,18 +31,14 @@ model:
     dropout: 0.1
     d_output: 10
     d_contrastive_space: 10
-    temperature: 0.05
+    temperature: 0.5
     supervised_simclr: true
     lr: 1e-3
     min_lr: 1e-6
     total_steps: null
     warmup_fraction: 0.02
     patch_size: 64
-    use_classifier: true
-    num_classes: 11
-    lambda_classifier: 1.0
-    class_anneal_epochs: 20
-    classifier_hidden_dims: [16,16]
+    use_classifier: false
 data:
   class_path: dataloader.SignalDataloader
   init_args:

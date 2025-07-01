@@ -171,7 +171,7 @@ class WhiteNoiseBurstBBC(BasePrior):
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
             int_hdot_squared = LogUniform(3.0e-40, 2.5e-34),
-            duration = LogUniform(1e-2,2)
+            duration = LogUniform(2e-2,2)
         )
 
 class CuspBBC(BasePrior):

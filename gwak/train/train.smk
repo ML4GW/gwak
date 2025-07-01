@@ -26,7 +26,8 @@ cl_configs = [
     'resnet_kl1.0_bs512_noClassifier_noMultiSG',
     'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus',
     'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
-    'iTransformer_test'
+    'iTransformer_test',
+    'resnet_kl1.0_bs512'
     ]
 fm_configs = [
     'NF_onlyBkg',
