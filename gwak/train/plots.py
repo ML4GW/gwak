@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import lightning.pytorch as pl
 from sklearn.metrics import roc_curve, auc
 
+from ml4gw.distributions import PowerLaw
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
@@ -133,6 +134,7 @@ if __name__=='__main__':
         num_workers=num_workers,
         data_saving_file=data_saving_file,
         ifos=args.ifos,
+        snr_prior=PowerLaw(index=3, minimum=3, maximum=30),
         glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
     )
 
