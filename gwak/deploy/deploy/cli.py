@@ -32,8 +32,9 @@ def main(args=None):
             skip=skip_keys
         ) 
         args = subparser.parse_args()
+        args = subparser.instantiate_classes(args)
         delattr(args, "subcommand")
-        args = args.as_dict()
+
         export(**args)
 
     if subcommand == "infer":
@@ -45,22 +46,24 @@ def main(args=None):
             skip=skip_keys
         ) 
         args = subparser.parse_args()
+        args = subparser.instantiate_classes(args)
         delattr(args, "subcommand")
-        args = args.as_dict()
+
         infer(**args)
 
     if subcommand == "deploy":
         from deploy.slurm_handeler import slurm_infer_wrapper    
         
         subparser = build_parser(action=ActionConfigFile)
-        # breakpoint()
+
         subparser.add_function_arguments(
             slurm_infer_wrapper, 
             skip=skip_keys
         )
         args = subparser.parse_args()
+        args = subparser.instantiate_classes(args)
         delattr(args, "subcommand")
-        args = args.as_dict()
+
         slurm_infer_wrapper(**args)
     
     
