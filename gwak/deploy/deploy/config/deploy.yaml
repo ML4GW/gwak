@@ -24,8 +24,8 @@ slurm_kwargs:
 run_name: null
 # Data arguments
 ifos: ["H1", "L1"]
-Tb: 31536000 # Tb = 0 will run zero-lag
-fname: /fred/oz994/andy/Data/gwak/HL # Sever dependent
+Tb: 0 # Tb = 0 will run zero-lag
+fname: /fred/oz994/andy/Data/gwak/bbc/O4_test_MDC_short-0/HL # Sever dependent
 psd_length: 64
 stride_batch_size: 256
 sample_rate: 4096
@@ -34,7 +34,7 @@ data_format: h5 # gwf
 inference_sampling_rate: 4
 
 # Triton and Model arguments
-result_dir: /fred/oz994/andy/Output/gwak
+result_dir: /fred/oz994/andy/Output/gwak-bbc
 project: combination
 grpc_port: 8001
 image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent

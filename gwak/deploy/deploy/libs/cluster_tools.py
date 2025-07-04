@@ -24,7 +24,8 @@ def write_infer_core_config(
                     f.write(f"  - {item}\n")
 
             else:
-                value = value or "null"
+                if value is None:
+                    value = "null"
                 f.write(f"{key}: {value}\n")
                 
     return yaml_file
