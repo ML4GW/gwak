@@ -93,6 +93,7 @@ if __name__=='__main__':
         num_workers=num_workers,
         data_saving_file=data_saving_file,
         ifos=args.ifos,
+        snr_prior=torch.distributions.Uniform(3, 30),
         glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
     )
 

@@ -77,8 +77,8 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         wrapper = FlowWrapper(module.model, module.standardizer).to("cuda:0")
         wrapper.eval()
         # this is for spline
-        example_input = torch.randn(1, module.model._transform._transforms[0].autoregressive_net.initial_layer.in_features).to("cuda:0")
-        # example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
+        # example_input = torch.randn(1, module.model._transform._transforms[0].autoregressive_net.initial_layer.in_features).to("cuda:0")
+        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
         # if module.conditioning:
         example_context = torch.randn(1, 1).to("cuda:0")
         traced = torch.jit.trace(wrapper, (example_input, example_context))
@@ -370,13 +370,14 @@ class BackgroundFlowModel(GwakBaseModelClass):
         # Define MAF Flow
         transforms = []
         for _ in range(n_flow_steps):
-            maf = MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
+            # maf = MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
+            maf = MaskedAffineAutoregressiveTransform(
                 features=self.n_dims,
                 hidden_features=hidden_dim,
-                num_bins=num_bins,
                 num_blocks=4,
-                tail_bound=8,
-                tails='linear',
+                # num_bins=num_bins,
+                # tail_bound=8,
+                # tails='linear',
                 context_features=1 if self.conditioning else 0
             )
             transforms.append(maf)
