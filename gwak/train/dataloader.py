@@ -549,6 +549,7 @@ class SignalDataloader(GwakBaseDataloader):
         snr_prior: Union[TransformedDistribution,Distribution],
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
+        rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -563,6 +564,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_anneal_epochs = snr_anneal_epochs
         self.has_glitch = "Glitch" in self.signal_classes
         self.cache_dir = cache_dir
+        self.rebalance_classes = rebalance_classes
 
         self.all_signal_labels = {
             "SineGaussian":1,
@@ -626,22 +628,23 @@ class SignalDataloader(GwakBaseDataloader):
             self.num_per_class[i] += 1
 
         # new computation for when several classes have the same label (e.g. merging strings)
-        uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
-        frac_per_label = 1.0/len(uniq)
-        counts_per_label = {}
-        for label,ct in zip(uniq,counts):
-            frac = 1.0 / ct
-            counts_per_label[label] = floor(frac*frac_per_label*self.batch_size)
-        self.num_per_class = [counts_per_label[self.all_signal_labels[signal_class]] for signal_class in self.signal_classes]
-        if np.sum(self.num_per_class) != self.batch_size:
-            if np.sum(self.num_per_class) > self.batch_size:
-                extra = np.sum(self.num_per_class) - self.batch_size
-                for i in range(extra):
-                    self.num_per_class[i] -= 1
-            else:
-                deficit = self.batch_size - np.sum(self.num_per_class)
-                for i in range(deficit):
-                    self.num_per_class[i] += 1
+        if self.rebalance_classes:
+            uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
+            frac_per_label = 1.0/len(uniq)
+            counts_per_label = {}
+            for label,ct in zip(uniq,counts):
+                frac = 1.0 / ct
+                counts_per_label[label] = floor(frac*frac_per_label*self.batch_size)
+            self.num_per_class = [counts_per_label[self.all_signal_labels[signal_class]] for signal_class in self.signal_classes]
+            if np.sum(self.num_per_class) != self.batch_size:
+                if np.sum(self.num_per_class) > self.batch_size:
+                    extra = np.sum(self.num_per_class) - self.batch_size
+                    for i in range(extra):
+                        self.num_per_class[i] -= 1
+                else:
+                    deficit = self.batch_size - np.sum(self.num_per_class)
+                    for i in range(deficit):
+                        self.num_per_class[i] += 1
         
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
@@ -907,7 +910,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
         if waveforms is not None:
-            snrs = compute_network_snr(waveforms, psds_resampled, self.sample_rate)
+            snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate)
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
@@ -979,6 +982,8 @@ class SignalDataloader(GwakBaseDataloader):
 
         if local_test or self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             clean_batch, glitch_batch = batch
+            clean_batch = clean_batch.to('cuda' if torch.cuda.is_available() else 'cpu')
+            glitch_batch = glitch_batch.to('cuda' if torch.cuda.is_available() else 'cpu') if glitch_batch is not None else glitch_batch
 
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
             waveforms, params, ras, decs, phics = self.generate_waveforms(clean_batch.shape[0])
@@ -1022,7 +1027,7 @@ class SignalDataloader(GwakBaseDataloader):
                 glitch_mask = (torch.where(indexed_labels == self.signal_classes.index("Glitch")+1))[0]
                 #glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
                 clean_batch[glitch_mask] = glitch_batch # should now only load in exactly enough glitch events
-            perm = torch.randperm(clean_batch.size(0)).to('cuda')
+            perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else torch.randperm(clean_batch.size(0))
             perm = perm.to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
             if local_test:
