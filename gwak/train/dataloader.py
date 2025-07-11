@@ -10,8 +10,10 @@ from typing import Callable, List, Optional, Union
 import wandb
 import torch
 import torch.nn.functional as F
+from torch.utils.data import TensorDataset
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
+from torch.utils.data import random_split
 
 import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
@@ -19,13 +21,47 @@ from ml4gw.transforms import SpectralDensity, Whiten, SnrRescaler
 from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_network_snr
 
 from torch.distributions.uniform import Uniform
-from ml4gw.distributions import Cosine
+from torch.distributions import TransformedDistribution, Distribution
+from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 
 from gwak import data
 from gwak.data.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
+
+class EmbeddingLoader(pl.LightningDataModule):
+    def __init__(self, embedding_path, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
+        super().__init__()
+        self.embedding_path = Path(embedding_path)
+        self.c_path = Path(c_path) if c_path else None
+        self.val_split = val_split
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
+    def setup(self, stage=None):
+        x = torch.tensor(np.load(self.embedding_path), dtype=torch.float32)
+
+        if self.c_path and self.c_path.exists():
+            c = torch.tensor(np.load(self.c_path), dtype=torch.float32)
+            assert len(x) == len(c), "x and c must have the same number of samples"
+            dataset = TensorDataset(x, c)
+        else:
+            dataset = TensorDataset(x)
+
+        val_size = int(len(dataset) * self.val_split)
+        train_size = len(dataset) - val_size
+        self.train_dataset, self.val_dataset = random_split(dataset, [train_size, val_size])
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
+
+    def test_dataloader(self):
+        return None
+
 
 class CleanGlitchPairedDataset(torch.utils.data.IterableDataset):
     def __init__(self, clean_ds, glitch_ds):
@@ -328,8 +364,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
             "fftlength": fftlength,
         }
 
-
-
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
         all_files = sorted(all_files)
@@ -508,11 +542,14 @@ class SignalDataloader(GwakBaseDataloader):
         extra_kwargs, # any additional kwargs a particular signal needs to generate waveforms (e.g. ringdown duration)
         cache_dir: Optional[str] = None,
         *args,
+
         loader_mode: str = "clean",
         fakeGlitch_types: Optional[List[str]] = None, # if we want to specify set of signals for fakeGlitch generation, otherwise use all available
-        anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning)
+        anneal_snr: bool = False, # whether to anneal the SNR of the generated waveforms (curriculum learning
+        snr_prior: Union[TransformedDistribution,Distribution],
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
+        rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -527,6 +564,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_anneal_epochs = snr_anneal_epochs
         self.has_glitch = "Glitch" in self.signal_classes
         self.cache_dir = cache_dir
+        self.rebalance_classes = rebalance_classes
 
         self.all_signal_labels = {
             "SineGaussian":1,
@@ -539,7 +577,8 @@ class SignalDataloader(GwakBaseDataloader):
             "CCSN":6,
             "Background":7,
             "Glitch":7,
-            "FakeGlitch":8
+            "FakeGlitch":8,
+            "MultiSineGaussian":9
         }
         self.all_signal_label_names = {
             1:"SineGaussian",
@@ -549,7 +588,8 @@ class SignalDataloader(GwakBaseDataloader):
             5:"WhiteNoiseBurst",
             6:"CCSN",
             7:"Bkg/Glitch",
-            8:"FakeGlitch"
+            8:"FakeGlitch",
+            9:"MultiSineGaussian"
         }
 
         self.signal_configs = []
@@ -588,22 +628,23 @@ class SignalDataloader(GwakBaseDataloader):
             self.num_per_class[i] += 1
 
         # new computation for when several classes have the same label (e.g. merging strings)
-        uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
-        frac_per_label = 1.0/len(uniq)
-        counts_per_label = {}
-        for label,ct in zip(uniq,counts):
-            frac = 1.0 / ct
-            counts_per_label[label] = floor(frac*frac_per_label*self.batch_size)
-        self.num_per_class = [counts_per_label[self.all_signal_labels[signal_class]] for signal_class in self.signal_classes]
-        if np.sum(self.num_per_class) != self.batch_size:
-            if np.sum(self.num_per_class) > self.batch_size:
-                extra = np.sum(self.num_per_class) - self.batch_size
-                for i in range(extra):
-                    self.num_per_class[i] -= 1
-            else:
-                deficit = self.batch_size - np.sum(self.num_per_class)
-                for i in range(deficit):
-                    self.num_per_class[i] += 1
+        if self.rebalance_classes:
+            uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
+            frac_per_label = 1.0/len(uniq)
+            counts_per_label = {}
+            for label,ct in zip(uniq,counts):
+                frac = 1.0 / ct
+                counts_per_label[label] = floor(frac*frac_per_label*self.batch_size)
+            self.num_per_class = [counts_per_label[self.all_signal_labels[signal_class]] for signal_class in self.signal_classes]
+            if np.sum(self.num_per_class) != self.batch_size:
+                if np.sum(self.num_per_class) > self.batch_size:
+                    extra = np.sum(self.num_per_class) - self.batch_size
+                    for i in range(extra):
+                        self.num_per_class[i] -= 1
+                else:
+                    deficit = self.batch_size - np.sum(self.num_per_class)
+                    for i in range(deficit):
+                        self.num_per_class[i] += 1
         
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
@@ -619,6 +660,17 @@ class SignalDataloader(GwakBaseDataloader):
             fakeGlitch_config = copy.deepcopy(self.config)
             fakeGlitch_config['ringdown_duration'] = 0.9 # need to set this by hand if there are BBHs included in fake glitch set
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
+
+        self.snr_prior = snr_prior
+        # PowerLaw(snr_low, snr_high, index=3)
+        rescaler = SnrRescaler(
+            num_channels = len(self.ifos), 
+            sample_rate = self.sample_rate,
+            waveform_duration = self.kernel_length + 1,
+            highpass = 30,
+            dtype=torch.float64
+        )
+        self.rescaler = rescaler.to('cuda') if torch.cuda.is_available() else rescaler
 
     def get_snr_factor(self,current_epoch):
         f = (1.0/self.snr_init_factor)**(1.0/self.snr_anneal_epochs)
@@ -712,7 +764,7 @@ class SignalDataloader(GwakBaseDataloader):
         for i, signal_class in enumerate(self.signal_classes):
             #print("Generating waveforms for class:", signal_class)
             if signal_class == 'BBH':
-                
+
                 responses, params, ra, dec, phic = generate_waveforms_bbh(
                     self.num_per_class[i],
                     self.priors[i],
@@ -776,6 +828,13 @@ class SignalDataloader(GwakBaseDataloader):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
+        psd_data = psd_data.double()
+        self.rescaler.fit(
+            psd_data[:, 0, :].to("cpu"), 
+            psd_data[:, 1, :].to("cpu"), 
+            fftlength=self.fftlength,
+        )
+        psd_data.to(batch.device)
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
         spectral_density = SpectralDensity(
@@ -789,8 +848,11 @@ class SignalDataloader(GwakBaseDataloader):
         psds = spectral_density(psd_data.double())
         if torch.any(torch.isnan(psds)):
             self._logger.info('psds fucked')
-
-        if self.anneal_snr:
+            
+        # This part is preserved for reviewing SNR rescalser PR,
+        # will remove after the PR been accepted. 
+        # if self.anneal_snr:
+        if self.snr_prior is None: 
             # if we are annealing the SNR, we need to scale the waveforms
             snr_factor = self.get_snr_factor(self.trainer.current_epoch)
             if waveforms is not None:
@@ -808,6 +870,7 @@ class SignalDataloader(GwakBaseDataloader):
             waveforms = list(torch.unbind(waveforms,dim=0))
             left = window_len//2
             right = window_len - left
+
             for i in range(len(waveforms)):
                 left_idx = imax[i] - left
                 right_idx = imax[i] + right - 1
@@ -821,7 +884,12 @@ class SignalDataloader(GwakBaseDataloader):
             if torch.any(torch.isnan(waveforms)):
                 self._logger.info('centered waveforms fucked')
 
-            injected = batch + waveforms
+            rescaled_waveforms, snr_factor = self.rescaler.forward(
+                responses=waveforms, 
+                target_snrs=self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
+            )
+
+            injected = batch + rescaled_waveforms
         else:
             injected = batch
 
@@ -842,7 +910,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
         if waveforms is not None:
-            snrs = compute_network_snr(waveforms, psds_resampled, self.sample_rate)
+            snrs = snr_factor # compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate)
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
@@ -914,6 +982,8 @@ class SignalDataloader(GwakBaseDataloader):
 
         if local_test or self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
             clean_batch, glitch_batch = batch
+            clean_batch = clean_batch.to('cuda' if torch.cuda.is_available() else 'cpu')
+            glitch_batch = glitch_batch.to('cuda' if torch.cuda.is_available() else 'cpu') if glitch_batch is not None else glitch_batch
 
             # generate waveforms (method also returns the params used to generate the waveforms; these are not used in vanilla loader but useful for augmentation loader)
             waveforms, params, ras, decs, phics = self.generate_waveforms(clean_batch.shape[0])
@@ -931,14 +1001,21 @@ class SignalDataloader(GwakBaseDataloader):
             if torch.any(torch.isnan(clean_batch)):
                 self._logger.info('batch fucked')
             # inject waveforms; maybe also whiten data preprocess etc..
-            _clean_batch = self.multiInject(waveforms, clean_batch)
+            if local_test:
+                _clean_batch, _snrs = self.multiInject_SNR(waveforms, clean_batch)
+            else:
+                _clean_batch = self.multiInject(waveforms, clean_batch)
             if self.has_glitch:
                 #glitch_batch = self.multiInject(waveforms, glitch_batch)
                 glitch_batch = self.inject(glitch_batch, waveforms[self.signal_classes.index("Glitch")])
             while torch.any(torch.isnan(_clean_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
                 waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])
-                _clean_batch = self.multiInject(waveforms, clean_batch)
+                if local_test:
+                    _clean_batch, _snrs = self.multiInject_SNR(waveforms, clean_batch)
+                else:
+                    _clean_batch = self.multiInject(waveforms, clean_batch)
+
 
             clean_batch = _clean_batch
             # new labeling scheme
@@ -950,14 +1027,18 @@ class SignalDataloader(GwakBaseDataloader):
                 glitch_mask = (torch.where(indexed_labels == self.signal_classes.index("Glitch")+1))[0]
                 #glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
                 clean_batch[glitch_mask] = glitch_batch # should now only load in exactly enough glitch events
-            perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else perm
+            perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else torch.randperm(clean_batch.size(0))
+            perm = perm.to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
+            if local_test:
+                snrs = _snrs[perm]
             labels = labels[perm]
             indexed_labels = indexed_labels.to('cuda') if torch.cuda.is_available() else indexed_labels
             indexed_labels = indexed_labels[perm]
 
         # a hack to use this function for plotting, outside of the plotting script
-        if local_test: return batch, indexed_labels
+        if local_test:
+            return batch, indexed_labels, snrs
 
         if self.trainer.training and (self.data_saving_file is not None):
             # Set a warning that when the global_step exceed 1e6,
@@ -986,7 +1067,7 @@ class SignalDataloader(GwakBaseDataloader):
                 if waveforms[i] is not None:
                     self.data_group.create_dataset(inj_step, data = waveforms[i].cpu())
 
-        return batch, labels
+        return batch, labels,
 
 
 class AugmentationSignalDataloader(SignalDataloader):

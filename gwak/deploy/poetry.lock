@@ -2056,17 +2056,6 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 use-chardet-on-py3 = ["chardet (>=3.0.2,<6)"]
 
 [[package]]
-name = "semver"
-version = "3.0.4"
-description = "Python helper for Semantic Versioning (https://semver.org)"
-optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "semver-3.0.4-py3-none-any.whl", hash = "sha256:9c824d87ba7f7ab4a1890799cec8596f15c1241cb473404ea1cb0c55e4b04746"},
-    {file = "semver-3.0.4.tar.gz", hash = "sha256:afc7d8c584a5ed0a11033af086e8af226a9c0b206f313e0301f8dd7b6b589602"},
-]
-
-[[package]]
 name = "setuptools"
 version = "75.8.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -2099,16 +2088,14 @@ files = [
 
 [[package]]
 name = "spython"
-version = "0.2.14"
+version = "0.3.14"
 description = "Command line python tool for working with singularity."
 optional = false
 python-versions = "*"
 files = [
-    {file = "spython-0.2.14.tar.gz", hash = "sha256:49e22fbbdebe456b27ca17d30061489db8e0f95e62be3623267a23b85e3ce0f0"},
+    {file = "spython-0.3.14-py3-none-any.whl", hash = "sha256:72968583e498bc2a51f9acd0ed6bc0d7d1f7ccd491feaba5e2f7d944bc51da3a"},
+    {file = "spython-0.3.14.tar.gz", hash = "sha256:8ad53ef034395cfa2d8a710cc1c3638e4475e5bbc6a2842d317db8013c2e4188"},
 ]
-
-[package.dependencies]
-semver = ">=2.8.1"
 
 [[package]]
 name = "sympy"
@@ -2513,4 +2500,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "0c7689e0a155b326afe9b89b420d681920e3c9329dab2719e660c94f8dd392e7"
+content-hash = "5defede4784ef5b242a4d7a204e539d56fe4a33a063cfd80db875397f3d4641c"

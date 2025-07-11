@@ -32,7 +32,7 @@ from PIL import Image
 from io import BytesIO
 import shutil
 
-from transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention
+from transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention, InvertedEncoderTransformer
 from ssm import DropoutNd, S4DKernel, S4D, S4Model
 from nets import MLP, Encoder, Decoder
 from callback import ModelCheckpoint
@@ -577,8 +577,7 @@ class Tarantula(SimCLRBase):
                     dim=self.latent_dim,
                     nhead=self.num_head,
                     dropout=self.cls_dropout,
-                    dim_factor_feedforward=self.feedforward_factor,
-                    patch_size=self.patch_size
+                    dim_factor_feedforward=self.feedforward_factor
                 )
             )
         self.class_attn = ClassAttention(self.latent_dim, class_attn_blocks)
@@ -695,3 +694,126 @@ class Contour(SimCLRBase):
             return {"optimizer": optimizer, "lr_scheduler": sched}
         else:
             return optimizer
+        
+class iTransformer(SimCLRBase):
+    def __init__(
+        self,
+        num_ifos: Union[int,str] = 2,
+        num_timesteps: int = 4096,
+        latent_dim: int = 128,
+        num_layers: int = 4,
+        num_head: int = 2,
+        num_cls_layers: int = 2,
+        fc_output_dims:list[int] = [],
+        d_output:int = 16,
+        d_contrastive_space: int = 16,
+        normalize: bool = True,
+        dropout: float = 0.1,
+        cls_dropout: float = 0.0,
+        feedforward_factor:int = 4,
+        temperature: float = 0.1,
+        supervised_simclr: bool = False,
+        lr: float = 1e-4,
+        min_lr: float = 1e-6,
+        total_steps: int = None,
+        warmup_fraction: float = 0.1,
+        use_classifier: bool = False,
+        num_classes: int = 8,
+        lambda_classifier: float = 0.5,
+        class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
+        anneal_classifier: bool = True, # whether to anneal classifier loss
+        temperature_init: Optional[float] = None, # initial temperature to start with, if None then constant temp throughout
+        n_temp_anneal: int = 10, # number of epochs to anneal temperature
+        classifier_hidden_dims: Optional[list[int]] = None
+        ):
+
+        super().__init__()
+        self.save_hyperparameters()
+
+        self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
+        self.num_timesteps = num_timesteps
+        self.latent_dim = latent_dim
+        self.num_layers = num_layers
+        self.num_head = num_head
+        self.num_cls_layers = num_cls_layers
+        self.fc_output_dims = fc_output_dims
+        self.d_output = d_output
+        self.d_contrastive_space = d_contrastive_space
+        self.normalize = normalize
+        self.dropout = dropout
+        self.cls_dropout = cls_dropout
+        self.feedforward_factor = feedforward_factor
+        self.temperature = temperature
+        self.supervised_simclr = supervised_simclr
+        self.lr = lr
+        self.min_lr = min_lr
+        self.total_steps = total_steps
+        self.warmup_fraction = warmup_fraction
+        self.use_classifier = use_classifier
+        self.num_classes = num_classes
+        self.lambda_classifier = lambda_classifier
+        self.lambda_classifier_original = lambda_classifier
+        self.class_anneal_epochs = class_anneal_epochs
+        self.anneal_classifier = anneal_classifier
+        self.temperature = temperature
+        self.temperature_init = temperature_init
+        self.n_temp_anneal = n_temp_anneal
+        self.classifier_hidden_dims = classifier_hidden_dims
+        
+        # define the self attention blocks
+        self.self_attn = InvertedEncoderTransformer(
+            num_features=self.num_timesteps,
+            num_layers=self.num_layers,
+            nhead=self.num_head,
+            latent_dim=self.latent_dim,
+            dim_factor_feedforward=self.feedforward_factor,
+            embed_first=True,
+        )
+
+        # define the class attention blocks
+        class_attn_blocks = []
+        for i in range(self.num_cls_layers):
+            class_attn_blocks.append(
+                ClassAttentionBlock(
+                    dim=self.latent_dim,
+                    nhead=self.num_head,
+                    dropout=self.cls_dropout,
+                    dim_factor_feedforward=self.feedforward_factor
+                )
+            )
+        self.class_attn = ClassAttention(self.latent_dim, class_attn_blocks)
+
+        # additional linear layer to project class token to d_output
+        self.fc_out = MLP(d_input=self.latent_dim, hidden_dims=self.fc_output_dims, d_output=self.d_output)
+
+        # define the model
+        self.model = nn.Sequential(self.self_attn,self.class_attn,self.fc_out)
+
+        # projection head with 1 hidden layer for SimCLR
+        self.projection_head = MLP(d_input=self.d_output,
+                                   hidden_dims=[self.d_output],
+                                   d_output=self.d_contrastive_space
+        )
+        if self.use_classifier:
+            hidden_dims = [4*self.d_output for _ in range(2)] if self.classifier_hidden_dims is None else self.classifier_hidden_dims
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
+                                d_output = self.num_classes)
+            
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
+                                                  contrast_mode='all', 
+                                                  base_temperature=self.temperature)
+
+        self.val_outputs = []
+        self.save_hyperparameters()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
+        scheduler = WarmupCosineAnnealingLR(optimizer,self.total_steps,self.lr,self.min_lr,self.warmup_fraction)
+        return {
+            "optimizer":optimizer,
+            "lr_scheduler": {
+                "scheduler":scheduler,
+                "interval":"step",
+                "frequency":1
+            }
+        }

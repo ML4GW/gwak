@@ -41,46 +41,28 @@ class GwakBaseModelClass(pl.LightningModule):
         logger.setLevel(logging.INFO)
         return logger
 
+class Standardizer(nn.Module):
+    def __init__(self,mean,std):
+        super().__init__()
+        self.mean = mean
+        self.std = std
 
-class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
-
-    def on_train_end(self, trainer, pl_module):
-        torch.cuda.empty_cache()
-
-        module = pl_module.__class__.load_from_checkpoint(
-            self.best_model_path,
-            **pl_module.hparams['init_args']
-        )
-
-        module.model.eval()
-        # Modifiy these to read the last training/valdation data
-        # to acess the input shape.
-        # X = torch.randn(1, 200, 2) # GWAK 1
-        X = torch.randn(1, 2, 200) # GWAK 2
-
-        # trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
-        trace = torch.jit.script(module.model.to("cpu"))
-        save_dir = trainer.logger.log_dir or trainer.logger.save_dir
-
-        with open(os.path.join(save_dir, "model_JIT.pt"), "wb") as f:
-            torch.jit.save(trace, f)
-
-
-import torch.nn as nn
+    def forward(self,x):
+        return (x-self.mean.to(x))/self.std.to(x)
 
 class FlowWrapper(nn.Module):
-    def __init__(self, flow):
+    def __init__(self, flow, standardizer):
         super().__init__()
         self.flow = flow
+        self.standardizer = standardizer
 
-    def forward(self, x):
-        return self.flow.log_prob(x)
+    def forward(self, x, context):
+        x = self.standardizer(x)
+        return self.flow.log_prob(inputs=x,context=context)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
     def on_train_end(self, trainer, pl_module):
-        import torch.nn as nn
-        import os
 
         torch.cuda.empty_cache()
 
@@ -92,18 +74,24 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         module.model.eval()
 
         # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model).to("cuda:0")
+        wrapper = FlowWrapper(module.model, module.standardizer).to("cuda:0")
         wrapper.eval()
+        # this is for spline
+        # example_input = torch.randn(1, module.model._transform._transforms[0].autoregressive_net.initial_layer.in_features).to("cuda:0")
         example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
+        # if module.conditioning:
+        example_context = torch.randn(1, 1).to("cuda:0")
+        traced = torch.jit.trace(wrapper, (example_input, example_context))
+        # traced = torch.jit.script(wrapper)
 
-        # Trace the wrapped model
-        traced = torch.jit.trace(wrapper, example_input)
+        # else:
+        #     traced = torch.jit.trace(wrapper, (example_input))
 
         # Save the traced model
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
+        os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, "model_JIT.pt")
         traced.save(save_path)
-
 
 class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
@@ -259,31 +247,23 @@ class MLPModel(nn.Module):
 class NonLinearClassifier(GwakBaseModelClass):
     def __init__(
             self,
-            backgrounds: str = '/home/hongyin.chen/whiten_timeslide.h5',
-            ckpt: str = "../output/test_S4_fixedSignals_0p5sec_v2/lightning_logs/2wla29uz/checkpoints/33-1700.ckpt",
-            cfg_path: str = "../output/test_S4_fixedSignals_0p5sec_v2/config.yaml",
+            embedding_path: str=None,
+            embedding_model: str=None,
             new_shape=128,
             n_dims=16,
+            c_path=None,
+            means=None,
+            stds=None,
+            conditioning=None,
             learning_rate=1e-3,
             hidden_dim=32):
         super().__init__()
         self.model = MLPModel(n_dims, hidden_dim)
 
-        with h5py.File(backgrounds, "r") as h:
-            data = h["data"][:128*10*20, :, :1024]
-
-        self.backgrounds, self.val_backgrounds = train_test_split(data, test_size=0.2, random_state=42)
-        self.backgrounds = torch.tensor(self.backgrounds, dtype=torch.float32).to("cpu")
-        self.val_backgrounds = torch.tensor(self.val_backgrounds, dtype=torch.float32).to("cpu")
-
-        self.ckpt = ckpt
-        self.cfg_path = cfg_path
-
-        with open(self.cfg_path, "r") as fin:
-            cfg = yaml.load(fin, yaml.FullLoader)
-        self.graph = Crayon.load_from_checkpoint(self.ckpt, **cfg['model']['init_args'])
+        self.graph = torch.jit.load(embedding_model)
         self.graph.eval()
         self.graph.to(device=self.device)
+        self.get_logger().info(f"Loaded embedding model from {embedding_model}")
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
@@ -297,12 +277,16 @@ class NonLinearClassifier(GwakBaseModelClass):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def training_step(self, batch, batch_idx):
-        i = batch_idx
-        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
+
+        batch, labels = batch
+        # 7 and 8 are background labels fixed from the dataset
+        # Create masks
+        background_mask = (labels == 7) | (labels == 8)
+        signal_mask = ~background_mask  # everything else
 
         # Feature extraction
-        signal_feats = self.graph.model(batch[0])
-        background_feats = self.graph.model(small_bkgs)
+        signal_feats = self.graph(batch[signal_mask])
+        background_feats = self.graph(batch[background_mask])
 
         # Predictions
         signal_preds = self.forward(signal_feats)
@@ -323,10 +307,16 @@ class NonLinearClassifier(GwakBaseModelClass):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        small_bkgs = self.val_backgrounds.to(self.device)
 
-        signal_feats = self.graph.model(batch[0])
-        background_feats = self.graph.model(small_bkgs)
+        batch, labels = batch
+        # 7 and 8 are background labels fixed from the dataset
+        # Create masks
+        background_mask = (labels == 7) | (labels == 8)
+        signal_mask = ~background_mask  # everything else
+
+        # Feature extraction
+        signal_feats = self.graph(batch[signal_mask])
+        background_feats = self.graph(batch[background_mask])
 
         signal_preds = self.forward(signal_feats)
         background_preds = self.forward(background_feats)
@@ -353,122 +343,130 @@ class NonLinearClassifier(GwakBaseModelClass):
 class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
-            embedding_model: str,
-            ckpt: str = "output/S4_SimCLR_multiSignalAndBkg/lightning_logs/8wuhxd59/checkpoints/47-2400.ckpt",
-            cfg_path: str = "output/S4_SimCLR_multiSignalAndBkg/config.yaml",
+            embedding_model: str = None,
+            means: Optional[str] = None,
+            stds: Optional[str] = None,
             new_shape=128,
             n_dims=8,
             n_flow_steps=4,
             hidden_dim=64,
+            num_bins=50,
             learning_rate=1e-3,
-            use_freq_correlation=False
+            conditioning=False
     ):
         super().__init__()
 
         # Load feature extractor
-        if embedding_model:
-            self.graph = torch.jit.load(embedding_model)
+        self.embedding_model = embedding_model
+        if self.embedding_model:
+            self.graph = torch.jit.load(self.embedding_model)
             self.graph.eval()
             self.graph.to(device=self.device)
             self.get_logger().info(f"Loaded embedding model from {embedding_model}")
-        else:
-            with open(cfg_path, "r") as fin:
-                cfg = yaml.load(fin, yaml.FullLoader)
-            self.graph = Crayon.load_from_checkpoint(ckpt, **cfg['model']['init_args']).model
-            self.graph.eval()
-            self.graph.to(device=self.device)
-            self.get_logger().info(f"Loaded embedding model from {ckpt}")
 
-        self.n_dims = n_dims +1 if use_freq_correlation else n_dims
+        self.n_dims = n_dims
+        self.conditioning = conditioning
 
-        # MAF Flow (instead of RealNVP)
+        # Define MAF Flow
         transforms = []
         for _ in range(n_flow_steps):
+            # maf = MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
             maf = MaskedAffineAutoregressiveTransform(
                 features=self.n_dims,
                 hidden_features=hidden_dim,
-                num_blocks=2,
-                use_residual_blocks=True,
-                activation=nn.ReLU()
+                num_blocks=4,
+                # num_bins=num_bins,
+                # tail_bound=8,
+                # tails='linear',
+                context_features=1 if self.conditioning else 0
             )
             transforms.append(maf)
-            transforms.append(ReversePermutation(features=self.n_dims))  # adds variety
+            transforms.append(ReversePermutation(features=self.n_dims))
 
-        self.model = Flow(
+        self.flow = Flow(
             transform=CompositeTransform(transforms),
-            distribution=StandardNormal([self.n_dims])
+            distribution=StandardNormal([self.n_dims]) if not self.conditioning else \
+                ConditionalDiagonalNormal([self.n_dims],
+                    context_encoder=nn.Linear(1,2*self.n_dims))
         )
+
+        # Store mean and std for standardization
+        self.embedding_mean = torch.tensor(np.load(means)).to(self.device) if means is not None else None
+        self.embedding_std = torch.tensor(np.load(stds)).to(self.device) if stds is not None else None
+        self.standardizer = Standardizer(self.embedding_mean,self.embedding_std) if means is not None else None
+        self.model = self.flow
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
-        self.use_freq_correlation = use_freq_correlation
 
         self.save_hyperparameters()
 
     def frequency_cos_similarity(self, batch):
-        # batch: (batch_size, 2, time_series_length)
-
-        # FFT along the last axis
-        H = torch.fft.rfft(batch[:, 0, :], dim=-1)  # Hanford
-        L = torch.fft.rfft(batch[:, 1, :], dim=-1)  # Livingston
-
-        # Complex dot product over frequency bins
+        H = torch.fft.rfft(batch[:, 0, :], dim=-1)
+        L = torch.fft.rfft(batch[:, 1, :], dim=-1)
         numerator = torch.sum(H * torch.conj(L), dim=-1)
-
-        # Compute norms
         norm_H = torch.linalg.norm(H, dim=-1)
         norm_L = torch.linalg.norm(L, dim=-1)
-
-        # Normalize
-        rho_complex = numerator / (norm_H * norm_L + 1e-8)  # avoid division by zero
-
-        # Return real part (cosine similarity in freq domain)
+        rho_complex = numerator / (norm_H * norm_L + 1e-8)
         rho_real = torch.real(rho_complex).unsqueeze(-1)
         return rho_real
-
-    def forward(self, x):
-        c = self.frequency_cos_similarity(x)
-        return self.model(c).log_prob(x)
 
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def training_step(self, batch, batch_idx):
-        # if labels are provided, disregard them
-        if len(batch)==2:
-            batch, _ = batch
-        feats = self.graph(batch)
-        if self.use_freq_correlation:
-            freq_correlation = self.frequency_cos_similarity(batch)
-            feats = torch.cat((feats, freq_correlation), dim=1)
-        log_prob = self.model.log_prob(feats)
+        if self.embedding_model:
+            if len(batch) == 2:
+                batch, _ = batch
+            feats = self.graph(batch)
+            c = self.frequency_cos_similarity(batch)
+        else:
+            feats, c = batch
+
+        if self.standardizer is not None:
+            feats = self.standardizer(feats)
+
+        if self.conditioning:
+            log_prob = self.model.log_prob(inputs=feats,context=c)
+        else:
+            log_prob = self.model.log_prob(inputs=feats)
         loss = -log_prob.mean()
         self.log("train/loss", loss, on_epoch=True, sync_dist=True)
         return loss
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        # if labels are provided, disregard them
-        if len(batch)==2:
-            batch, _ = batch
-        feats = self.graph(batch)
-        if self.use_freq_correlation:
-            freq_correlation = self.frequency_cos_similarity(batch)
-            feats = torch.cat((feats, freq_correlation), dim=1)
-        log_prob = self.model.log_prob(feats)
+        if self.embedding_model:
+            if len(batch) == 2:
+                batch, _ = batch
+            feats = self.graph(batch)
+            c = self.frequency_cos_similarity(batch)
+        else:
+            feats, c = batch
+
+        if self.standardizer is not None:
+            feats = self.standardizer(feats)
+
+        if self.conditioning:
+            log_prob = self.model.log_prob(inputs=feats,context=c)
+        else:
+            log_prob = self.model.log_prob(inputs=feats)
+
         loss = -log_prob.mean()
         self.log("val/loss", loss, sync_dist=True)
         return loss
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
-        return [ModelCheckpoint(
-            monitor='val/loss',
-            save_last=True,
-            auto_insert_metric_name=False
+        return [
+            ModelCheckpoint(
+                monitor='val/loss',
+                save_last=True,
+                auto_insert_metric_name=False
             ),
-            EarlyStopping(
+            pl.callbacks.EarlyStopping(
                 monitor='val/loss',
                 patience=10,
                 mode='min',
                 verbose=True
-        )]
+            )
+        ]

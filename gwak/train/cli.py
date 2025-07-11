@@ -24,7 +24,7 @@ class GwakMultiSignalCLI(LightningCLI):
                 self.config['fit.data.init_args.waveforms'][i]['init_args']['duration'] = fduration+kernel_length
 
         # harmonize lr between optimizer and scheduler if applicable
-        if self.config['fit.model.class_path'] == "cl_models.Tarantula":
+        if self.config['fit.model.class_path'] == "cl_models.Tarantula" or self.config['fit.model.class_path'] == "cl_models.iTransformer":
             print("Making LR scheduling update for tarantula")
             tot_steps = self.config['fit.trainer.max_epochs'] * self.config['fit.data.init_args.batches_per_epoch']
             self.config['fit.model.init_args.total_steps'] = tot_steps

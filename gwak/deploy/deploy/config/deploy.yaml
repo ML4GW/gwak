@@ -1,0 +1,46 @@
+slurm_batch: 2
+# Slurm arguments
+slurm_kwargs:
+  job-name: null
+  output: null
+  error: null
+  partition: milan # Sever dependent
+  nodes: 1
+  tmp: 10G
+  gpu_card: null
+  gpu_per_node: 1 
+  cpus-per-task: 8
+  mem: 32G
+  time: 0-01:30:00
+
+  cmd: # null
+    - module load apptainer # Sever dependent
+  deploy_cmd:
+    export: 
+      - poetry run python deploy/cli.py export
+    infer:
+      - poetry run python deploy/cli.py infer
+
+run_name: null
+# Data arguments
+ifos: ["H1", "L1"]
+Tb: 1 # Tb = 0 will run zero-lag
+fname: /fred/oz994/andy/Data/gwak/HL_test # Sever dependent
+psd_length: 64
+stride_batch_size: 256
+sample_rate: 4096
+shifts: [0, 1]
+data_format: h5 # gwf
+inference_sampling_rate: 4
+
+# Triton and Model arguments
+result_dir: /fred/oz994/andy/Output/gwak
+project: combination
+grpc_port: 8001
+image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent
+job_rate_limit: 8
+patients: 30
+cl_config: s4_kl1.0_bs256
+fm_config: NF_onlyBkg
+model_repo_dir: null
+singularity_path: /apps/system/software/apptainer/latest/bin/apptainer # Sever dependent

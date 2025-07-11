@@ -34,15 +34,11 @@ model:
     lr_min: 1e-5
     cos_anneal: false
     cos_anneal_tmax: 50
-    use_classifier: true
-    num_classes: 11
-    lambda_classifier: 1.0
-    classifier_hidden_dims: [16, 16]
-    class_anneal_epochs: 20
+    use_classifier: false
     s4_kwargs:
-      d_model: 256
+      d_model: 128
       d_state: 64
-      n_layers: 6
+      n_layers: 4
       dropout: 0.1
       prenorm: false
       dt_min: 0.001
@@ -52,7 +48,7 @@ data:
   class_path: dataloader.SignalDataloader
   init_args:
     signal_classes:
-      - "MultiSineGaussian"
+      - "SineGaussian"
       - "BBH"
       - "Gaussian"
       - "Cusp"
@@ -64,7 +60,7 @@ data:
       - "Glitch"
       - "FakeGlitch"
     priors:
-      - class_path: gwak.data.prior.MultiSineGaussianBBC # MultiSineGaussian
+      - class_path: gwak.data.prior.SineGaussianBBC # SineGaussian
       - class_path: gwak.data.prior.LAL_BBHPrior # BBH
       - class_path: gwak.data.prior.GaussianBBC # Gaussian
       - class_path: gwak.data.prior.CuspBBC # Cusp
@@ -76,7 +72,7 @@ data:
       - null # Glitch
       - null # FakeGlitch
     waveforms:
-      - class_path: ml4gw.waveforms.MultiSineGaussian # MultiSineGaussian
+      - class_path: ml4gw.waveforms.SineGaussian # SineGaussian
         init_args:
           sample_rate: 0
           duration: 0
@@ -104,7 +100,7 @@ data:
       - null # Glitch
       - null # FakeGlitch
     extra_kwargs:
-      - null # MultiSineGaussian
+      - null # SineGaussian
       - ringdown_duration: 0.9 # BBH
       - null # Gaussian
       - null # Cusp
@@ -126,4 +122,4 @@ data:
     data_saving_file: null
     anneal_snr: true
     snr_init_factor: 10.0
-    snr_anneal_epochs: 20
+    snr_anneal_epochs: 10

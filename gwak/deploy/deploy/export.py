@@ -35,7 +35,7 @@ def export(
     fm_config: str='NF_onlyBkg',
     **kwargs,
 ):
-    
+
     file_path = Path(__file__).resolve()
     if model_dir is None: 
         model_dir = file_path.parents[2] / "output"
@@ -45,8 +45,8 @@ def export(
     num_ifos = len(ifos)
     ifo_str = ''.join(ifo[0] for ifo in ifos)
 
-    weights = model_dir / f"{cl_config}_{fm_config}_{ifo_str}" / project / "model_JIT.pt"
-    output_dir = output_dir / f"{cl_config}_{fm_config}_{ifo_str}" /project
+    weights = Path(model_dir) / f"{cl_config}_{fm_config}_{ifo_str}" / project / "model_JIT.pt"
+    output_dir = Path(output_dir) / f"{cl_config}_{fm_config}_{ifo_str}" /project
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)
 

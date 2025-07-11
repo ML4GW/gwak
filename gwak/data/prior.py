@@ -121,7 +121,7 @@ class SineGaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            hrss = LogUniform(5e-23, 3.33e-22), 
+            hrss = LogUniform(1.1e-23, 1.0e-21), 
             quality = Uniform(3, 700),
             frequency = Uniform(30, 2048),
             phase = Uniform(0, torch.pi),
@@ -151,7 +151,7 @@ class GaussianBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             #hrss = LogUniform(8.5e-19, 4e-18), 
-            hrss = Uniform(2.2e-20, 2.4e-20),
+            hrss = LogUniform(1.6e-23, 2.0e-16),
             polarization = Uniform(0, torch.pi),
             eccentricity = Uniform(0, 1),
             #duration = Uniform(0.001, 0.1)
@@ -166,11 +166,11 @@ class WhiteNoiseBurstBBC(BasePrior):
     def __init__(self):
         super().__init__()
         self.params = OrderedDict(
-            frequency = Uniform(55, 1520),
+            frequency = Uniform(55, 1600),
             bandwidth = Uniform(32, 2048),
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
-            int_hdot_squared = LogUniform(1e-37, 1e-36),
+            int_hdot_squared = LogUniform(3.0e-40, 2.5e-34),
             duration = LogUniform(2e-2,2)
         )
 
@@ -180,7 +180,7 @@ class CuspBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-4.0 / 3.0),
-            amplitude = Uniform(3.0e-21, 7.0e-21),
+            amplitude = Uniform(4.0e-22, 4.0e-21),
             f_high = Constant(1000)
         )
 
@@ -190,7 +190,7 @@ class KinkBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-5.0 / 3.0),
-            amplitude = Uniform(7.8e-21, 3.4e-20),
+            amplitude = Uniform(1.4e-21, 1.4e-20),
             f_high = Constant(1000)
         )
 
@@ -200,7 +200,7 @@ class KinkkinkBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             power = Constant(-2.0),
-            amplitude = Uniform(3.5e-20, 8.7e-20),
+            amplitude = Uniform(4.7e-21, 4.7e-20),
             f_high = Constant(1000)
         )
 

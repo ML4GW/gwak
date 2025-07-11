@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import argparse
+import yaml
 
 class CombinedModel(nn.Module):
     def __init__(self, embedder_model, metric_model):
@@ -12,9 +13,20 @@ class CombinedModel(nn.Module):
     def forward(self, x):
         # Get the embedding from the embedder model.
         embedding = self.embedder_model(x)
+        c = self.frequency_cos_similarity(x)
         # Pass the embedding to the metric model to get final classification.
-        out = self.metric_model(embedding)
+        out = self.metric_model(embedding, c)
         return out
+
+    def frequency_cos_similarity(self, batch):
+        H = torch.fft.rfft(batch[:, 0, :], dim=-1)
+        L = torch.fft.rfft(batch[:, 1, :], dim=-1)
+        numerator = torch.sum(H * torch.conj(L), dim=-1)
+        norm_H = torch.linalg.norm(H, dim=-1)
+        norm_L = torch.linalg.norm(L, dim=-1)
+        rho_complex = numerator / (norm_H * norm_L + 1e-8)
+        rho_real = torch.real(rho_complex).unsqueeze(-1)
+        return rho_real
 
 def main(embedder_model_file,
          metric_model_file,
@@ -24,26 +36,31 @@ def main(embedder_model_file,
          num_ifos=2,
          output_path="model_JIT.pt"):
 
-    # Load the embedder model (assumed to be a TorchScript module).
+    # Load the embedder model (TorchScript traced module)
     embedder_model = torch.jit.load(embedder_model_file, map_location="cpu")
     embedder_model = embedder_model.to("cuda:0")
     embedder_model.eval()
 
-    # Load the metric model (also in TorchScript format).
+    # Load the metric model (TorchScript traced module)
     metric_model = torch.jit.load(metric_model_file, map_location="cpu")
     metric_model = metric_model.to("cuda:0")
     metric_model.eval()
-    # Create the combined model.
-    combined_model = CombinedModel(embedder_model, metric_model)
+
+    # Create the combined model
+    combined_model = CombinedModel(embedder_model, metric_model).to("cuda:0")
     combined_model.eval()
 
-    # Script the combined model to produce a single TorchScript module.
-    scripted_model = torch.jit.script(combined_model)
+    # Prepare a dummy input for tracing
+    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
 
-    scripted_model.save(output_path)
+    # Trace the model (instead of scripting)
+    traced_model = torch.jit.trace(combined_model, dummy_input)
+
+    # Save the traced model
+    traced_model.save(output_path)
     print(f"Combined model saved to {output_path}")
 
-    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
+    # Test inference
     output = combined_model(dummy_input)
     print("Test inference complete.")
     print(f"Output shape: {output.shape}")
@@ -55,20 +72,26 @@ if __name__ == "__main__":
     )
     parser.add_argument('folder_embedder', type=str, help='Path to the folder containing JIT embedder model.')
     parser.add_argument('folder_metric', type=str, help='Path to the folder containing JIT metric model.')
-    parser.add_argument('--batch_size', type=int, default=256, help='Batch size for inference (default: 256).')
-    parser.add_argument('--kernel_length', type=float, default=0.5, help='Kernel length in seconds (default: 0.5).')
-    parser.add_argument('--sample_rate', type=float, default=4096, help='Sample rate in Hz (default: 4096).')
-    parser.add_argument('--num_ifos', type=int, default=2, help='Number of interferometers (default: 2).')
-    parser.add_argument('--outfile', type=str, default='Output folder for JIT combined model', help='Output file name for the NumPy array (default: far_metrics.npy).')
-    
+    parser.add_argument('--config', type=str)
+    parser.add_argument('--outfile', type=str, default='model_JIT.pt', help='Output file name for the JIT combined model (default: model_JIT.pt).')
+
     args = parser.parse_args()
+
+    # Load the YAML config file
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+
+    # Extract values
+    sample_rate = config['data']['init_args']['sample_rate']
+    kernel_length = config['data']['init_args']['kernel_length']
+    batch_size = 64  # You can make this configurable if needed
 
     main(
         embedder_model_file=args.folder_embedder,
         metric_model_file=args.folder_metric,
-        batch_size=args.batch_size,
-        kernel_length=args.kernel_length,
-        sample_rate=args.sample_rate,
-        num_ifos=args.num_ifos,
+        batch_size=batch_size,
+        kernel_length=kernel_length,
+        sample_rate=sample_rate,
+        num_ifos=2,
         output_path=args.outfile
     )

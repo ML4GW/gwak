@@ -99,6 +99,54 @@ class EncoderTransformer(nn.Module):
 
         return x
     
+class InvertedEncoderTransformer(nn.Module):
+    # inspired by iTransformer https://arxiv.org/abs/2310.06625
+    # idea is that you embed the *entire time series* of each channel (i.e. ifo) into d_model, then do self-attention between the embeddings of the channels
+    # e.g. there will only be 2-3 "tokens" in the sequence, one for each channel (ifo)
+    # maybe this will facilitate easier learning of correlations between ifos?
+    def __init__(self,
+                 num_features:int=4096,
+                 num_layers: int=4,
+                 nhead: int=2,
+                 latent_dim:int=512,
+                 dim_factor_feedforward:int=4,
+                 dropout:float=0.1,
+                 embed_first:bool=True):
+        super().__init__()
+        self.num_features = num_features
+        self.latent_dim = latent_dim
+        self.dim_feedforward = dim_factor_feedforward*latent_dim
+        self.dropout = dropout
+        self.nhead = nhead
+        self.embed_first = embed_first
+
+        if self.embed_first:
+            # linear embedding into the latent dimension (no patching)
+            self.embedding = nn.Linear(num_features, latent_dim, bias=False)
+
+        # self-attention layers
+        attn_layers = []
+        for i in range(num_layers):
+            attn_layers.append(nn.TransformerEncoderLayer(d_model=latent_dim,
+                                                           nhead=nhead,
+                                                           dim_feedforward=self.dim_feedforward,
+                                                           dropout=dropout,
+                                                           batch_first=True))
+        self.attn_layers = nn.ModuleList(attn_layers)
+
+    def forward(self, x):
+        # Input shape: (B, F, T) - batch, features, timesteps
+        # we are actually embedding the time dimension, so it doesn't need to be transposed
+        
+        if self.embed_first:
+            x = self.embedding(x)  # (B, F, latent_dim)
+
+        # Apply transformer layers
+        for layer in self.attn_layers:
+            x = layer(x)
+
+        return x
+    
 class ClassAttentionBlock(nn.Module):
     def __init__(self,
                  dim:int=2,
@@ -108,8 +156,7 @@ class ClassAttentionBlock(nn.Module):
                  scale_heads:bool=True,
                  scale_attn:bool=True,
                  scale_fc:bool=True,
-                 scale_resids:bool=True,
-                 patch_size:int=None):
+                 scale_resids:bool=True):
         super().__init__()
         self.dim = dim
         self.dim_feedforward = dim_factor_feedforward * dim
@@ -118,7 +165,6 @@ class ClassAttentionBlock(nn.Module):
         self.scale_heads = scale_heads
         self.scale_attn = scale_attn
         self.head_dim = dim // nhead
-        self.patch_size = patch_size
 
         # self-attention
         self.attn = nn.MultiheadAttention(
