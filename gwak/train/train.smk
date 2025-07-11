@@ -61,12 +61,27 @@ rule train_cl:
             --model.num_ifos {wildcards.ifos} \
             --data.glitch_root /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{wildcards.ifos}/'
 
+rule compare_embeddings:
+    input:
+        data_dir = 'output/O4_MDC_background/HL/'
+    params:
+        config = 'train/configs/resnet_kl1.0_bs512.yaml',
+        models_to_compare = ['output/resnet_kl1.0_bs512_HL/model_JIT.pt', 'output/s4_kl1.0_bs256_HL/model_JIT.pt'],
+        plot_dir = 'output/plots/compare_embeddings/'
+    shell:
+        'mkdir -p {params.plot_dir}; '
+        'python train/compare_embeddings.py {params.models_to_compare} \
+            --config {params.config} \
+            --data-dir {input.data_dir} \
+            --output {params.plot_dir} \
+            --nevents 1024'
+
 rule precompute_embeddings:
     params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/',
+        data_dir = 'output/O4_MDC_background/{ifos}/',
         config = 'train/configs/{cl_config}.yaml'
     output:
         means = 'output/{cl_config}_{ifos}/means.npy',
@@ -152,12 +167,11 @@ rule make_plots_i:
             --output {output} \
             --conditioning {params.conditioning} \
             --nevents 100000 \
-            --snr-cut 4 \
-            --threshold-1yr 20 '
+            --threshold-1yr 15 '
 
 rule make_plots:
     input:
         expand(rules.make_plots_i.output,
-            cl_config='resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
+            cl_config='resnet_kl1.0_bs512',
             fm_config='NF_from_file_conditioning',
-            ifos=['HL', 'HV', 'LV'])
+            ifos=['HL'])

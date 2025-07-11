@@ -36,26 +36,31 @@ def main(embedder_model_file,
          num_ifos=2,
          output_path="model_JIT.pt"):
 
-    # Load the embedder model (assumed to be a TorchScript module).
+    # Load the embedder model (TorchScript traced module)
     embedder_model = torch.jit.load(embedder_model_file, map_location="cpu")
     embedder_model = embedder_model.to("cuda:0")
     embedder_model.eval()
 
-    # Load the metric model (also in TorchScript format).
+    # Load the metric model (TorchScript traced module)
     metric_model = torch.jit.load(metric_model_file, map_location="cpu")
     metric_model = metric_model.to("cuda:0")
     metric_model.eval()
-    # Create the combined model.
-    combined_model = CombinedModel(embedder_model, metric_model)
+
+    # Create the combined model
+    combined_model = CombinedModel(embedder_model, metric_model).to("cuda:0")
     combined_model.eval()
 
-    # Script the combined model to produce a single TorchScript module.
-    scripted_model = torch.jit.script(combined_model)
+    # Prepare a dummy input for tracing
+    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
 
-    scripted_model.save(output_path)
+    # Trace the model (instead of scripting)
+    traced_model = torch.jit.trace(combined_model, dummy_input)
+
+    # Save the traced model
+    traced_model.save(output_path)
     print(f"Combined model saved to {output_path}")
 
-    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
+    # Test inference
     output = combined_model(dummy_input)
     print("Test inference complete.")
     print(f"Output shape: {output.shape}")
@@ -68,7 +73,7 @@ if __name__ == "__main__":
     parser.add_argument('folder_embedder', type=str, help='Path to the folder containing JIT embedder model.')
     parser.add_argument('folder_metric', type=str, help='Path to the folder containing JIT metric model.')
     parser.add_argument('--config', type=str)
-    parser.add_argument('--outfile', type=str, default='Output folder for JIT combined model', help='Output file name for the NumPy array (default: far_metrics.npy).')
+    parser.add_argument('--outfile', type=str, default='model_JIT.pt', help='Output file name for the JIT combined model (default: model_JIT.pt).')
 
     args = parser.parse_args()
 
@@ -79,14 +84,7 @@ if __name__ == "__main__":
     # Extract values
     sample_rate = config['data']['init_args']['sample_rate']
     kernel_length = config['data']['init_args']['kernel_length']
-    psd_length = config['data']['init_args']['psd_length']
-    fduration = config['data']['init_args']['fduration']
-    fftlength = config['data']['init_args']['fftlength']
-    batch_size = 64 #config['data']['init_args']['batch_size']
-    batches_per_epoch = config['data']['init_args']['batches_per_epoch']
-    num_workers = config['data']['init_args']['num_workers']
-    data_saving_file = config['data']['init_args']['data_saving_file']
-    signal_classes = config['data']['init_args']['signal_classes']
+    batch_size = 64  # You can make this configurable if needed
 
     main(
         embedder_model_file=args.folder_embedder,

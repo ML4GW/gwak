@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import lightning.pytorch as pl
 from sklearn.metrics import roc_curve, auc
 
+from ml4gw.distributions import PowerLaw
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
@@ -133,6 +134,7 @@ if __name__=='__main__':
         num_workers=num_workers,
         data_saving_file=data_saving_file,
         ifos=args.ifos,
+        snr_prior=PowerLaw(index=3, minimum=4, maximum=30),
         glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
     )
 
@@ -232,29 +234,29 @@ if __name__=='__main__':
         np.save(f'{args.output}_precomputed/embeddings_{args.nevents}.npy', all_embeddings)
         np.save(f'{args.output}_precomputed/snrs_{args.nevents}.npy', all_snrs)
 
-    # Define labels you do NOT want to apply SNR cut to
-    special_labels = [10, 11, 12]
+    # PLOT SNR HISTS
+    # Find unique labels, excluding 10, 11, 12
+    unique_labels = [label for label in np.unique(all_labels) if label not in [10, 11, 12]]
 
-    # Mask for labels 10,11,12
-    special_mask = np.isin(all_labels, special_labels)
+    # Create a figure
+    plt.figure(figsize=(12, 7))
 
-    # Mask for SNR > 4
-    snr_mask = all_snrs > args.snr_cut
+    # Plot a histogram for each allowed label
+    for label in unique_labels:
+        snrs = all_snrs[all_labels == label]
+        name = signal_classes[int(label) - 1]
+        snr_min = np.min(snrs)
+        snr_max = np.max(snrs)
+        snr_mean = np.mean(snrs)
+        plt.hist(snrs, bins=50, alpha=0.5, label=f'{name} (min={snr_min:.1f}, max={snr_max:.1f}, mean={snr_mean:.1f})')
 
-    # Combined mask:
-    # - Keep all special labels (10,11,12) without SNR cut
-    # - Apply SNR > 4 cut only to the others
-    final_mask = special_mask | (~special_mask & snr_mask)
-
-    print('Passed the SNR cut (for NOT 10/11/12)', 100 * np.mean(~special_mask & snr_mask))
-
-    # Apply the final mask
-    all_context = all_context[final_mask]
-    all_binary_labels = all_binary_labels[final_mask]
-    all_labels = all_labels[final_mask]
-    all_scores = all_scores[final_mask]
-    all_embeddings = all_embeddings[final_mask]
-    all_snrs = all_snrs[final_mask]
+    plt.xlabel('SNR')
+    plt.ylabel('Count')
+    plt.title('SNR Distribution by Class')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f'{args.output}/snrs-label.png')
 
     ########### PLOT CONTEXT
     # Mask based on label
@@ -377,7 +379,7 @@ if __name__=='__main__':
         raise ValueError("No anomaly samples found in the test set!")
 
     num_bins = 10
-    bin_edges = np.linspace(4, 100, num_bins + 1)  # 10 bins between 4 and 100
+    bin_edges = np.linspace(4, 30, num_bins + 1)  # 10 bins between 4 and 100
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
 
     plt.figure(figsize=(8,6))
@@ -415,12 +417,3 @@ if __name__=='__main__':
     plt.legend()
     plt.grid(True)
     plt.savefig(f'{args.output}/fraction_1overYearFAR_SNR.png')
-
-    # bins = np.logspace(1,7,100)
-    # for i,sig in enumerate(signal_classes):
-    #     h=plt.hist(all_snrs[all_labels==i+1],bins=np.logspace(-3,3,100),label=sig,histtype='step')
-    # plt.xscale('log')
-    # plt.xlabel("SNR")
-    # plt.legend()
-    # plt.savefig(f'{args.output}/snr_histograms.png')
-    # plt.clf()

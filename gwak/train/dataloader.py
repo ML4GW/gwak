@@ -910,7 +910,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
         if waveforms is not None:
-            snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate)
+            snrs = snr_factor # compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate)
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
