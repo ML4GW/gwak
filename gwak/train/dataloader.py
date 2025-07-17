@@ -17,7 +17,7 @@ from torch.utils.data import random_split
 
 import ml4gw
 from ml4gw.dataloading import Hdf5TimeSeriesDataset
-from ml4gw.transforms import SpectralDensity, Whiten, SnrRescaler
+from ml4gw.transforms import SpectralDensity, Whiten, SnrRescaler_Online
 from ml4gw.gw import compute_observed_strain, get_ifo_geometry, compute_network_snr
 
 from torch.distributions.uniform import Uniform
@@ -659,13 +659,9 @@ class SignalDataloader(GwakBaseDataloader):
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
 
         self.snr_prior = snr_prior
-        # PowerLaw(snr_low, snr_high, index=3)
-        rescaler = SnrRescaler(
-            num_channels = len(self.ifos), 
+        rescaler = SnrRescaler_Online(
             sample_rate = self.sample_rate,
-            waveform_duration = self.kernel_length + 1,
             highpass = 30,
-            dtype=torch.float64
         )
         self.rescaler = rescaler.to('cuda') if torch.cuda.is_available() else rescaler
 
@@ -825,13 +821,6 @@ class SignalDataloader(GwakBaseDataloader):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
-        psd_data = psd_data.double()
-        self.rescaler.fit(
-            psd_data[:, 0, :].to("cpu"), 
-            psd_data[:, 1, :].to("cpu"), 
-            fftlength=self.fftlength,
-        )
-        psd_data.to(batch.device)
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
         spectral_density = SpectralDensity(
@@ -881,9 +870,15 @@ class SignalDataloader(GwakBaseDataloader):
             if torch.any(torch.isnan(waveforms)):
                 self._logger.info('centered waveforms fucked')
 
-            rescaled_waveforms, snr_factor = self.rescaler.forward(
+            snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
+            with h5py.File("/home/hongyin.chen/gwak-check_01.h5", "w") as f:
+
+                f.create_dataset("target_snrs", data=snr_factor.cpu().numpy())
+            
+            rescaled_waveforms = self.rescaler.forward(
                 responses=waveforms, 
-                target_snrs=self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
+                psds=psds,
+                target_snrs=snr_factor
             )
 
             injected = batch + rescaled_waveforms
@@ -907,7 +902,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
         if waveforms is not None:
-            snrs = snr_factor # compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate)
+            snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
