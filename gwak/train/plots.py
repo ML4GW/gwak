@@ -21,9 +21,9 @@ from gwak.train.cl_models import Crayon
 
 from gwak.train.plotting import make_corner
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
-device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
+device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 
 
 def str2bool(v):
@@ -135,7 +135,7 @@ if __name__=='__main__':
         data_saving_file=data_saving_file,
         ifos=args.ifos,
         snr_prior=PowerLaw(index=3, minimum=4, maximum=30),
-        glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
+        glitch_root=f'/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{args.ifos}/'
     )
 
     all_background_classes = ['Background', 'Glitch'] #, 'FakeGlitch']

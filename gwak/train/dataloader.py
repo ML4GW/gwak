@@ -10,7 +10,7 @@ from typing import Callable, List, Optional, Union
 import wandb
 import torch
 import torch.nn.functional as F
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, IterableDataset, DataLoader
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import random_split
@@ -29,6 +29,10 @@ from gwak.data.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
+
+import threading
+from queue import Queue
+import time
 
 class EmbeddingLoader(pl.LightningDataModule):
     def __init__(self, embedding_path, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
@@ -666,7 +670,7 @@ class SignalDataloader(GwakBaseDataloader):
         rescaler = SnrRescaler(
             num_channels = len(self.ifos), 
             sample_rate = self.sample_rate,
-            waveform_duration = self.kernel_length + 1,
+            waveform_duration = self.kernel_length + self.fduration,
             highpass = 30,
             dtype=torch.float64
         )
@@ -906,11 +910,14 @@ class SignalDataloader(GwakBaseDataloader):
             self._logger.info('whitened fucked before dividing by std')
 
         psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
-        psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
+        #psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
+        psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='nearest')
+        # use same resampling mode ('nearest', default) as the rescaler
 
         snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
         if waveforms is not None:
-            snrs = snr_factor # compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate)
+            #snrs = snr_factor 
+            snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
 
         # normalize the input data
         stds = torch.std(whitened, dim=-1, keepdim=True)
@@ -1148,7 +1155,6 @@ class AugmentationSignalDataloader(SignalDataloader):
                 self.data_group.create_dataset(label_step, data = labels.cpu())
 
             return batch, labels
-
 
 
 def generate_waveforms_standard(
@@ -1509,3 +1515,124 @@ class FakeGlitchMaker:
             all_decs.append(dec)
             all_phics.append(phic)
         return all_responses, all_params, all_ras, all_decs, all_phics
+
+class GenericDataModule(pl.LightningDataModule):
+    def __init__(self,batch_size=512,num_workers=4,pin_memory=False, **kwargs):
+        super().__init__()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.loader_kwargs = {"batch_size":self.batch_size,
+                              "num_workers":self.num_workers,
+                              "pin_memory":self.pin_memory}
+
+class OfflineLIGOData(GenericDataModule):
+    def __init__(self, signal_classes, chunk_size=10_000, data_dir=None, ifos=None, glitch_root=None, **kwargs):
+        super().__init__(**kwargs)
+        self.signal_classes = signal_classes
+        self.chunk_size = chunk_size
+        self.data_dir = data_dir # not used, but snakemake complains about needing it since default loader uses it
+        self.ifos = ifos # same story
+        self.glitch_root = glitch_root # same story
+
+        self.data_dir = "/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/offline_dataset/"
+        self.train_files = [
+            self.data_dir + "dataset_HL_SR4096_kernel1.0_3194.h5",
+            self.data_dir + "dataset_HL_SR4096_kernel1.0_3698.h5",
+            self.data_dir + "dataset_HL_SR4096_kernel1.0_1241.h5"
+        ]
+        self.val_files = [
+            self.data_dir + "dataset_HL_SR4096_kernel1.0_6779.h5"
+        ]
+        self.test_files = [
+            self.data_dir + "dataset_HL_SR4096_kernel1.0_6130.h5"
+        ]
+        self.all_signal_label_names = {i:c for i,c in enumerate(self.signal_classes)}
+        
+    def train_dataloader(self):
+        dataset = HDF5FullLoader(self.train_files, self.signal_classes, subset_size=self.chunk_size, seed=1683)
+        loader = DataLoader(dataset, persistent_workers=True, **self.loader_kwargs)
+        return loader
+    
+    def val_dataloader(self):
+        dataset = HDF5FullLoader(self.val_files, self.signal_classes, subset_size=self.chunk_size, seed=1683)
+        loader = DataLoader(dataset, persistent_workers=True, **self.loader_kwargs)
+        return loader
+    
+    def test_dataloader(self):
+        dataset = HDF5FullLoader(self.test_files, self.signal_classes, subset_size=self.chunk_size, seed=1683)
+        loader = DataLoader(dataset, persistent_workers=True, **self.loader_kwargs)
+        return loader
+
+class HDF5FullLoader(IterableDataset):
+    def __init__(self, file_paths, signal_classes, subset_size=10000, seed=23234, **kwargs):
+        super().__init__(**kwargs)
+        self.file_paths = file_paths
+        self.signal_classes = signal_classes
+        self.subset_size = subset_size
+        self.seed = seed
+        self.rng = np.random.default_rng(seed)
+        self.num_per_class_per_file = int(subset_size / (len(self.signal_classes) * len(self.file_paths)))
+        
+        # Map the full dataset structure
+        self.total_size = 0
+        
+        for f in file_paths:
+            with h5py.File(f, "r") as fcurr:
+                for isig, sig_class in enumerate(signal_classes):
+                    key = f"{sig_class}_data"
+                    size = fcurr[key].shape[0]
+                    self.total_size += size
+        
+        # Current batch tracking
+        self.current_data = None
+        self.current_labels = None
+        self.current_index = 0
+        
+        # Load the first batch
+        self._load_next_batch()
+    
+    def _load_next_batch(self):
+        """Load a new batch of data"""
+        data_list = []
+        labels_list = []
+        
+        for f in self.file_paths:
+            with h5py.File(f, "r") as fcurr:
+                for isig, sig_class in enumerate(self.signal_classes):
+                    key = f"{sig_class}_data"
+                    size = fcurr[key].shape[0]
+                    # Randomly select indices for this class
+                    indices = np.sort(self.rng.choice(size, self.num_per_class_per_file, replace=False))
+                    data_list.append(fcurr[key][indices])
+                    labels_list.append(isig * np.ones(self.num_per_class_per_file, dtype=int))
+        
+        data = np.concatenate(data_list, axis=0)
+        labels = np.concatenate(labels_list, axis=0)
+        
+        # Shuffle the loaded subset
+        shuf = self.rng.permutation(len(data))
+        data = data[shuf]
+        labels = labels[shuf]
+        
+        # Convert to torch tensors
+        self.current_data = torch.tensor(data, dtype=torch.float32)
+        self.current_labels = torch.tensor(labels, dtype=torch.int32)
+        self.current_index = 0
+        print(f"Loaded new data batch with {len(self.current_data)} samples")
+    
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        if self.current_data is None or self.current_index >= len(self.current_data):
+            # Load the next batch
+            self._load_next_batch()
+            
+        item = self.current_data[self.current_index], self.current_labels[self.current_index]
+        self.current_index += 1
+        return item
+    
+    def __len__(self):
+        # Return the total size of all data
+        return self.total_size

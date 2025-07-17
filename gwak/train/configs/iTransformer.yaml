@@ -1,0 +1,68 @@
+# lightning.pytorch==2.3.2
+seed_everything: 0
+trainer:
+  callbacks:
+    - class_path: callback.ValidationCallback
+  accelerator: gpu
+  devices: [0]
+  # accelerator: auto
+  # devices: auto
+  #strategy: ddp_find_unused_parameters_true
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: gwak2_embeddings
+      entity: gwak
+  log_every_n_steps: 1
+  max_epochs: 100
+  limit_train_batches: 50
+  limit_val_batches: 20
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 1
+ckpt_path: null
+
+model:
+  class_path: cl_models.iTransformer
+  init_args:
+    num_ifos: 2
+    num_timesteps: 4096
+    latent_dim: 128
+    conv_embd_kernel_size: 64
+    conv_embd_channels: 8
+    num_layers: 5
+    num_head: 8
+    num_cls_layers: 4
+    fc_output_dims: [64,32]
+    dropout: 0.1
+    d_output: 16
+    d_contrastive_space: 4
+    proj_mlp_hidden: [8]
+    temperature: 0.05
+    supervised_simclr: true
+    lr: 1e-3
+    min_lr: 1e-6
+    total_steps: null
+    warmup_fraction: 0.02
+
+data:
+  class_path: dataloader.OfflineLIGOData
+  init_args:
+    signal_classes:
+      - "SineGaussian"
+      - "BBH"
+      - "Gaussian"
+      - "Cusp"
+      - "Kink"
+      - "KinkKink"
+      - "WhiteNoiseBurst"
+      - "Background"
+      - "Glitch"
+    chunk_size: 50_000
+    batch_size: 512
+    num_workers: 4
+    sample_rate: 4096
+    kernel_length: 1.0
+    psd_length: 64
+    fduration: 1
+    fftlength: 2
+    data_saving_file: null
