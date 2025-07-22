@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from background_utils import (
     get_conincident_segs,
+    check_scitoken,
     get_background,
     get_injections,
     create_lcs,
@@ -37,6 +38,7 @@ def gwak_background(
     ana_end: int,
     sample_rate: int,
     save_dir: Path,
+    host: str = "datafind.ldas.cit:80",
     state_flag: list[str]=None,
     frame_type: list[str]=None,
     segments: str = None, # provide segments instead of start and end time
@@ -45,7 +47,10 @@ def gwak_background(
     omi_paras: Optional[dict] = None,
     **kwargs
 ):
-    
+
+    if host == "datafind.igwn.org":
+        check_scitoken()
+
     # File handling
     ifo_abbrs = "".join(ifo[0] for ifo in ifos)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +76,7 @@ def gwak_background(
             start=ana_start,
             stop=ana_end,
             state_flag=state_flag,
+            host=host
         )
 
     # Run data fetching and Omicron process
@@ -78,7 +84,7 @@ def gwak_background(
 
         seg_dur = seg_end-seg_start
         if not skip_background_generation:
-            
+
             print(f'Downloading segment from {seg_start} to {seg_dur}')    
             if not frame_type and not state_flag:
                 strains = get_injections(
@@ -97,10 +103,13 @@ def gwak_background(
                     channels=channels,
                     frame_type=frame_type,
                     sample_rate=sample_rate,
+                    host=host,
                 )
 
             file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
 
+            # ToDo: Compress the data before saving
+            #       https://docs.h5py.org/en/stable/high/dataset.html#dataset
             with h5py.File(save_dir / file_name, "w") as g:
 
                 for dname, dset in strains.items():
@@ -120,7 +129,8 @@ def gwak_background(
                     start_time=seg_start,
                     end_time=seg_end,
                     output_dir= Path(out_dir) / f"Segs_{int(seg_start)}_{int(seg_dur)}", 
-                    urltype="file"
+                    urltype="file",
+                    host=host,
                 )
 
             bash_scripts = omicron_bashes(
@@ -147,24 +157,26 @@ def gwak_background(
                     continue
                 omicron_bash_files.append(bash_script)
 
-    bash_scripts = sorted(bash_scripts)
+    if omi_paras is not None:
 
-    print("Launching Omicron....")
-    with ThreadPoolExecutor(max_workers=2) as e:
-        
-        for bash_file in omicron_bash_files:
-        
-            e.submit(run_omicron_bash_file, bash_file)
-            print(f"Run {bash_file}")
-            time.sleep(0.1)
-            print("====")
+        bash_scripts = sorted(bash_scripts)
 
-    # Generate a glitch_info.h5 file that stores omicron informations 
-    for seg_num, (seg_start, seg_end) in enumerate(segs):
-        seg_dur = seg_end-seg_start
+        print("Launching Omicron....")
+        with ThreadPoolExecutor(max_workers=2) as e:
+            
+            for bash_file in omicron_bash_files:
+            
+                e.submit(run_omicron_bash_file, bash_file)
+                print(f"Run {bash_file}")
+                time.sleep(0.1)
+                print("====")
 
-        glitch_merger(
-            ifos=ifos,
-            omicron_path=out_dir / f"Segs_{int(seg_start)}_{int(seg_dur)}",
-            channels=channels
-        )
+        # Generate a glitch_info.h5 file that stores omicron informations 
+        for seg_num, (seg_start, seg_end) in enumerate(segs):
+            seg_dur = seg_end-seg_start
+
+            glitch_merger(
+                ifos=ifos,
+                omicron_path=out_dir / f"Segs_{int(seg_start)}_{int(seg_dur)}",
+                channels=channels
+            )

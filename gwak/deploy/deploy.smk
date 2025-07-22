@@ -1,4 +1,6 @@
-models = ['white_noise_burst', 'gaussian', 'sine_gaussian', 'cusp', 'kink', 'kinkkink', 'bbh', 'S4_SimCLR_multiSignalAndBkg', 'combination'] 
+models = [
+    'combination'
+] 
 
 wildcard_constraints:
     deploymodels = '|'.join(models)

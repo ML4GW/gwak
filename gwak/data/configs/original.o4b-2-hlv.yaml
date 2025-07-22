@@ -8,15 +8,16 @@ ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burs
 ana_end: 1402069900
 sample_rate: 4096
 save_dir: output/O4_MDC_background/HLV
-skip_background_generation: True
-omi_paras:
-  clear_out_dir: False
-  out_dir: null
-  q_range: [3.3166, 108.0]
-  frequency_range: [30.0, 2048.0]
-  cluster_dt: 0.5
-  chunk_duration: 124
-  segment_duration: 64
-  overlap_duration: 4
-  mismatch_max: 0.2
-  snr_threshold: 5.0
+host: datafind.igwn.org
+skip_background_generation: null
+# omi_paras:
+#   clear_out_dir: False
+#   out_dir: null
+#   q_range: [3.3166, 108.0]
+#   frequency_range: [30.0, 2048.0]
+#   cluster_dt: 0.5
+#   chunk_duration: 124
+#   segment_duration: 64
+#   overlap_duration: 4
+#   mismatch_max: 0.2
+#   snr_threshold: 5.0

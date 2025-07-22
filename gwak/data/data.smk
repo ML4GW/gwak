@@ -45,8 +45,24 @@ rule find_valid_segments:
             --ifos {wildcards.ifos} \
             --save-path {output.save_path}'
 
+rule get_token:
+    output: "tmp/token_ready.txt"
+    shell:
+        """
+        echo " "
+        echo " "
+        echo "Get scitoken..."
+        echo " "
+        echo "    Check if any window pops up automatically."
+        echo " "
+        echo " "
+        htgettoken -a vault.ligo.org -i igwn 
+        echo "Token obtained at $(date)" > {output}
+        """
+
 rule pull_data:
     input:
+        "tmp/token_ready.txt",
         config = 'data/configs/{segment_type}-{ifos}.yaml',
         segments = 'output/data/segments.{segment_type}-{ifos}.npy'
     output:
