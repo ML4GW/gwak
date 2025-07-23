@@ -65,6 +65,7 @@ def gwak_background(
         out_dir.mkdir(parents=True, exist_ok=True)
 
     # Find segments
+    segments=None
     if segments:
 
         segs = np.load(segments)
@@ -113,7 +114,12 @@ def gwak_background(
             with h5py.File(save_dir / file_name, "w") as g:
 
                 for dname, dset in strains.items():
-                    g.create_dataset(dname, data=dset)
+                    g.create_dataset(
+                        dname, 
+                        data=dset, 
+                        # compression="lzf", 
+                        # chunks=(1, 4096*32)
+                    )
 
         # Handle Omicron processing
         if omi_paras is not None:
@@ -130,7 +136,7 @@ def gwak_background(
                     end_time=seg_end,
                     output_dir= Path(out_dir) / f"Segs_{int(seg_start)}_{int(seg_dur)}", 
                     urltype="file",
-                    host=host,
+                    # host=host, # Let it use default CIT datafind server
                 )
 
             bash_scripts = omicron_bashes(
@@ -162,11 +168,11 @@ def gwak_background(
         bash_scripts = sorted(bash_scripts)
 
         print("Launching Omicron....")
-        with ThreadPoolExecutor(max_workers=2) as e:
+        with ThreadPoolExecutor(max_workers=omi_paras["max_workers"]) as e:
             
-            for bash_file in omicron_bash_files:
+            for conut, bash_file in enumerate(omicron_bash_files):
             
-                e.submit(run_omicron_bash_file, bash_file)
+                e.submit(run_omicron_bash_file, bash_file.resolve())
                 print(f"Run {bash_file}")
                 time.sleep(0.1)
                 print("====")

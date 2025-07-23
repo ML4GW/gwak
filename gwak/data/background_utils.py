@@ -4,6 +4,7 @@ import subprocess
 
 import gwdatafind.utils
 import torch
+import time
 from torch.nn import functional as F 
 import math
 import h5py
@@ -377,7 +378,10 @@ def omicron_bashes(
         with open (bash_file_path, 'w') as rsh:
             for args in omicron_args:
                 rsh.writelines(f"{args} \\\n")
-
+        time.sleep(1)
+        while Path(bash_file_path).exists() == False: 
+            print(f"Waiting for {bash_file_path} to be created...")
+            time.sleep(1)
     return bash_files
 
 
