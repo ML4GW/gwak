@@ -1519,7 +1519,9 @@ class GenericDataModule(pl.LightningDataModule):
                               "pin_memory":self.pin_memory}
 
 class OfflineLIGOData(GenericDataModule):
-    def __init__(self, signal_classes, chunk_size=10_000, data_dir=None, ifos=None, glitch_root=None, **kwargs):
+    def __init__(self, signal_classes, chunk_size=10_000, data_dir=None, ifos=None, glitch_root=None,
+                 sample_rate:int=4096, kernel_length:float=1.0, psd_length:float=64,fduration:float=1,fftlength:float=2,data_saving_file:Optional[str]=None,
+                 **kwargs):
         super().__init__(**kwargs)
         self.signal_classes = signal_classes
         self.chunk_size = chunk_size
@@ -1527,17 +1529,20 @@ class OfflineLIGOData(GenericDataModule):
         self.ifos = ifos # same story
         self.glitch_root = glitch_root # same story
 
-        self.data_dir = "/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/offline_dataset/"
+        self.data_dir = "/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/offline_dataset_v2/"
         self.train_files = [
-            self.data_dir + "dataset_HL_SR4096_kernel1.0_3194.h5",
-            self.data_dir + "dataset_HL_SR4096_kernel1.0_3698.h5",
-            self.data_dir + "dataset_HL_SR4096_kernel1.0_1241.h5"
+            #self.data_dir + "dataset_HL_SR4096_kernel1.0_3194.h5",
+            #self.data_dir + "dataset_HL_SR4096_kernel1.0_3698.h5",
+            #self.data_dir + "dataset_HL_SR4096_kernel1.0_1241.h5"
+            self.data_dir + 'dataset_test_HL_SR4096_kernel1.0_5877.h5'
         ]
         self.val_files = [
-            self.data_dir + "dataset_HL_SR4096_kernel1.0_6779.h5"
+            #self.data_dir + "dataset_HL_SR4096_kernel1.0_6779.h5"
+            self.data_dir + 'dataset_train_HL_SR4096_kernel1.0_9867.h5'
         ]
         self.test_files = [
-            self.data_dir + "dataset_HL_SR4096_kernel1.0_6130.h5"
+            #self.data_dir + "dataset_HL_SR4096_kernel1.0_6130.h5"
+            self.data_dir + 'dataset_train_HL_SR4096_kernel1.0_8790.h5'
         ]
         self.all_signal_label_names = {i:c for i,c in enumerate(self.signal_classes)}
         
