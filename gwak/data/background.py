@@ -65,7 +65,6 @@ def gwak_background(
         out_dir.mkdir(parents=True, exist_ok=True)
 
     # Find segments
-    segments=None
     if segments:
 
         segs = np.load(segments)
