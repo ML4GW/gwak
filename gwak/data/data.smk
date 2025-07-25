@@ -46,7 +46,7 @@ rule find_valid_segments:
             --save-path {output.save_path}'
 
 rule get_token:
-    output: "tmp/token_ready.txt"
+    output: token_log = "tmp/token_ready.txt"
     shell:
         """
         echo " "
@@ -62,7 +62,7 @@ rule get_token:
 
 rule pull_data:
     input:
-        "tmp/token_ready.txt",
+        token_log = "tmp/token_ready.txt",
         config = 'data/configs/{segment_type}-{ifos}.yaml',
         segments = 'output/data/segments.{segment_type}-{ifos}.npy'
     output:

@@ -871,10 +871,6 @@ class SignalDataloader(GwakBaseDataloader):
                 self._logger.info('centered waveforms fucked')
 
             snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
-            with h5py.File("/home/hongyin.chen/gwak-check_01.h5", "w") as f:
-
-                f.create_dataset("target_snrs", data=snr_factor.cpu().numpy())
-            
             rescaled_waveforms = self.rescaler.forward(
                 responses=waveforms, 
                 psds=psds,

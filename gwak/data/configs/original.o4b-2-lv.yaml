@@ -8,7 +8,8 @@ ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burs
 ana_end: 1402069900
 sample_rate: 4096
 save_dir: output/O4_MDC_background/LV
-host: datafind.igwn.org
+host: datafind.ldas.cit:80 # datafind.igwn.org
+compression: lzf # lzf, gzip, or null
 skip_background_generation: True
 omi_paras:
   clear_out_dir: True

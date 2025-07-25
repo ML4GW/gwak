@@ -5,20 +5,21 @@ channels: ["GDS-CALIB_STRAIN_CLEAN", "GDS-CALIB_STRAIN_CLEAN"]
 frame_type: ["HOFT_C00", "HOFT_C00"]
 # start and end don't matter if we provide segment npy array
 ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_2/O4b-2
-ana_end: 1402069900
+ana_end:   1401699900
 sample_rate: 4096
 save_dir: output/O4_MDC_background/HL
-host: datafind.igwn.org
-skip_background_generation: True
-omi_paras:
-  clear_out_dir: True 
-  out_dir: output/omicron/HL # Please ensure this directory does not contain old data. 
-  q_range: [3.3166, 108.0]
-  frequency_range: [30.0, 2048.0]
-  cluster_dt: 0.5
-  chunk_duration: 124
-  segment_duration: 64
-  overlap_duration: 4
-  mismatch_max: 0.2
-  snr_threshold: 5.0
-  max_workers: 8
+host: datafind.ldas.cit:80 # datafind.igwn.org
+compression: lzf # lzf, gzip, or null
+skip_background_generation: null
+# omi_paras:
+#   clear_out_dir: True 
+#   out_dir: output/omicron/HL # Please ensure this directory does not contain old data. 
+#   q_range: [3.3166, 108.0]
+#   frequency_range: [30.0, 2048.0]
+#   cluster_dt: 0.5
+#   chunk_duration: 124
+#   segment_duration: 64
+#   overlap_duration: 4
+#   mismatch_max: 0.2
+#   snr_threshold: 5.0
+#   max_workers: 8

@@ -42,6 +42,7 @@ def gwak_background(
     state_flag: list[str]=None,
     frame_type: list[str]=None,
     segments: str = None, # provide segments instead of start and end time
+    compression: Optional[str] = None,
     skip_background_generation: Optional[bool]=False,
     # Omicron process
     omi_paras: Optional[dict] = None,
@@ -108,16 +109,17 @@ def gwak_background(
 
             file_name = f"background-{int(seg_start)}-{int(seg_dur)}.h5"
 
-            # ToDo: Compress the data before saving
-            #       https://docs.h5py.org/en/stable/high/dataset.html#dataset
+            chunks = None
+            if compression is not None:
+                chunks = (4096*32,)
             with h5py.File(save_dir / file_name, "w") as g:
 
                 for dname, dset in strains.items():
                     g.create_dataset(
                         dname, 
                         data=dset, 
-                        # compression="lzf", 
-                        # chunks=(1, 4096*32)
+                        compression=compression,
+                        chunks=chunks
                     )
 
         # Handle Omicron processing
