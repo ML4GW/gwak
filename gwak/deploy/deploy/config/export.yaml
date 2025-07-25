@@ -3,7 +3,7 @@ model_dir: null
 output_dir: null 
 clean: True
 background_batch_size: 2
-stride_batch_size: 256
+stride_batch_size: 64
 ifos: ["H1", "L1"]
 # ifos: ["H1", "V1"]
 # ifos: ["L1", "V1"]

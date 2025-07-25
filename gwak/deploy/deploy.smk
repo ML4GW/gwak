@@ -15,7 +15,7 @@ rule export:
     shell:
         'mkdir -p tmp; '
         'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
-        deploy/cli_export.py export \
+        deploy/cli.py export \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
 
@@ -31,6 +31,22 @@ rule infer:
         'mkdir -p tmp; '
         'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
         deploy/cli.py infer \
+        --config ../{input.config} \
+        --project {params.cli} | tee ../{output.artefact}'
+        # --result_dir {params.output} 
+
+rule infer_condor:
+    input:
+        config = 'deploy/deploy/config/infer.yaml',
+    params:
+        cli = lambda wildcards: wildcards.deploymodels,
+        output = 'output/infer/{deploymodels}'
+    output:
+        artefact = 'tmp/infer_condor_{deploymodels}.log'
+    shell:
+        'mkdir -p tmp; '
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
+        deploy/cli.py infer_condor \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
         # --result_dir {params.output} 
@@ -52,6 +68,9 @@ rule export_all:
 
 rule infer_all:
     input: expand(rules.infer.output, deploymodels='combination')
+
+rule infer_condor_all:
+    input: expand(rules.infer_condor.output, deploymodels='combination')
 
 rule deploy_all:
     input: expand(rules.deploy.output, run_name=['first_run', 'second_run'])

@@ -4,7 +4,7 @@ from jsonargparse import ArgumentParser, ActionConfigFile
 
 
 def build_parser(
-    subcommands=["export", "infer", "deploy"],
+    subcommands=["export", "infer", "infer_condor", "deploy"],
     action="store",
     skip_keys=["project", "output_dir", "run_name"]
 ):
@@ -39,6 +39,20 @@ def main(args=None):
 
     if subcommand == "infer":
         from deploy.infer_module import infer
+        
+        subparser = build_parser(action=ActionConfigFile)
+        subparser.add_function_arguments(
+            infer, 
+            skip=skip_keys
+        ) 
+        args = subparser.parse_args()
+        args = subparser.instantiate_classes(args)
+        delattr(args, "subcommand")
+
+        infer(**args)
+
+    if subcommand == "infer_condor":
+        from deploy.infer import infer
         
         subparser = build_parser(action=ActionConfigFile)
         subparser.add_function_arguments(

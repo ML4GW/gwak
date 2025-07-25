@@ -161,6 +161,7 @@ def infer(
                 job_dir.mkdir(parents=True, exist_ok=True)
                 config_file = make_infer_config(
                     job_dir=job_dir,
+                    result_dir=result_dir,
                     triton_server_ip=ip,
                     grpc_port=grpc_port,
                     gwak_streamer=gwak_streamer,
