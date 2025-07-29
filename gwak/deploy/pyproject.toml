@@ -25,6 +25,9 @@ h5py = "^3.12.1"
 tqdm = "^4.67.1"
 torch = "^2.6.0"
 ratelimiter = "^1.2.0.post0"
+ipykernel = "^6.29.5"
+matplotlib = "^3.9"
+bokeh = "^3.4"
 
 [[tool.poetry.source]]
 name = "torch"

@@ -1,6 +1,10 @@
 import os
 import re
+import subprocess
+
+import gwdatafind.utils
 import torch
+import time
 from torch.nn import functional as F 
 import math
 import h5py
@@ -40,6 +44,7 @@ def get_conincident_segs(
     start:int,
     stop:int,
     state_flag:list,
+    host:str="datafind.ldas.cit:80"
 ):
 
     query_flag = []
@@ -49,9 +54,9 @@ def get_conincident_segs(
     flags = DataQualityDict.query_dqsegdb(
         query_flag,
         start,
-        stop
+        stop,
+        host=host,
     )
-
     segs = []
 
     try:
@@ -68,6 +73,30 @@ def get_conincident_segs(
 
     return segs
     
+    
+def check_scitoken():
+    """
+    # Activate the SciToken for GW data access.
+    # This is required to access the data from the GW datafind service.
+    # """
+
+    # print("Activating SciToken for GW data access...")
+    print("")
+    print("Check SciToken status.")
+    print("")
+
+
+    result = subprocess.run([
+        "htgettoken", 
+        "-a", 
+        "vault.ligo.org", 
+        "-i", 
+        "igwn",
+    ],
+    text=True
+    )
+    print(result.stdout)
+
 
 def get_background(
     seg_start: int,
@@ -76,13 +105,15 @@ def get_background(
     frame_type:list,
     channels:list,
     sample_rate:int,
-    verbose:bool=True
+    verbose:bool=True,
+    host:str="datafind.ldas.cit:80"
 ): 
     
     strains = {}
+    print(f"Fetching data from {host}")
     logging.info(f"Collecting strain data from {seg_start} to {seg_end} at {channels}")
     for num, ifo in enumerate(ifos):
-        
+
         if 'V' in ifo:  ### VIRGO uses frametype WITHOUT the IFO name
             files = find_urls(
                 site=f"{ifo[0]}",
@@ -90,6 +121,7 @@ def get_background(
                 gpsstart=seg_start,
                 gpsend=seg_end,
                 urltype="file",
+                host=host,
             )
 
         else: ### LIGO uses frametype WITH the IFO name
@@ -100,13 +132,14 @@ def get_background(
                 gpsstart=seg_start,
                 gpsend=seg_end,
                 urltype="file",
+                host=host,
             )
-        print(f"{ifo}_{frame_type[num]}")
+
         print(f"Found {len(files)} files for {ifo}")
         if len(files) == 0:
             raise ValueError(f"No files found for {ifo} between {seg_start} and {seg_end}")
 
-        print(seg_start, seg_end)
+        print(f"Reading strain data betweeen {seg_start} and {seg_end}.")
         strains[ifo] = TimeSeries.read(
             files, 
             f"{ifo}:{channels[num]}", 
@@ -116,7 +149,6 @@ def get_background(
             verbose=verbose
         ).resample(sample_rate).value
         print(f"Strain data for {ifo} collected")
-        print(strains[ifo].shape)
         print()
 
     return strains
@@ -184,7 +216,8 @@ def create_lcs(
     start_time,
     end_time,
     output_dir,
-    urltype="file"
+    urltype="file",
+    host: str = "datafind.ldas.cit:80"
 ):
     """
     Create lcs file for omicron to fetch strain data (*.gwf file) 
@@ -200,8 +233,8 @@ def create_lcs(
         gpsstart=start_time,
         gpsend=end_time,
         urltype=urltype,
+        host=host,
     )
-    # breakpoint()
     
     output_dir = output_dir / ifo
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -345,7 +378,10 @@ def omicron_bashes(
         with open (bash_file_path, 'w') as rsh:
             for args in omicron_args:
                 rsh.writelines(f"{args} \\\n")
-
+        time.sleep(1)
+        while Path(bash_file_path).exists() == False: 
+            print(f"Waiting for {bash_file_path} to be created...")
+            time.sleep(1)
     return bash_files
 
 

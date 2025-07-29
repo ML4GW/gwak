@@ -3,7 +3,7 @@ model_dir: null
 output_dir: null 
 clean: True
 background_batch_size: 2
-stride_batch_size: 256
+stride_batch_size: 64
 ifos: ["H1", "L1"]
 # ifos: ["H1", "V1"]
 # ifos: ["L1", "V1"]
@@ -19,5 +19,5 @@ sample_rate: 4096
 preproc_instances: 8
 inference_sampling_rate: 4
 device: cuda:0 # cuda:0
-cl_config: s4_kl1.0_bs256
-fm_config: NF_onlyBkg
+cl_config: resnet_kl1.0_bs512
+fm_config: NF_from_file_conditioning
