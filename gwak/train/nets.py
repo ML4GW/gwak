@@ -32,8 +32,19 @@ from PIL import Image
 from io import BytesIO
 import shutil
 
+activation_functions = {
+    'relu': nn.ReLU(),
+    'leaky_relu': nn.LeakyReLU(),
+    'elu': nn.ELU(),
+    'selu': nn.SELU(),
+    'tanh': nn.Tanh(),
+    'sigmoid': nn.Sigmoid(),
+    'softmax': nn.Softmax(dim=-1),
+    'swish': nn.SiLU(),
+}
+
 class MLP(nn.Module):
-    def __init__(self, d_input:int, hidden_dims:list[int], d_output, dropout=0.0, activation=nn.SiLU(), output_activation=None):
+    def __init__(self, d_input:int, hidden_dims:list[int], d_output:int, dropout=0.0, activation='swish', output_activation=None):
         super().__init__()
         #copying the paper of having one-layer MLP
         layers = []
@@ -43,12 +54,12 @@ class MLP(nn.Module):
             dcurr = d_input
             for dh in hidden_dims:
                 layers.append(nn.Linear(dcurr,dh))
-                layers.append(activation)
+                layers.append(activation_functions[activation])
                 layers.append(nn.Dropout(dropout))
                 dcurr = dh
             layers.append(nn.Linear(dcurr,d_output))
         if output_activation is not None:
-            layers.append(output_activation)
+            layers.append(activation_functions[output_activation])
         
         self.model = nn.Sequential(*layers)
 
