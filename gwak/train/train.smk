@@ -26,8 +26,10 @@ cl_configs = [
     'resnet_kl1.0_bs512_noClassifier_noMultiSG',
     'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus',
     'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
-    'iTransformer_test',
-    'resnet_kl1.0_bs512'
+    'resnet_kl1.0_bs512',
+    'Astroconformer',
+    'iTransformer',
+    'ResNet'
     ]
 fm_configs = [
     'NF_onlyBkg',
@@ -48,7 +50,7 @@ wildcard_constraints:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        data_dir = '/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/'
+        data_dir = 'output/O4_MDC_background/{ifos}/'
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:

@@ -10,11 +10,14 @@ def sum_args(a, b):
 
 class GwakMultiSignalCLI(LightningCLI):
     def before_instantiate_classes(self):
-        sample_rate = self.config["fit.data.init_args.sample_rate"]
-        fduration = self.config['fit.data.init_args.fduration']
-        kernel_length = self.config['fit.data.init_args.kernel_length']
+        sample_rate = getattr(self.config,"fit.data.init_args.sample_rate",None)
+        fduration = getattr(self.config,'fit.data.init_args.fduration',None)
+        kernel_length = getattr(self.config,'fit.data.init_args.kernel_length',None)
+        if sample_rate is None or fduration is None or kernel_length is None:
+            print("Sample rate, fduration, and kernel length =", sample_rate, fduration, kernel_length,", make sure this is right for your purposes!")
         
-        for i in range(len(self.config['fit.data.init_args.waveforms'])):
+        waveforms = getattr(self.config, 'fit.data.init_args.waveforms', [])
+        for i in range(len(waveforms)):
             if self.config['fit.data.init_args.signal_classes'][i] in ["Background", "Glitch", "CCSN", "FakeGlitch"]: continue
             
             if "sample_rate" in self.config['fit.data.init_args.waveforms'][i]['init_args'].keys():
@@ -26,7 +29,8 @@ class GwakMultiSignalCLI(LightningCLI):
         # harmonize lr between optimizer and scheduler if applicable
         if self.config['fit.model.class_path'] == "cl_models.Tarantula" or self.config['fit.model.class_path'] == "cl_models.iTransformer":
             print("Making LR scheduling update for tarantula")
-            tot_steps = self.config['fit.trainer.max_epochs'] * self.config['fit.data.init_args.batches_per_epoch']
+            batches_per_epoch = self.config['fit.data.init_args.batches_per_epoch'] if 'fit.data.init_args.batches_per_epoch' in self.config.keys() else self.config['fit.trainer.limit_train_batches']
+            tot_steps = self.config['fit.trainer.max_epochs'] * batches_per_epoch
             self.config['fit.model.init_args.total_steps'] = tot_steps
 
         # make sure length is right if we're using S4 SSM
