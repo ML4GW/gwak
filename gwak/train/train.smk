@@ -257,12 +257,12 @@ rule make_plots_i:
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 300000 \
+            --nevents 30000 \
             --threshold-1yr 20 '
 
 rule make_plots:
     input:
         expand(rules.make_plots_i.output,
-            cl_config='resnet_kl1.0_bs512',
-            fm_config='FM_multiSignalAndBkg',
+            cl_config='ResNet',
+            fm_config='NF_from_file_conditioning',
             ifos=['HL'])
