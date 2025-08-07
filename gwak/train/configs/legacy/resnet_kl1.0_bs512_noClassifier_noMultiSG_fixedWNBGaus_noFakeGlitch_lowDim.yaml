@@ -117,4 +117,4 @@ data:
         maximum: 100
         index: 3
     snr_init_factor: 10.0
-    snr_anneal_epochs: 10
+    snr_anneal_epochs: 20

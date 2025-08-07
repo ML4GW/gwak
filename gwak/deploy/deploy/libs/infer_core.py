@@ -61,12 +61,12 @@ def client_action(
             if Tb == 0: 
                 _shifts = [0, 0]
             resolved_job_dir = job_dir / f"batch_job/job_{submit_count:07d}" # Make this to flexable
-            result_dir = Path(result_dir) / "inference_result" # infer_result_dir
+            _result_dir = Path(result_dir) / "inference_result" # infer_result_dir
             job_dir.mkdir(parents=True, exist_ok=True)
             logging.info(f"Creating config at {resolved_job_dir}.")
             config_file = make_infer_config(
                 job_dir=resolved_job_dir, #local
-                result_dir=result_dir,#local 
+                result_dir=_result_dir,#local 
                 triton_server_ip=ip,
                 grpc_port=grpc_port,
                 gwak_streamer=gwak_streamer,

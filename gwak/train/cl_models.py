@@ -417,7 +417,7 @@ class Crayon(SimCLRBase):
         n_temp_anneal: int = 10, # number of epochs to anneal temperature
         supervised_simclr: bool = False,
         lr_opt: float = 1e-4,
-        lr_min: float = 1e-5,
+        min_lr: float = 1e-5,
         cos_anneal: bool = False,
         cos_anneal_tmax: int = 50,
         num_classes: int = 8,
@@ -439,7 +439,7 @@ class Crayon(SimCLRBase):
         self.n_temp_anneal = n_temp_anneal
         self.supervised_simclr = supervised_simclr
         self.lr_opt = lr_opt
-        self.lr_min = lr_min
+        self.min_lr = min_lr
         self.cos_anneal = cos_anneal
         self.cos_anneal_tmax = cos_anneal_tmax
         self.num_classes = num_classes
@@ -487,7 +487,7 @@ class Crayon(SimCLRBase):
             )
         
         if self.cos_anneal:
-            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.lr_min)
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.min_lr)
             return {"optimizer": optimizer, "lr_scheduler": sched}
         else:
             return optimizer
@@ -631,7 +631,7 @@ class Contour(SimCLRBase):
         n_temp_anneal: int = 10, # number of epochs to anneal temperature
         supervised_simclr: bool = False,
         lr: float = 1e-4,
-        lr_min: float = 1e-5,
+        min_lr: float = 1e-5,
         cos_anneal: bool = False,
         cos_anneal_tmax: int = 50,
         num_classes: int = 8,
@@ -654,7 +654,7 @@ class Contour(SimCLRBase):
         self.n_temp_anneal = n_temp_anneal
         self.supervised_simclr = supervised_simclr
         self.lr = lr
-        self.lr_min = lr_min
+        self.min_lr = min_lr
         self.cos_anneal = cos_anneal
         self.cos_anneal_tmax = cos_anneal_tmax
         self.num_classes = num_classes
@@ -690,7 +690,7 @@ class Contour(SimCLRBase):
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
         if self.cos_anneal:
-            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.lr_min)
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.min_lr)
             return {"optimizer": optimizer, "lr_scheduler": sched}
         else:
             return optimizer
@@ -700,6 +700,8 @@ class iTransformer(SimCLRBase):
         self,
         num_ifos: Union[int,str] = 2,
         num_timesteps: int = 4096,
+        conv_embd_kernel_size: int = 64,
+        conv_embd_channels: int = 16,
         latent_dim: int = 128,
         num_layers: int = 4,
         num_head: int = 2,
@@ -707,6 +709,7 @@ class iTransformer(SimCLRBase):
         fc_output_dims:list[int] = [],
         d_output:int = 16,
         d_contrastive_space: int = 16,
+        proj_mlp_hidden: Optional[list] = None,
         normalize: bool = True,
         dropout: float = 0.1,
         cls_dropout: float = 0.0,
@@ -733,12 +736,15 @@ class iTransformer(SimCLRBase):
         self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
         self.num_timesteps = num_timesteps
         self.latent_dim = latent_dim
+        self.conv_embd_kernel_size = conv_embd_kernel_size
+        self.conv_embd_channels = conv_embd_channels
         self.num_layers = num_layers
         self.num_head = num_head
         self.num_cls_layers = num_cls_layers
         self.fc_output_dims = fc_output_dims
         self.d_output = d_output
         self.d_contrastive_space = d_contrastive_space
+        self.proj_mlp_hidden = proj_mlp_hidden
         self.normalize = normalize
         self.dropout = dropout
         self.cls_dropout = cls_dropout
@@ -763,9 +769,12 @@ class iTransformer(SimCLRBase):
         # define the self attention blocks
         self.self_attn = InvertedEncoderTransformer(
             num_features=self.num_timesteps,
+            num_ifos=self.num_ifos,
             num_layers=self.num_layers,
             nhead=self.num_head,
             latent_dim=self.latent_dim,
+            conv_embd_kernel_size=self.conv_embd_kernel_size,
+            conv_embd_channels=self.conv_embd_channels,
             dim_factor_feedforward=self.feedforward_factor,
             embed_first=True,
         )
@@ -791,7 +800,7 @@ class iTransformer(SimCLRBase):
 
         # projection head with 1 hidden layer for SimCLR
         self.projection_head = MLP(d_input=self.d_output,
-                                   hidden_dims=[self.d_output],
+                                   hidden_dims=[self.d_output] if self.proj_mlp_hidden is None else self.proj_mlp_hidden,
                                    d_output=self.d_contrastive_space
         )
         if self.use_classifier:
@@ -817,3 +826,62 @@ class iTransformer(SimCLRBase):
                 "frequency":1
             }
         }
+    
+class ModularSimCLR(SimCLRBase):
+
+    def __init__(
+        self,
+        model: nn.Module,
+        projection_head: nn.Module,
+        num_ifos: Union[int,str] = 2,
+        temperature: float = 0.1,
+        temperature_init: float = None, # initial temperature to start with, if None then constant temp throughout
+        n_temp_anneal: int = 10, # number of epochs to anneal temperature
+        supervised_simclr: bool = False,
+        lr: float = 1e-4,
+        min_lr: float = 1e-5,
+        cos_anneal: bool = False,
+        cos_anneal_tmax: int = 50,
+        num_classes: int = 8,
+        classifier = None,
+        lambda_classifier: float = 0.5,
+        class_anneal_epochs: int = 10, # number of epochs over which to anneal lambda_classifier
+        anneal_classifier: bool = True, # whether to anneal classifier loss
+        ):
+
+        super().__init__()
+        self.num_ifos = num_ifos if type(num_ifos) == int else len(num_ifos)
+        self.temperature = temperature
+        self.temperature_init = temperature_init
+        self.n_temp_anneal = n_temp_anneal
+        self.supervised_simclr = supervised_simclr
+        self.lr = lr
+        self.min_lr = min_lr
+        self.cos_anneal = cos_anneal
+        self.cos_anneal_tmax = cos_anneal_tmax
+        self.num_classes = num_classes
+        self.use_classifier = classifier is not None
+        self.lambda_classifier = lambda_classifier
+        self.lambda_classifier_original = lambda_classifier
+        self.class_anneal_epochs = class_anneal_epochs
+        self.anneal_classifier = anneal_classifier
+
+        self.model = model
+        self.projection_head = projection_head
+        self.classifier = classifier
+        
+        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
+                                                  contrast_mode='all', 
+                                                  base_temperature=self.temperature)
+
+        self.val_outputs = []
+
+        self.save_hyperparameters()
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
+        if self.cos_anneal:
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.min_lr)
+            return {"optimizer": optimizer, "lr_scheduler": sched}
+        else:
+            return optimizer

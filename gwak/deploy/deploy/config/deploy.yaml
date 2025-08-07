@@ -1,4 +1,4 @@
-slurm_batch: 2
+slurm_batch: 20
 # Slurm arguments
 slurm_kwargs:
   job-name: null
@@ -11,7 +11,7 @@ slurm_kwargs:
   gpu_per_node: 1 
   cpus-per-task: 8
   mem: 32G
-  time: 0-01:30:00
+  time: 0-03:00:00
 
   cmd: # null
     - module load apptainer # Sever dependent
@@ -24,8 +24,8 @@ slurm_kwargs:
 run_name: null
 # Data arguments
 ifos: ["H1", "L1"]
-Tb: 1 # Tb = 0 will run zero-lag
-fname: /fred/oz994/andy/Data/gwak/HL_test # Sever dependent
+Tb: 0 # Tb = 0 will run zero-lag
+fname: /fred/oz994/andy/Data/gwak/bbc/O4_test_MDC_short-0/HL # Sever dependent
 psd_length: 64
 stride_batch_size: 256
 sample_rate: 4096
@@ -34,13 +34,13 @@ data_format: h5 # gwf
 inference_sampling_rate: 4
 
 # Triton and Model arguments
-result_dir: /fred/oz994/andy/Output/gwak
+result_dir: /fred/oz994/andy/Output/gwak-bbc
 project: combination
 grpc_port: 8001
 image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent
 job_rate_limit: 8
 patients: 30
-cl_config: s4_kl1.0_bs256
-fm_config: NF_onlyBkg
+cl_config: resnet_kl1.0_bs512
+fm_config: NF_from_file_conditioning
 model_repo_dir: null
 singularity_path: /apps/system/software/apptainer/latest/bin/apptainer # Sever dependent
