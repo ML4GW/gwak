@@ -22,4 +22,8 @@ $ snakemake -c1 infer_all -F
 $ cd gwak/gwak
 $ snakemake -c1 deploy -F
 ```
- 
+# Help 
+Use the following commad if VScode did not recognize the jupyter kernel correctly. 
+```
+poetry run python -m ipykernel install --user --name deploy-py3.9 --display-name "Python (deploy-py3.9)"
+```
