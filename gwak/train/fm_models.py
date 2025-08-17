@@ -51,13 +51,13 @@ class Standardizer(nn.Module):
         return (x-self.mean.to(x))/self.std.to(x)
 
 class FlowWrapper(nn.Module):
-    def __init__(self, flow, standardizer):
+    def __init__(self, flow, standardizer=None):
         super().__init__()
         self.flow = flow
         self.standardizer = standardizer
 
     def forward(self, x, context):
-        x = self.standardizer(x)
+        if self.standardizer: x = self.standardizer(x)
         return self.flow.log_prob(inputs=x,context=context)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
@@ -105,7 +105,7 @@ class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         # Modifiy these to read the last training/valdation data
         # to acess the input shape.
-        X = torch.randn(1, 8).to(module.device) # GWAK 2
+        X = torch.randn(1, 16).to(module.device) # GWAK 2
         trace = torch.jit.trace(module.model.to("cpu"), X.to("cpu"))
 
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
@@ -235,12 +235,16 @@ class MLPModel(nn.Module):
     def __init__(self, input_dim, hidden_dim=32):
         super().__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)  # Hidden layer
-        self.fc2 = nn.Linear(hidden_dim, 1)  # Output layer
+        self.fc11 = nn.Linear(hidden_dim, 16)  # Hidden layer
+        self.fc12 = nn.Linear(16, 8)  # Hidden layer
+        self.fc2 = nn.Linear(8, 1)  # Output layer
         self.activation = nn.ReLU()  # Non-linearity
         self.sigmaboy = nn.Sigmoid()
 
     def forward(self, x):
         x = self.activation(self.fc1(x))  # Apply activation
+        x = self.activation(self.fc11(x))  # Apply activation
+        x = self.activation(self.fc12(x))  # Apply activation
         x = self.sigmaboy(self.fc2(x))  # Output score (no sigmoid)
         return x
 
@@ -249,24 +253,31 @@ class NonLinearClassifier(GwakBaseModelClass):
             self,
             embedding_path: str=None,
             embedding_model: str=None,
+            means: Optional[str] = None,
+            stds: Optional[str] = None,
             new_shape=128,
             n_dims=16,
             c_path=None,
-            means=None,
-            stds=None,
             conditioning=None,
             learning_rate=1e-3,
             hidden_dim=32):
         super().__init__()
         self.model = MLPModel(n_dims, hidden_dim)
 
-        self.graph = torch.jit.load(embedding_model)
-        self.graph.eval()
-        self.graph.to(device=self.device)
-        self.get_logger().info(f"Loaded embedding model from {embedding_model}")
+        if embedding_model:
+            self.graph = torch.jit.load(embedding_model)
+            self.graph.eval()
+            self.graph.to(device=self.device)
+        else:
+            self.graph = None
 
         self.new_shape = new_shape
         self.learning_rate = learning_rate
+
+        # Store mean and std for standardization
+        self.embedding_mean = torch.tensor(np.load(means)).to(self.device) if means is not None else None
+        self.embedding_std = torch.tensor(np.load(stds)).to(self.device) if stds is not None else None
+        self.standardizer = Standardizer(self.embedding_mean,self.embedding_std) if means is not None else None
 
         self.save_hyperparameters()
 
@@ -279,14 +290,24 @@ class NonLinearClassifier(GwakBaseModelClass):
     def training_step(self, batch, batch_idx):
 
         batch, labels = batch
-        # 7 and 8 are background labels fixed from the dataset
+        unique, counts = np.unique(labels.cpu().numpy(), return_counts=True)
+        # self.get_logger().info(f'Background: {unique[-1]}', dict(zip(unique, counts)))
+        # 9 and 10 are background labels fixed from the dataset
         # Create masks
-        background_mask = (labels == 7) | (labels == 8)
+        background_mask = (labels == unique[-1]) | (labels == unique[-2])
         signal_mask = ~background_mask  # everything else
 
+        signal_feats = batch[signal_mask]
+        background_feats = batch[background_mask]
+
         # Feature extraction
-        signal_feats = self.graph(batch[signal_mask])
-        background_feats = self.graph(batch[background_mask])
+        if self.graph is not None:
+            signal_feats = self.graph(signal_feats)
+            background_feats = self.graph(background_feats)
+
+        if self.standardizer is not None:
+            signal_feats = self.standardizer(signal_feats)
+            background_feats = self.standardizer(background_feats)
 
         # Predictions
         signal_preds = self.forward(signal_feats)
@@ -300,6 +321,7 @@ class NonLinearClassifier(GwakBaseModelClass):
         loss_signal = F.binary_cross_entropy(signal_preds, target_signal)
         loss_background = F.binary_cross_entropy(background_preds, target_background)
         loss = loss_signal + loss_background
+        # self.get_logger().info(f"Signal loss {loss_signal}, background loss {loss_background}")
 
         self.log("train_loss", loss, on_epoch=True, sync_dist=True)
 
@@ -309,14 +331,24 @@ class NonLinearClassifier(GwakBaseModelClass):
     def validation_step(self, batch, batch_idx):
 
         batch, labels = batch
-        # 7 and 8 are background labels fixed from the dataset
+        unique, counts = np.unique(labels.cpu().numpy(), return_counts=True)
+        # self.get_logger().info(f'Background: {unique[-1]}', dict(zip(unique, counts)))
+        # 9 and 10 are background labels fixed from the dataset
         # Create masks
-        background_mask = (labels == 7) | (labels == 8)
+        background_mask = (labels == unique[-1]) # | (labels == 10)
         signal_mask = ~background_mask  # everything else
 
+        signal_feats = batch[signal_mask]
+        background_feats = batch[background_mask]
+
         # Feature extraction
-        signal_feats = self.graph(batch[signal_mask])
-        background_feats = self.graph(batch[background_mask])
+        if self.graph is not None:
+            signal_feats = self.graph(signal_feats)
+            background_feats = self.graph(background_feats)
+
+        if self.standardizer is not None:
+            signal_feats = self.standardizer(signal_feats)
+            background_feats = self.standardizer(background_feats)
 
         signal_preds = self.forward(signal_feats)
         background_preds = self.forward(background_feats)

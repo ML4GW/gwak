@@ -49,6 +49,7 @@ if __name__=='__main__':
     parser.add_argument('--means', type=str, default=None)
     parser.add_argument('--stds', type=str, default=None)
     parser.add_argument('--nevents', type=int, default=10000)
+    parser.add_argument('--include-signals', default=None, help='Use signal_classes, priors, waveforms from config if set')
     args = parser.parse_args()
 
     embed_model = torch.jit.load(args.embedding_model)
@@ -73,11 +74,107 @@ if __name__=='__main__':
     # Computed variable
     duration = fduration + kernel_length
 
-    # Signal setup
-    signal_classes = ['Glitch', 'Background']
-    priors = [None, None]
-    waveforms = [None, None]
-    extra_kwargs = [None, None]
+    # After loading the YAML config:
+    if args.include_signals in ['All', 'ALL']:
+        signal_classes = [
+            "MultiSineGaussian",
+            "SineGaussian",
+            "BBH",
+            "Gaussian",
+            "Cusp",
+            "Kink",
+            "KinkKink",
+            "WhiteNoiseBurst",
+            "CCSN",
+            "Background",
+            "Glitch",
+            ]
+
+        # Computed variable
+        duration = fduration + kernel_length
+
+        # Signal setup
+        priors = [
+            MultiSineGaussianBBC(),
+            SineGaussianBBC(),
+            LAL_BBHPrior(),
+            GaussianBBC(),
+            CuspBBC(),
+            KinkBBC(),
+            KinkkinkBBC(),
+            WhiteNoiseBurstBBC(),
+            None,
+            None,
+            None
+        ]
+        waveforms = [
+            MultiSineGaussian(sample_rate=sample_rate, duration=duration),
+            SineGaussian(sample_rate=sample_rate, duration=duration),
+            IMRPhenomPv2(),
+            Gaussian(sample_rate=sample_rate, duration=duration),
+            GenerateString(sample_rate=sample_rate),
+            GenerateString(sample_rate=sample_rate),
+            GenerateString(sample_rate=sample_rate),
+            WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
+            None,
+            None,
+            None
+        ]
+        extra_kwargs = [None,None,{"ringdown_duration": 0.9},None,None,None,None,None,None,None,None
+        ]
+
+    elif args.include_signals in ['WNB', 'wnb']:
+        signal_classes = [
+            "WhiteNoiseBurst",
+            "Background",
+            "Glitch",
+            ]
+
+        # Computed variable
+        duration = fduration + kernel_length
+
+        # Signal setup
+        priors = [
+            WhiteNoiseBurstBBC(),
+            None,
+            None
+        ]
+        waveforms = [
+            WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
+            None,
+            None
+        ]
+        extra_kwargs = [None,None,None
+        ]
+    elif args.include_signals in ['SG', 'sg']:
+        signal_classes = [
+            "SineGaussian",
+            "Background",
+            "Glitch",
+            ]
+
+        # Computed variable
+        duration = fduration + kernel_length
+
+        # Signal setup
+        priors = [
+            SineGaussianBBC(),
+            None,
+            None
+        ]
+        waveforms = [
+            SineGaussian(sample_rate=sample_rate, duration=duration),
+            None,
+            None
+        ]
+        extra_kwargs = [None,None,None
+        ]
+    elif args.include_signals is None:
+        # Default behavior
+        signal_classes = ['Glitch', 'Background']
+        priors = [None, None]
+        waveforms = [None, None]
+        extra_kwargs = [None, None]
 
     # DataLoader
     loader = SignalDataloader(
@@ -116,18 +213,21 @@ if __name__=='__main__':
         processed, labels, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
 
         embeddings = embed_model(processed).cpu().detach().numpy()
-        correlations = frequency_cos_similarity(processed).cpu().detach().numpy()
+        if args.correlations:
+            correlations = frequency_cos_similarity(processed).cpu().detach().numpy()
 
         all_labels.append(labels.cpu().detach().numpy())
         all_embeddings.append(embeddings)
-        all_correlations.append(correlations)
+        if args.correlations:
+            all_correlations.append(correlations)
 
-        del clean_batch, glitch_batch, processed, embeddings, correlations
+        del clean_batch, glitch_batch, processed, embeddings
         torch.cuda.empty_cache()
 
     all_labels = np.concatenate(all_labels, axis=0)
     all_embeddings = np.concatenate(all_embeddings, axis=0)
-    all_correlations = np.concatenate(all_correlations, axis=0)
+    if args.correlations:
+        all_correlations = np.concatenate(all_correlations, axis=0)
 
     np.save(f'{args.labels}', all_labels)
     print('Labels shape', all_labels.shape)
@@ -135,8 +235,9 @@ if __name__=='__main__':
     np.save(f'{args.embeddings}', all_embeddings)
     print('Embeddings shape', all_embeddings.shape)
 
-    np.save(f'{args.correlations}', all_correlations)
-    print('Correlation shape', all_correlations.shape)
+    if args.correlations:
+        np.save(f'{args.correlations}', all_correlations)
+        print('Correlation shape', all_correlations.shape)
 
     means = np.mean(all_embeddings, axis=0)
     stds = np.std(all_embeddings, axis=0)
