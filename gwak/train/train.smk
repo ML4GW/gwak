@@ -60,8 +60,8 @@ rule train_cl:
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
-            --model.num_ifos {wildcards.ifos} \
-            --data.glitch_root /n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{wildcards.ifos}/'
+            --model.num_ifos {wildcards.ifos} '
+            # --data.glitch_root /home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{wildcards.ifos}-backup/'
 
 rule compare_embeddings:
     input:
@@ -120,9 +120,99 @@ rule train_fm:
             --trainer.logger.save_dir {params.artefact} \
             --data.embedding_path {params.embeddings} \
             --data.c_path {params.correlations} \
+            --model.conditioning {params.conditioning} '
+
+            # --model.means {params.means} \
+            # --model.stds {params.stds} \
+
+
+rule precompute_wnb_embeddings_classifier:
+    params:
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='ResNet',
+            ifos='HL'),
+        data_dir = 'output/O4_MDC_background/HL/',
+        config = 'train/configs/ResNet.yaml'
+    output:
+        means = 'output/ResNet_wnb_HL/means.npy',
+        stds = 'output/ResNet_wnb_HL/stds.npy',
+        embeddings = 'output/ResNet_wnb_HL/embeddings.npy',
+        correlations = 'output/ResNet_wnb_HL/correlations.npy',
+        labels = 'output/ResNet_wnb_HL/labels.npy'
+    shell:
+        'python train/precompute_embeddings.py \
+            --embedding-model {params.embedding_model} \
+            --data-dir {params.data_dir} \
+            --config {params.config} \
+            --ifos HL \
+            --embeddings {output.embeddings} \
+            --labels {output.labels} \
+            --correlations {output.correlations} \
+            --means {output.means} \
+            --stds {output.stds} \
+            --include-signals WNB \
+            --nevents 200000 '
+
+rule precompute_sg_embeddings_classifier:
+    params:
+        embedding_model = expand(rules.train_cl.output.model,
+            cl_config='ResNet',
+            ifos='HL'),
+        data_dir = 'output/O4_MDC_background/HL/',
+        config = 'train/configs/ResNet.yaml'
+    output:
+        means = 'output/ResNet_sg_HL/means.npy',
+        stds = 'output/ResNet_sg_HL/stds.npy',
+        embeddings = 'output/ResNet_sg_HL/embeddings.npy',
+        correlations = 'output/ResNet_sg_HL/correlations.npy',
+        labels = 'output/ResNet_sg_HL/labels.npy'
+    shell:
+        'python train/precompute_embeddings.py \
+            --embedding-model {params.embedding_model} \
+            --data-dir {params.data_dir} \
+            --config {params.config} \
+            --ifos HL \
+            --embeddings {output.embeddings} \
+            --labels {output.labels} \
+            --correlations {output.correlations} \
+            --means {output.means} \
+            --stds {output.stds} \
+            --include-signals SG \
+            --nevents 200000 '
+
+rule train_wnb_classifier:
+    params:
+        artefact = directory('output/ResNet_HL_FM_multiSignalAndBkg/'),
+        embeddings = 'output/ResNet_signals_HL/embeddings.npy',
+        data_dir = 'output/O4_MDC_background/HL/',
+        config = 'train/configs/FM_multiSignalAndBkg.yaml',
+        means = 'output/ResNet_signals_HL/means.npy',
+        stds = 'output/ResNet_signals_HL/stds.npy',
+        labels = 'output/ResNet_signals_HL/labels.npy'
+    shell:
+        'python train/cli_fm.py fit --config {params.config} \
+            --trainer.logger.save_dir {params.artefact} \
             --model.means {params.means} \
             --model.stds {params.stds} \
-            --model.conditioning {params.conditioning} '
+            --data.embedding_path {params.embeddings} \
+            --data.labels_path {params.labels} '
+
+rule train_sg_classifier:
+    params:
+        artefact = directory('output/ResNet_HL_FM_multiSignalAndBkg/'),
+        embeddings = 'output/ResNet_signals_HL/embeddings.npy',
+        data_dir = 'output/O4_MDC_background/HL/',
+        config = 'train/configs/FM_multiSignalAndBkg.yaml',
+        means = 'output/ResNet_signals_HL/means.npy',
+        stds = 'output/ResNet_signals_HL/stds.npy',
+        labels = 'output/ResNet_signals_HL/labels.npy'
+    shell:
+        'python train/cli_fm.py fit --config {params.config} \
+            --trainer.logger.save_dir {params.artefact} \
+            --model.means {params.means} \
+            --model.stds {params.stds} \
+            --data.embedding_path {params.embeddings} \
+            --data.labels_path {params.labels} '
 
 rule combine_models:
     input:
@@ -168,12 +258,12 @@ rule make_plots_i:
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 100000 \
-            --threshold-1yr 15 '
+            --nevents 30000 \
+            --threshold-1yr 20 '
 
 rule make_plots:
     input:
         expand(rules.make_plots_i.output,
-            cl_config='resnet_kl1.0_bs512',
+            cl_config='ResNet',
             fm_config='NF_from_file_conditioning',
             ifos=['HL'])
