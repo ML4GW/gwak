@@ -11,6 +11,7 @@ segment_types = [
     'original.o4b-0',
     'short-0.o4b-0',
     'short-1.o4b-0',
+    'ARminusCat12_O4b',
 ]
 wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs]),
