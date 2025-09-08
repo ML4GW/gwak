@@ -32,7 +32,7 @@ model:
     n_temp_anneal: 10
     supervised_simclr: true
     lr: 1e-3
-    lr_min: 1e-5
+    min_lr: 1e-5
     cos_anneal: false
     cos_anneal_tmax: 50
     use_classifier: false

@@ -664,7 +664,6 @@ class Contour(SimCLRBase):
         self.class_anneal_epochs = class_anneal_epochs
         self.anneal_classifier = anneal_classifier
         self.classifier_hidden_dims = classifier_hidden_dims
-
         self.model = ResNet1D(
             in_channels=self.num_ifos,
             classes=self.d_output,
@@ -673,15 +672,25 @@ class Contour(SimCLRBase):
         )
 
         self.projector_hidden_dims = projector_hidden_dims if projector_hidden_dims is not None else [4*self.d_output, 4*self.d_output]
-        self.projection_head = MLP(d_input = self.d_output, hidden_dims=self.projector_hidden_dims, d_output = self.d_contrastive_space)
+        self.projection_head = MLP(
+            d_input = self.d_output, 
+            hidden_dims=self.projector_hidden_dims, 
+            d_output = self.d_contrastive_space
+        )
+
         if self.use_classifier:
             hidden_dims = self.classifier_hidden_dims if self.classifier_hidden_dims is not None else [4*self.d_output for _ in range(2)]
-            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
-                                d_output = self.num_classes)
+            self.classifier = MLP(
+                d_input = self.d_output, 
+                hidden_dims=hidden_dims, 
+                d_output = self.num_classes
+            )
         
-        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
-                                                  contrast_mode='all', 
-                                                  base_temperature=self.temperature)
+        self.loss_function = SupervisedSimCLRLoss(
+            temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
+            contrast_mode='all', 
+            base_temperature=self.temperature
+        )
 
         self.val_outputs = []
 
@@ -690,7 +699,11 @@ class Contour(SimCLRBase):
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
         if self.cos_anneal:
-            sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.min_lr)
+            sched = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, 
+                T_max=self.cos_anneal_tmax, 
+                eta_min=self.min_lr
+            )
             return {"optimizer": optimizer, "lr_scheduler": sched}
         else:
             return optimizer
