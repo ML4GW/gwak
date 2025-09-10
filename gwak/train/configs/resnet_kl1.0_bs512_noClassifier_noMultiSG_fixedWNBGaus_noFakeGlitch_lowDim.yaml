@@ -14,7 +14,7 @@ trainer:
       project: gwak2_embeddings
       entity: gwak
   log_every_n_steps: 1
-  max_epochs: 2
+  max_epochs: 50
   limit_val_batches: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -32,19 +32,19 @@ model:
     n_temp_anneal: 10
     supervised_simclr: true
     lr: 1e-3
-    lr_min: 1e-5
+    min_lr: 1e-5
     cos_anneal: false
     cos_anneal_tmax: 50
     use_classifier: false
-    num_classes: 11
+    num_classes: 9
 data:
   class_path: dataloader.SignalDataloader
   init_args:
     signal_classes:
       - "SineGaussian"
       - "BBH"
-      - "Gaussian"
       - "Cusp"
+      # - "Gaussian"
       - "Kink"
       - "KinkKink"
       - "WhiteNoiseBurst"
@@ -54,8 +54,8 @@ data:
     priors:
       - class_path: gwak.data.prior.SineGaussianBBC # SineGaussian
       - class_path: gwak.data.prior.LAL_BBHPrior # BBH
-      - class_path: gwak.data.prior.GaussianBBC # Gaussian
       - class_path: gwak.data.prior.CuspBBC # Cusp
+      # - class_path: gwak.data.prior.GaussianBBC # Gaussian
       - class_path: gwak.data.prior.KinkBBC # Kink
       - class_path: gwak.data.prior.KinkkinkBBC # KinkKink
       - class_path: gwak.data.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
@@ -69,13 +69,13 @@ data:
           duration: 0
       - class_path: ml4gw.waveforms.IMRPhenomPv2 # BBH
         init_args: {}
-      - class_path: ml4gw.waveforms.Gaussian # Gaussian
-        init_args:
-          sample_rate: 0
-          duration: 0
       - class_path: ml4gw.waveforms.GenerateString # Cusp
         init_args:
           sample_rate: 0
+      # - class_path: ml4gw.waveforms.Gaussian # Gaussian
+      #   init_args:
+      #     sample_rate: 0
+      #     duration: 0
       - class_path: ml4gw.waveforms.GenerateString # Kink
         init_args:
           sample_rate: 0
@@ -92,7 +92,7 @@ data:
     extra_kwargs:
       - null # SineGaussian
       - ringdown_duration: 0.9 # BBH
-      - null # Gaussian
+      # - null # Gaussian
       - null # Cusp
       - null # Kink
       - null # KinkKink

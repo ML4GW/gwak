@@ -50,7 +50,8 @@ wildcard_constraints:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        data_dir = 'output/O4_MDC_background/{ifos}/'
+        # data_dir = 'output/O4_MDC_background/{ifos}/'
+        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
@@ -83,7 +84,8 @@ rule precompute_embeddings:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = 'output/O4_MDC_background/{ifos}/',
+        # data_dir = 'output/O4_MDC_background/{ifos}/',
+        data_dir = '/fred/oz994/andy/Data/gwak/{ifos}',
         config = 'train/configs/{cl_config}.yaml'
     output:
         means = 'output/{cl_config}_{ifos}/means.npy',
@@ -158,7 +160,8 @@ rule precompute_sg_embeddings_classifier:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='ResNet',
             ifos='HL'),
-        data_dir = 'output/O4_MDC_background/HL/',
+        # data_dir = 'output/O4_MDC_background/HL/',
+        data_dir = '/fred/oz994/andy/Data/gwak/HL',
         config = 'train/configs/ResNet.yaml'
     output:
         means = 'output/ResNet_sg_HL/means.npy',
@@ -243,7 +246,8 @@ rule make_plots_i:
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = 'output/O4_MDC_background/{ifos}/',
+        # data_dir = 'output/O4_MDC_background/{ifos}/',
+        data_dir = '/fred/oz994/andy/Data/gwak/{ifos}',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:

@@ -28,6 +28,7 @@ ratelimiter = "^1.2.0.post0"
 ipykernel = "^6.29.5"
 matplotlib = "^3.9"
 bokeh = "^3.4"
+notebook = "^7.4.4"
 
 [[tool.poetry.source]]
 name = "torch"
