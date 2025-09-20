@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import sys
 from dataloader import SignalDataloader
@@ -11,20 +12,15 @@ import random
 import h5py
 import os
 
-if __name__ == "__main__":
+def main(ifos, num_samples_per_class, dataset):
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    assert len(sys.argv) == 4, "Usage python make_offline_dataset.py [ifos (HL,HV,LV)] [num_samples] [dataset (train,val,test)]"
-    ifos = sys.argv[1]
-    num_samples_per_class = int(sys.argv[2])
-    dataset = sys.argv[3]
-
-
-    data_dir = f"/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/{ifos}/"
+    data_dir = f"/home/katya.govorkova/gwak2/gwak/output/BBC_AnalysisReady_Cat12/{ifos}/"
     sample_rate = 4096
     kernel_length = 1.0
     psd_length = 64
-    fduration = 1
+    fduration = 2
     fftlength = 2
     batch_size = 128
     num_workers = 1
@@ -32,40 +28,40 @@ if __name__ == "__main__":
 
 
     random_id = random.randint(1000, 9999)
-    OUTFILE = f"/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/offline_dataset_v2/dataset_{dataset}_{ifos}_SR{sample_rate}_kernel{kernel_length}_{random_id}.h5"
+    OUTFILE = f"output/dataset_{dataset}_{ifos}_SR{sample_rate}_kernel{kernel_length}_{random_id}.h5"
     os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
 
     signal_classes = ["SineGaussian",
                     "BBH",
-                    "Gaussian",
-                    "Cusp",
-                    "Kink",
-                    "KinkKink",
+                    # "Gaussian",
+                    # "Cusp",
+                    # "Kink",
+                    # "KinkKink",
                     "WhiteNoiseBurst",
-                    "CCSN",
+                    # "CCSN",
                     "Background",
                     "Glitch"]
     priors = [
         SineGaussianBBC(),
         LAL_BBHPrior(),
-        GaussianBBC(),
-        CuspBBC(),
-        KinkBBC(),
-        KinkkinkBBC(),
+        # GaussianBBC(),
+        # CuspBBC(),
+        # KinkBBC(),
+        # KinkkinkBBC(),
         WhiteNoiseBurstBBC(),
-        None,
+        # None,
         None,
         None
     ]
     waveforms = [
         SineGaussian(sample_rate=sample_rate, duration=duration),
         IMRPhenomPv2(),
-        Gaussian(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate),
-        GenerateString(sample_rate=sample_rate),
-        GenerateString(sample_rate=sample_rate),
+        # Gaussian(sample_rate=sample_rate, duration=duration),
+        # GenerateString(sample_rate=sample_rate),
+        # GenerateString(sample_rate=sample_rate),
+        # GenerateString(sample_rate=sample_rate),
         WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
-        None,
+        # None,
         None,
         None
     ]
@@ -73,12 +69,12 @@ if __name__ == "__main__":
     extra_kwargs = [
         None,
         {"ringdown_duration":0.9},
+        # None,
+        # None,
+        # None,
+        # None,
         None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        # None,
         None,
         None
     ]
@@ -103,19 +99,19 @@ if __name__ == "__main__":
                     # Append to existing datasets
                     f[f"{sig_name}_data"].resize(f[f"{sig_name}_data"].shape[0] + class_data.shape[0], axis=0)
                     f[f"{sig_name}_data"][-class_data.shape[0]:] = class_data
-                    
-                    #f[f"{sig_name}_labels"].resize(f[f"{sig_name}_labels"].shape[0] + class_labels.shape[0], axis=0)
-                    #f[f"{sig_name}_labels"][-class_labels.shape[0]:] = class_labels
-                    
+
+                    # f[f"{sig_name}_labels"].resize(f[f"{sig_name}_labels"].shape[0] + class_labels.shape[0], axis=0)
+                    # f[f"{sig_name}_labels"][-class_labels.shape[0]:] = class_labels
+
                     f[f"{sig_name}_snrs"].resize(f[f"{sig_name}_snrs"].shape[0] + class_snrs.shape[0], axis=0)
                     f[f"{sig_name}_snrs"][-class_snrs.shape[0]:] = class_snrs
                 else:
                     # Create new datasets with chunks for efficient appending later
-                    f.create_dataset(f"{sig_name}_data", data=class_data, 
+                    f.create_dataset(f"{sig_name}_data", data=class_data,
                                         maxshape=(None,class_data.shape[1],class_data.shape[2]), chunks=True)
-                    #f.create_dataset(f"{sig_name}_labels", data=class_labels, 
+                    # f.create_dataset(f"{sig_name}_labels", data=class_labels,
                     #                    maxshape=(None,), chunks=True)
-                    f.create_dataset(f"{sig_name}_snrs", data=class_snrs, 
+                    f.create_dataset(f"{sig_name}_snrs", data=class_snrs,
                                         maxshape=(None,), chunks=True)
 
     sig_loader = SignalDataloader(signal_classes,
@@ -132,7 +128,8 @@ if __name__ == "__main__":
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
         ifos=ifos,
-        glitch_root=f"/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{ifos}/",
+        glitch_root=f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/O4b_AnalysisReady_Cat12/omicron/",
+        # remake_cache=True,
         anneal_snr=False,
         snr_prior=snr_prior,
         rebalance_classes=False
@@ -166,7 +163,7 @@ if __name__ == "__main__":
             labels = np.concatenate(labels, axis=0)
             snrs = np.concatenate(snrs, axis=0)
             write_file(OUTFILE, data, labels, snrs)
-            
+
             # clean up
             del data, labels, snrs
             if torch.cuda.is_available():
@@ -176,7 +173,20 @@ if __name__ == "__main__":
             snrs = []
             num_loaded = 0
     if num_loaded > 0:
-        data = torch.cat(data, dim=0)
-        labels = torch.cat(labels, dim=0)
-        snrs = torch.cat(snrs, dim=0)
+        print('Loaded data ', data)
+        data = np.concatenate(data, axis=0)
+        labels = np.concatenate(labels, axis=0)
+        snrs = np.concatenate(snrs, axis=0)
         write_file(OUTFILE, data, labels, snrs)
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Create offline dataset.')
+    parser.add_argument('ifos', type=str, help='(HL,HV,LV)')
+    parser.add_argument('num_samples', type=int, help='per class')
+    parser.add_argument('dataset', type=str, help='(train,val,test)')
+    args = parser.parse_args()
+
+    main(args.ifos, args.num_samples, args.dataset)
+
