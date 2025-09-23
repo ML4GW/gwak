@@ -64,7 +64,7 @@ class BandpassFilter:
             order=order,
             output="sos",
         )
-        print(len(self.coeffs))
+
     def __call__(self, X):
         y = 0
         for coeff in self.coeffs:
