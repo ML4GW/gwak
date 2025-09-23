@@ -320,11 +320,6 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(batch.double(), psds.double())
-
-        # normalize the input data
-        stds = torch.std(whitened, dim=-1, keepdim=True)
-        whitened = whitened / stds
-
         return whitened
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
@@ -552,11 +547,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
         whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(batch.double(), psds.double())
-
-        # normalize the input data
-        stds = torch.std(whitened, dim=-1, keepdim=True)
-        whitened = whitened / stds
-
         return whitened
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
@@ -960,17 +950,6 @@ class SignalDataloader(GwakBaseDataloader):
         injected = torch.Tensor(injected).to('cuda')
 
         whitened = self.whitener(injected.double(), psds.double())
-        if torch.any(torch.isnan(whitened)):
-            self._logger.info('whitened fucked before dividing by std')
-
-        # normalize the input data
-        stds = torch.std(whitened, dim=-1, keepdim=True)
-        if torch.any(torch.isnan(stds)):
-            self._logger.info('stds fucked (nan)')
-        if torch.any(stds == 0):
-            self._logger.info('stds fucked (zero)')
-        whitened = whitened / stds
-
         if torch.any(torch.isnan(whitened)):
             self._logger.info('whitened fucked')
 
