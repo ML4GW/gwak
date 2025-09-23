@@ -949,17 +949,13 @@ class SignalDataloader(GwakBaseDataloader):
         else:
             injected = batch
 
-        # bandpass_filter = BandpassFilter([30], [2047], 4096)
-        # injected = bandpass_filter(injected.detach().cpu())
-        # injected = torch.Tensor(injected).to('cuda')
+        bandpass_filter = BandpassFilter([30], [2047], 4096)
+        injected = bandpass_filter(injected.detach().cpu())
+        injected = torch.Tensor(injected).to('cuda')
 
         whitened = self.whitener(injected.double(), psds.double())
         if torch.any(torch.isnan(whitened)):
             self._logger.info('whitened fucked')
-
-        bandpass_filter = BandpassFilter([30], [2047], 4096)
-        whitened = bandpass_filter(whitened.detach().cpu())
-        whitened = torch.Tensor(whitened).to('cuda')
 
         if output_snrs:
             psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
