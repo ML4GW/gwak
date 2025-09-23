@@ -299,12 +299,16 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
+        bandpass_filter = BandpassFilter([30], [2047], 4096)
+        batch = bandpass_filter(batch.detach().cpu())
+        batch = torch.Tensor(batch).to('cuda')
+
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
         spectral_density = SpectralDensity(
             self.sample_rate,
             self.fftlength,
-            overlap=1,
+            average='median'
         )
         spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
@@ -315,7 +319,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         whitener = Whiten(
             self.fduration,
             self.sample_rate,
-            # highpass = 30,
+            highpass = 30,
         )
         whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
