@@ -34,6 +34,46 @@ import threading
 from queue import Queue
 import time
 
+from typing import Union
+
+from scipy import signal
+
+def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
+    coeffs = []
+    for Wn in zip(freq_low, freq_high):
+        coeff = signal.butter(
+            order, Wn, btype="bandpass", fs=sample_rate, output=output
+        )
+        coeffs.append(coeff)
+    return coeffs
+
+
+class BandpassFilter:
+    def __init__(
+        self,
+        freq_low: list[float],
+        freq_high: list[float],
+        sample_rate: float,
+        order: int = 8,
+    ) -> None:
+        super().__init__()
+        self.coeffs = get_filt_coeffs(
+            freq_low,
+            freq_high,
+            sample_rate=sample_rate,
+            order=order,
+            output="sos",
+        )
+
+    def __call__(self, X):
+        y = 0
+        for coeff in self.coeffs:
+
+            y += signal.sosfiltfilt(coeff, X, axis=-1)
+
+        return y
+
+
 class EmbeddingLoader(pl.LightningDataModule):
     def __init__(self, embedding_path, labels_path=None, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
         super().__init__()
@@ -259,12 +299,16 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
+        bandpass_filter = BandpassFilter([30], [2047], 4096)
+        batch = bandpass_filter(batch.detach().cpu())
+        batch = torch.Tensor(batch).to('cuda')
+
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
         spectral_density = SpectralDensity(
             self.sample_rate,
             self.fftlength,
-            average = 'median'
+            average='median'
         )
         spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
@@ -280,11 +324,6 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(batch.double(), psds.double())
-
-        # normalize the input data
-        stds = torch.std(whitened, dim=-1, keepdim=True)
-        whitened = whitened / stds
-
         return whitened
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
@@ -487,12 +526,16 @@ class GwakBaseDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
+        bandpass_filter = BandpassFilter([30], [2047], 4096)
+        batch = bandpass_filter(batch.detach().cpu())
+        batch = torch.Tensor(batch).to('cuda')
+
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
         spectral_density = SpectralDensity(
             self.sample_rate,
             self.fftlength,
-            average = 'median'
+            average='median'
         )
         spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
@@ -508,11 +551,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
         whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = whitener(batch.double(), psds.double())
-
-        # normalize the input data
-        stds = torch.std(whitened, dim=-1, keepdim=True)
-        whitened = whitened / stds
-
         return whitened
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
@@ -624,7 +662,7 @@ class SignalDataloader(GwakBaseDataloader):
             signals_dict=self.ccsn_dict,
             sample_rate=self.sample_rate,
             sample_duration=0.5,
-            buffer_duration=2.5
+            buffer_duration=3.5
         )
 
         # compute number of events to generate per class per batch
@@ -650,7 +688,7 @@ class SignalDataloader(GwakBaseDataloader):
                     deficit = self.batch_size - np.sum(self.num_per_class)
                     for i in range(deficit):
                         self.num_per_class[i] += 1
-        
+
         # save correspondence between numerical labels and signal names
         # convention is label 1 = first signal, label 2 = second signal, etc.
         #class_labels = [i+1 for i in range(self.num_classes)]
@@ -727,7 +765,7 @@ class SignalDataloader(GwakBaseDataloader):
             train_glitch_dataset = None
 
         train_paired_dataset = CleanGlitchPairedDataset(
-            train_clean_dataset, 
+            train_clean_dataset,
             train_glitch_dataset
         )
 
@@ -828,7 +866,6 @@ class SignalDataloader(GwakBaseDataloader):
         return all_responses, output_params, output_ras, output_decs, output_phics
 
     def inject(self, batch, waveforms, waveform_class, output_snrs = False):
-
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
         splits = [batch.size(-1) - split_size, split_size]
@@ -839,7 +876,7 @@ class SignalDataloader(GwakBaseDataloader):
         spectral_density = SpectralDensity(
             self.sample_rate,
             self.fftlength,
-            average = 'median'
+            average='median'
         )
         spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
@@ -856,7 +893,6 @@ class SignalDataloader(GwakBaseDataloader):
             snr_factor = self.get_snr_factor(self.trainer.current_epoch)
             if waveforms is not None:
                 waveforms = snr_factor * waveforms
-
         # Waveform padding
         if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
 
@@ -893,13 +929,13 @@ class SignalDataloader(GwakBaseDataloader):
             )
 
             injected = batch + rescaled_waveforms
-        
-        elif waveform_class == "CCSN": 
+
+        elif waveform_class == "CCSN":
 
             waveforms = F.pad(
-                input=waveforms, 
+                input=waveforms,
                 pad=(1024,1024, 0,0, 0,0), # ToDo: scale this with kernel and offset
-                mode='constant', 
+                mode='constant',
                 value=0
             )
             snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
@@ -909,22 +945,15 @@ class SignalDataloader(GwakBaseDataloader):
                 target_snrs=snr_factor
             )
             injected = batch + rescaled_waveforms
-        
+
         else:
             injected = batch
 
+        bandpass_filter = BandpassFilter([30], [2047], 4096)
+        injected = bandpass_filter(injected.detach().cpu())
+        injected = torch.Tensor(injected).to('cuda')
+
         whitened = self.whitener(injected.double(), psds.double())
-        if torch.any(torch.isnan(whitened)):
-            self._logger.info('whitened fucked before dividing by std')
-
-        # normalize the input data
-        stds = torch.std(whitened, dim=-1, keepdim=True)
-        if torch.any(torch.isnan(stds)):
-            self._logger.info('stds fucked (nan)')
-        if torch.any(stds == 0):
-            self._logger.info('stds fucked (zero)')
-        whitened = whitened / stds
-
         if torch.any(torch.isnan(whitened)):
             self._logger.info('whitened fucked')
 
@@ -957,7 +986,7 @@ class SignalDataloader(GwakBaseDataloader):
                 for wf in waveforms[i]:
                     whitened.append(
                         self.inject(
-                            batch[i1:i1+wf.shape[0]], 
+                            batch[i1:i1+wf.shape[0]],
                             wf,
                             wave_cl
                         )
@@ -966,8 +995,8 @@ class SignalDataloader(GwakBaseDataloader):
                 whitened = torch.cat(whitened, dim=0)
             else:
                 whitened = self.inject(
-                    batch[idx_lo:idx_lo+self.num_per_class[i]], 
-                    waveforms[i], 
+                    batch[idx_lo:idx_lo+self.num_per_class[i]],
+                    waveforms[i],
                     wave_cl
                 )
             sub_batches.append(whitened)
@@ -990,9 +1019,9 @@ class SignalDataloader(GwakBaseDataloader):
                 i1 = idx_lo
                 for wf in waveforms[i]:
                     iw_, isnr_ = self.inject(
-                        batch[i1:i1+wf.shape[0]], 
-                        wf, 
-                        wave_cl, 
+                        batch[i1:i1+wf.shape[0]],
+                        wf,
+                        wave_cl,
                         output_snrs=True
                     )
                     whitened.append(iw_)
@@ -1002,9 +1031,9 @@ class SignalDataloader(GwakBaseDataloader):
                 snrs = torch.cat(snrs, dim=0)
             else:
                 whitened, snrs = self.inject(
-                    batch[idx_lo:idx_lo+self.num_per_class[i]], 
-                    waveforms[i], 
-                    wave_cl, 
+                    batch[idx_lo:idx_lo+self.num_per_class[i]],
+                    waveforms[i],
+                    wave_cl,
                     output_snrs=True
                 )
             sub_batches.append(whitened)
@@ -1044,8 +1073,8 @@ class SignalDataloader(GwakBaseDataloader):
             else:
                 _clean_batch = self.multiInject(waveforms, clean_batch)
             if self.has_glitch:
-
                 glitch_batch = self.inject(glitch_batch, waveforms[self.signal_classes.index("Glitch")], "Glitch")
+
             while torch.any(torch.isnan(_clean_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
                 waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])

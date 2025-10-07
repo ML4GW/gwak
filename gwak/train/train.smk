@@ -47,6 +47,18 @@ wildcard_constraints:
     fm_config = '|'.join([x for x in fm_configs]),
     ifos = '|'.join([x for x in ifo_configs])
 
+
+rule make_offline_dataset:
+    params:
+        ifos = 'HL',
+        num_samples = 100_000,
+        dataset = 'train',
+    output:
+    shell:
+        'python train/make_offline_dataset.py {params.ifos} \
+            {params.num_samples} \
+            {params.dataset}'
+
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
