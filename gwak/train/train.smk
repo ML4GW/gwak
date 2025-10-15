@@ -74,7 +74,7 @@ rule train_cl:
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
             --model.num_ifos {wildcards.ifos} '
-            # --data.glitch_root /home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{wildcards.ifos}-backup/'
+            # --data.glitch_root /fred/oz016/Andy/New_Data/gwak/omicron/{wildcards.ifos}'
 
 rule compare_embeddings:
     input:
@@ -97,7 +97,7 @@ rule precompute_embeddings:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         # data_dir = 'output/O4_MDC_background/{ifos}/',
-        data_dir = '/fred/oz994/andy/Data/gwak/{ifos}',
+        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
         config = 'train/configs/{cl_config}.yaml'
     output:
         means = 'output/{cl_config}_{ifos}/means.npy',
@@ -173,7 +173,7 @@ rule precompute_sg_embeddings_classifier:
             cl_config='ResNet',
             ifos='HL'),
         # data_dir = 'output/O4_MDC_background/HL/',
-        data_dir = '/fred/oz994/andy/Data/gwak/HL',
+        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
         config = 'train/configs/ResNet.yaml'
     output:
         means = 'output/ResNet_sg_HL/means.npy',
@@ -259,7 +259,7 @@ rule make_plots_i:
             cl_config='{cl_config}',
             ifos='{ifos}'),
         # data_dir = 'output/O4_MDC_background/{ifos}/',
-        data_dir = '/fred/oz994/andy/Data/gwak/{ifos}',
+        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:

@@ -191,7 +191,8 @@ if __name__=='__main__':
         data_saving_file=data_saving_file,
         ifos=args.ifos,
         snr_prior=torch.distributions.Uniform(3, 30),
-        glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
+        # glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
+        glitch_root=f"/fred/oz016/Andy/New_Data/gwak/omicron/{args.ifos}"
     )
 
     all_labels = []

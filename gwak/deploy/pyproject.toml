@@ -29,6 +29,7 @@ ipykernel = "^6.29.5"
 matplotlib = "^3.9"
 bokeh = "^3.4"
 notebook = "^7.4.4"
+scipy = "<1.12"
 
 [[tool.poetry.source]]
 name = "torch"

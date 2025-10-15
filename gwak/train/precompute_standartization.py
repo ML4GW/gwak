@@ -77,7 +77,8 @@ if __name__=='__main__':
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
         data_saving_file=data_saving_file,
-        glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
+        # glitch_root='/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
+        glitch_root=f"/fred/oz016/Andy/New_Data/gwak/omicron/HL"
     )
 
     all_embeddings = []

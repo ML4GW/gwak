@@ -1,11 +1,66 @@
 import torch 
 
+import numpy as np
+from scipy import signal
 from typing import Callable, Optional, Tuple
 
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.utils.slicing import unfold_windows
 
 Tensor = torch.Tensor
+
+class TorchBandpassFIR(torch.nn.Module):
+    """
+    Differentiable, zero-phase FIR band-pass filter.
+    Works with [B, C, T] tensors.
+    Can be TorchScripted for Triton deployment.
+    """
+
+    def __init__(
+        self,
+        lowcut: float,
+        highcut: float,
+        sample_rate: int = 4096,
+        # order: int = 8,
+        num_taps: int = 4096,
+        zero_phase: bool = True,
+    ):
+        super().__init__()
+        self.zero_phase = zero_phase
+
+        # ---- FIR design ----
+        fir_coeff = signal.firwin(
+            numtaps=num_taps,
+            cutoff=[lowcut, highcut],
+            pass_zero=False,
+            fs=sample_rate,
+        ).astype(np.float32)
+
+        # Conv1d expects [out_channels, in_channels/groups, kernel]
+        kernel = torch.tensor(fir_coeff, dtype=torch.float32).view(1, 1, -1)
+
+        self.register_buffer("kernel", kernel)
+        self.pad = num_taps // 2
+        self.num_taps = num_taps
+
+    def _conv(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Internal grouped convolution.
+        x: [B, C, T]
+        """
+        B, C, T = x.shape
+        weight = self.kernel.repeat(C, 1, 1)  # one kernel per channel
+        return torch.nn.functional.conv1d(x, weight, groups=C, padding="same")
+
+    def forward(self, x):
+        pad = self.num_taps // 2
+        x_pad = torch.nn.functional.pad(x, (pad, pad), mode="reflect")
+        y = self._conv(x_pad)
+        if self.zero_phase:
+            y = torch.flip(y, dims=[-1])
+            y = self._conv(y)
+            y = torch.flip(y, dims=[-1])
+        return y[..., pad:-pad]
 
 class BackgroundSnapshotter(torch.nn.Module):
     """Update a kernel with a new piece of streaming data"""
@@ -129,6 +184,13 @@ class BatchWhitener(torch.nn.Module):
         fsize = int(fduration * sample_rate)
         size = strides + self.kernel_size + fsize
         length = size / sample_rate
+        
+        self.bandpass = TorchBandpassFIR(
+                    lowcut=highpass,
+                    highcut=2047,
+                    sample_rate=sample_rate
+        )
+        
         self.psd_estimator = PsdEstimator(
             length,
             sample_rate,
@@ -155,6 +217,9 @@ class BatchWhitener(torch.nn.Module):
                 "but found shape {}".format(x.shape)
             )
         x, psd = self.psd_estimator(x)
+        x = x.reshape(-1, num_channels, x.size(-1))
+        x = self.bandpass(x)
+        x = x.reshape(num_channels, -1)
         whitened = self.whitener(x.double(), psd.double())
 
         # unfold x and then put it into the expected shape.
