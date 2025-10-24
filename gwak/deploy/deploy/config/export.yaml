@@ -13,11 +13,13 @@ platform: TORCHSCRIPT
 highpass: 30
 psd_length: 64
 kernel_length: 1
-fduration: 1
+fduration: 2
 fftlength: 2
 sample_rate: 4096
+snapshotter_instances: 8
 preproc_instances: 8
 inference_sampling_rate: 4
 device: cuda:0 # cuda:0
-cl_config: resnet_kl1.0_bs512
+# cl_config: resnet_kl1.0_bs512
+cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25
 fm_config: NF_from_file_conditioning
