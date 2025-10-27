@@ -37,21 +37,24 @@ def export(
     **kwargs,
 ):
 
-    file_path = Path(__file__).resolve()
-    if model_dir is None: 
-        model_dir = file_path.parents[2] / "output"
-    if output_dir is None: 
-        output_dir = file_path.parents[2] / "output/export"
-
     num_ifos = len(ifos)
     ifo_str = ''.join(ifo[0] for ifo in ifos)
+    prefix = f"{cl_config}_{fm_config}_{ifo_str}"
 
-    weights = Path(model_dir) / f"{cl_config}_{fm_config}_{ifo_str}" / project / "model_JIT.pt"
-    output_dir = Path(output_dir) / f"{cl_config}_{fm_config}_{ifo_str}" /project
+    file_path = Path(__file__).resolve()
+    gwak_folder = file_path.parents[2] #gwak/gwak/
+    if model_dir is None: 
+        model_dir = gwak_folder / "output" / prefix / project / "model_JIT.pt"
+
+    # weights = model_dir
+    if output_dir is None: 
+        output_dir = gwak_folder / "output/export" / prefix / project
+
+    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)
 
-    with open(weights, "rb") as f:
+    with open(model_dir, "rb") as f:
         graph = torch.jit.load(f)
     graph.eval()
 

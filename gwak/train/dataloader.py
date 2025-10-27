@@ -365,9 +365,7 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
-        # bandpass_filter = BandpassFilter([30], [2047], 4096)
         batch = self.bandpass(batch)
-        # batch = torch.Tensor(batch).to('cuda')
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
@@ -381,13 +379,6 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         # calculate psds
         psds = spectral_density(psd_data.double())
 
-        # create whitener
-        # whitener = Whiten(
-        #     self.fduration,
-        #     self.sample_rate,
-        #     highpass = 30,
-        # )
-        # whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = self.whitener(batch.double(), psds.double())
         return whitened
@@ -607,10 +598,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
-
-        # bandpass_filter = BandpassFilter([30], [2047], 4096)
         batch = self.bandpass(batch)
-        # batch = torch.Tensor(batch).to('cuda')
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
@@ -623,14 +611,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         # calculate psds
         psds = spectral_density(psd_data.double())
-
-        # # create whitener
-        # whitener = Whiten(
-        #     self.fduration,
-        #     self.sample_rate,
-        #     highpass = 30,
-        # )
-        # whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
         whitened = self.whitener(batch.double(), psds.double())
         return whitened
@@ -743,8 +723,9 @@ class SignalDataloader(GwakBaseDataloader):
             ifos=self.ifos,
             signals_dict=self.ccsn_dict,
             sample_rate=self.sample_rate,
-            sample_duration=0.5,
-            buffer_duration=3.5
+            sample_duration=0.8,
+            buffer_duration=self.kernel_length + self.fduration,
+            time_shift=-0.25
         )
 
         # compute number of events to generate per class per batch
@@ -789,9 +770,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_prior = snr_prior
 
         bandpass = TorchBandpassFIR(
-                    lowcut=30,
-                    highcut=2047,
-                    sample_rate=self.sample_rate
+            lowcut=30,
+            highcut=2047,
+            sample_rate=self.sample_rate
         )
         rescaler = SnrRescaler_Online(
             sample_rate = self.sample_rate,
@@ -1022,26 +1003,19 @@ class SignalDataloader(GwakBaseDataloader):
 
         elif waveform_class == "CCSN":
 
-            waveforms = F.pad(
-                input=waveforms,
-                pad=(1024,1024, 0,0, 0,0), # ToDo: scale this with kernel and offset
-                mode='constant',
-                value=0
-            )
             snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
             rescaled_waveforms = self.rescaler.forward(
                 responses=waveforms,
                 psds=psds,
                 target_snrs=snr_factor
             )
+
             injected = batch + rescaled_waveforms
 
         else:
             injected = batch
 
-        # bandpass_filter = BandpassFilter([30], [2047], 4096)
         injected = self.bandpass(injected)
-        # injected = torch.Tensor(injected).to('cuda')
 
         whitened = self.whitener(injected.double(), psds.double())
         if torch.any(torch.isnan(whitened)):
@@ -1562,7 +1536,7 @@ class CCSN_Injector:
 
 
             ccsne_agg_count += count
-        X = X[:, :, 2048:-2048]
+        # X = X[:, :, 2048:-2048]
         dec_distro = Cosine()
         psi_distro = Uniform(0, np.pi)
         phi_distro = Uniform(0, 2 * np.pi)
@@ -1708,28 +1682,15 @@ class OfflineLIGOData(GenericDataModule):
         self.glitch_root = glitch_root # same story
 
         # self.data_dir = "/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/offline_dataset_v2/"
-        # self.data_dir = "/fred/oz994/andy/Data/gwak/O4_MDC_background/offline_dataset_v2/"
-        self.data_dir = "/fred/oz016/Andy/Data/gwak/O4_MDC_background/offline_dataset_v2/"
+        self.data_dir = "/fred/oz016/Andy/Data/gwak/HL_offline_dataset/"
         self.train_files = [
-            #self.data_dir + "dataset_HL_SR4096_kernel1.0_3194.h5",
-            #self.data_dir + "dataset_HL_SR4096_kernel1.0_3698.h5",
-            #self.data_dir + "dataset_HL_SR4096_kernel1.0_1241.h5"
-            # self.data_dir + 'dataset_test_HL_SR4096_kernel1.0_5877.h5'
-            # self.data_dir + "dataset_train_HL_SR4096_kernel1.0_1013.h5"
-            # self.data_dir + "dataset_train_HL_SR4096_kernel0.5_5688.h5"
+            self.data_dir + "dataset_train_HL_SR4096_kernel1.0.h5"
         ]
         self.val_files = [
-            #self.data_dir + "dataset_HL_SR4096_kernel1.0_6779.h5"
-            # self.data_dir + 'dataset_train_HL_SR4096_kernel1.0_9867.h5'
-            # self.data_dir + "dataset_val_HL_SR4096_kernel1.0_1718.h5",
-            # self.data_dir + "dataset_train_HL_SR4096_kernel1.0_1013.h5"
-            # self.data_dir + "dataset_val_HL_SR4096_kernel0.5_1681.h5"
+            self.data_dir + "dataset_train_HL_SR4096_kernel1.0.h5"
         ]
         self.test_files = [
-            #self.data_dir + "dataset_HL_SR4096_kernel1.0_6130.h5"
-            # self.data_dir + 'dataset_train_HL_SR4096_kernel1.0_8790.h5'
-            # self.data_dir + "dataset_test_HL_SR4096_kernel1.0_2769.h5",
-            # self.data_dir + "dataset_test_HL_SR4096_kernel0.5_2047.h5"
+            self.data_dir + "dataset_train_HL_SR4096_kernel1.0.h5"
         ]
         self.all_signal_label_names = {i:c for i,c in enumerate(self.signal_classes)}
 

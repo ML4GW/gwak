@@ -1,7 +1,8 @@
+import yaml
 import subprocess
 from pathlib import Path
 from infer_data import get_shifts_meta_data
-from deploy.libs.cluster_tools import write_slurm_config, write_infer_core_config
+from deploy.libs.cluster_tools import write_slurm_config, write_export_config, write_infer_core_config
 from typing import Optional
 
 
@@ -31,11 +32,16 @@ def slurm_infer_wrapper(
     **kwargs,
 ):
 
+    Tb = int(Tb)
+    grpc_port = int(grpc_port)
+
     # Local path settings
     deploy_dir = Path(__file__).resolve().parents[1]
     output_dir = deploy_dir.parents[0] / "output"
     ifo_str = ''.join(ifo[0] for ifo in ifos)
     prefix = f"{cl_config}_{fm_config}_{ifo_str}"
+    result_dir = result_dir / prefix / run_name
+    export_config_file = deploy_dir / "deploy/config/export.yaml"
 
     num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts, data_format)
     fnames = [str(p) for p in fnames]
@@ -47,7 +53,8 @@ def slurm_infer_wrapper(
 
     for batch in range(slurm_batch):
         
-        job_dir = output_dir / f"Slurm_Job_{run_name}" / f"Node_{batch:02d}"
+        job_dir = output_dir / f"Slurm_Jobs/{prefix}/{run_name}" / f"Node_{batch:02d}"
+        
         export_job_dir = job_dir / "export"
         infer_job_dir = job_dir / "infer"
 
@@ -56,7 +63,22 @@ def slurm_infer_wrapper(
         slurm_kwargs["job-name"] = f"TS_{batch:02d}"
         slurm_kwargs["output"] = job_dir / f"output.log"
         slurm_kwargs["error"] = job_dir / f"error.log"
-        grpc_port = int(grpc_port+3)
+
+        # Make copy of export.yaml and modifiy the file according to the vars for infer run. 
+        export_config = write_export_config(
+            export_config_file=export_config_file,
+            export_job_dir=export_job_dir,
+            project=project,
+            model_dir=output_dir / prefix / project / "model_JIT.pt",
+            output_dir=model_repo_dir or export_job_dir / "models",
+            stride_batch_size=stride_batch_size,
+            ifos=ifos,
+            psd_length=psd_length,
+            sample_rate=sample_rate,
+            inference_sampling_rate=inference_sampling_rate,
+            cl_config=cl_config,
+            fm_config=fm_config
+        )
 
         # Make config file for infer_core() and return the path of the config
         infer_config = write_infer_core_config(
@@ -65,7 +87,7 @@ def slurm_infer_wrapper(
             job_dir=infer_job_dir,
             result_dir=result_dir,
             project=project,
-            model_repo_dir=model_repo_dir or export_job_dir / prefix / project, # Can be null, cause we export at node level=# model_repo_dir, # Can be null, cause we export at node level.
+            model_repo_dir=model_repo_dir or export_job_dir / "models", # Can be null, cause we export at node level=# model_repo_dir, # Can be null, cause we export at node level.
             image=image,
             grpc_port=grpc_port,
             patients=patients,
@@ -88,8 +110,10 @@ def slurm_infer_wrapper(
         slurm_file = write_slurm_config(
             kwargs=slurm_kwargs,
             job_dir=job_dir,
-            project="combination",
+            # project="combination",
+            export_config=export_config,
             infer_config=infer_config,
         )
-        
-        subprocess.run(["sbatch", f"{slurm_file}"])
+
+        grpc_port = int(grpc_port+3)
+        # subprocess.run(["sbatch", f"{slurm_file}"])

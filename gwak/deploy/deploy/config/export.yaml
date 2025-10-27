@@ -1,25 +1,22 @@
-project: null
-model_dir: null 
-output_dir: null 
+project: null # overwritebleb
+model_dir: null # overwriteble
+output_dir: null # overwriteble
 clean: True
 background_batch_size: 2
-stride_batch_size: 64
-ifos: ["H1", "L1"]
-# ifos: ["H1", "V1"]
-# ifos: ["L1", "V1"]
+stride_batch_size: 64 # overwriteble
+ifos: ["H1", "L1"] # overwriteble
 gwak_instances: 8
 platform: TORCHSCRIPT
 # platform: TENSORRT
 highpass: 30
-psd_length: 64
+psd_length: 64 # overwriteble
 kernel_length: 1
 fduration: 2
 fftlength: 2
-sample_rate: 4096
+sample_rate: 4096 # overwriteble
 snapshotter_instances: 8
 preproc_instances: 8
-inference_sampling_rate: 4
+inference_sampling_rate: 4 # overwriteble
 device: cuda:0 # cuda:0
-# cl_config: resnet_kl1.0_bs512
-cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25
-fm_config: NF_from_file_conditioning
+cl_config: torch_rbw_zp_resnet_do64_dcs128_epoch25 # overwriteble
+fm_config: NF_from_file_conditioning # overwriteble

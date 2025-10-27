@@ -1,3 +1,4 @@
+# The configuration values defined here will override corresponding entries in export.yaml.
 slurm_batch: 10
 # Slurm arguments
 slurm_kwargs:
@@ -27,20 +28,20 @@ ifos: ["H1", "L1"]
 Tb: 31557600 # Tb = 0 will run zero-lag
 fname: /fred/oz016/Andy/Data/gwak/HL # Sever dependent
 psd_length: 64
-stride_batch_size: 64
+stride_batch_size: 256
 sample_rate: 4096
 shifts: [0, 1]
 data_format: h5 # gwf
-inference_sampling_rate: 4
+inference_sampling_rate: 8
 
 # Triton and Model arguments
-result_dir: /fred/oz016/Andy/Output/gwak-bbc/torch_rbw_zp_resnet_do6_dcs128_epoch25
+result_dir: /fred/oz016/Andy/Output/gwak-bbc/
 project: combination
 grpc_port: 8001
 image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent
 job_rate_limit: 4
 patients: 30
-cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25
+cl_config: null
 fm_config: NF_from_file_conditioning
 model_repo_dir: null
 singularity_path: /apps/system/software/apptainer/latest/bin/apptainer # Sever dependent

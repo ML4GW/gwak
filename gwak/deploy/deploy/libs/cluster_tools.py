@@ -2,6 +2,7 @@
 import re
 import os, sys
 import time
+import yaml
 import logging
 import subprocess
 
@@ -27,14 +28,43 @@ def write_infer_core_config(
                 if value is None:
                     value = "null"
                 f.write(f"{key}: {value}\n")
-                
+
     return yaml_file
 
+
+
+def write_export_config(
+    **export_kwargs
+):
+
+    # Load the arguments in main eport file
+    with open(export_kwargs["export_config_file"], "r") as yaml_file:
+        export_args = yaml.safe_load(yaml_file)
+
+    # Replace the arguments for inference
+    for key, item in export_kwargs.items():
+
+        if key in ("export_config_file", "export_job_dir"):
+            continue
+        export_args[key] = item
+
+    # Write the and save the new arguments
+    export_config = Path(export_kwargs["export_job_dir"]) / "export.yaml"
+    with open(export_config, "w") as yaml_file:
+
+        for key, value in export_args.items():
+            if value is None:
+                value = "null"
+            yaml_file.write(f"{key}: {value}\n")
+
+    
+
+    return export_config
 
 def write_slurm_config(
     kwargs,
     job_dir,
-    project,
+    export_config,
     infer_config,
 ):
 
@@ -45,9 +75,9 @@ def write_slurm_config(
     # Deploy commands
     export_cmd = (
         f"{kwargs['deploy_cmd']['export'][0]} "
-        "--config deploy/config/export.yaml "
-        f"--project {project} "
-        f"--output_dir {job_dir}/export"
+        f"--config {export_config} " # Modify this to follow run dir
+        # f"--project {project} "
+        # f"--output_dir {job_dir}/export"
     )
     
     infer_cmd = (
