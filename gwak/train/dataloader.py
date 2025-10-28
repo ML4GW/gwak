@@ -73,6 +73,57 @@ class BandpassFilter:
 
         return y
 
+class TorchBandpassFIR(torch.nn.Module):
+    """
+    Differentiable, zero-phase FIR band-pass filter.
+    Works with [B, C, T] tensors.
+    Can be TorchScripted for Triton deployment.
+    """
+
+    def __init__(
+        self,
+        lowcut: float,
+        highcut: float,
+        sample_rate: int = 4096,
+        num_taps: int = 4096,
+        zero_phase: bool = True,
+    ):
+        super().__init__()
+        self.zero_phase = zero_phase
+
+        # ---- FIR design ----
+        fir_coeff = signal.firwin(
+            numtaps=num_taps,
+            cutoff=[lowcut, highcut],
+            pass_zero=False,
+            fs=sample_rate,
+        ).astype(np.float32)
+
+        # Conv1d expects [out_channels, in_channels/groups, kernel]
+        kernel = torch.tensor(fir_coeff, dtype=torch.float32).view(1, 1, -1)
+
+        self.register_buffer("kernel", kernel)
+        self.pad = num_taps // 2
+        self.num_taps = num_taps
+
+    def _conv(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Internal grouped convolution.
+        x: [B, C, T]
+        """
+        B, C, T = x.shape
+        weight = self.kernel.repeat(C, 1, 1)  # one kernel per channel
+        return torch.nn.functional.conv1d(x, weight, groups=C, padding="same")
+
+    def forward(self, x):
+        pad = self.num_taps // 2
+        x_pad = torch.nn.functional.pad(x, (pad, pad), mode="reflect")
+        y = self._conv(x_pad)
+        if self.zero_phase:
+            y = torch.flip(y, dims=[-1])
+            y = self._conv(y)
+            y = torch.flip(y, dims=[-1])
+        return y[..., pad:-pad]
 
 class EmbeddingLoader(pl.LightningDataModule):
     def __init__(self, embedding_path, labels_path=None, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
@@ -170,6 +221,21 @@ class TimeSlidesDataloader(pl.LightningDataModule):
             self.data_group = h5py.File(self.data_saving_file, "w")
 
         self._logger = self.get_logger()
+
+        bandpass = TorchBandpassFIR(
+            lowcut=30,
+            highcut=2047,
+            sample_rate=self.sample_rate
+        )
+
+        whitener = Whiten(
+            self.fduration,
+            self.sample_rate,
+            highpass = 30,
+        )
+
+        self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
+        self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -299,9 +365,9 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
-        bandpass_filter = BandpassFilter([30], [2047], 4096)
-        batch = bandpass_filter(batch.detach().cpu())
-        batch = torch.Tensor(batch).to('cuda')
+        # bandpass_filter = BandpassFilter([30], [2047], 4096)
+        batch = self.bandpass(batch)
+        # batch = torch.Tensor(batch).to('cuda')
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
@@ -316,14 +382,14 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         psds = spectral_density(psd_data.double())
 
         # create whitener
-        whitener = Whiten(
-            self.fduration,
-            self.sample_rate,
-            highpass = 30,
-        )
-        whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
+        # whitener = Whiten(
+        #     self.fduration,
+        #     self.sample_rate,
+        #     highpass = 30,
+        # )
+        # whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
-        whitened = whitener(batch.double(), psds.double())
+        whitened = self.whitener(batch.double(), psds.double())
         return whitened
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
@@ -411,6 +477,21 @@ class GwakBaseDataloader(pl.LightningDataModule):
             "fduration": fduration,
             "fftlength": fftlength,
         }
+
+        bandpass = TorchBandpassFIR(
+                    lowcut=30,
+                    highcut=2047,
+                    sample_rate=self.sample_rate
+        )
+
+        whitener = Whiten(
+            self.fduration,
+            self.sample_rate,
+            highpass = 30,
+        )
+
+        self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
+        self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -526,9 +607,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
         splits = [batch.size(-1) - split_size, split_size]
         psd_data, batch = torch.split(batch, splits, dim=-1)
 
-        bandpass_filter = BandpassFilter([30], [2047], 4096)
-        batch = bandpass_filter(batch.detach().cpu())
-        batch = torch.Tensor(batch).to('cuda')
+
+        # bandpass_filter = BandpassFilter([30], [2047], 4096)
+        batch = self.bandpass(batch)
+        # batch = torch.Tensor(batch).to('cuda')
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
@@ -542,15 +624,15 @@ class GwakBaseDataloader(pl.LightningDataModule):
         # calculate psds
         psds = spectral_density(psd_data.double())
 
-        # create whitener
-        whitener = Whiten(
-            self.fduration,
-            self.sample_rate,
-            highpass = 30,
-        )
-        whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
+        # # create whitener
+        # whitener = Whiten(
+        #     self.fduration,
+        #     self.sample_rate,
+        #     highpass = 30,
+        # )
+        # whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
 
-        whitened = whitener(batch.double(), psds.double())
+        whitened = self.whitener(batch.double(), psds.double())
         return whitened
 
     def on_after_batch_transfer(self, batch, dataloader_idx):
@@ -597,6 +679,7 @@ class SignalDataloader(GwakBaseDataloader):
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
+        whiten: bool = True,   # make whitening optional
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -612,6 +695,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.has_glitch = "Glitch" in self.signal_classes
         self.cache_dir = cache_dir
         self.rebalance_classes = rebalance_classes
+        self.do_whiten = whiten
 
         self.all_signal_labels = {
             "SineGaussian":1,
@@ -705,6 +789,12 @@ class SignalDataloader(GwakBaseDataloader):
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
 
         self.snr_prior = snr_prior
+
+        bandpass = TorchBandpassFIR(
+                    lowcut=30,
+                    highcut=2047,
+                    sample_rate=self.sample_rate
+        )
         rescaler = SnrRescaler_Online(
             sample_rate = self.sample_rate,
             highpass = 30
@@ -714,6 +804,8 @@ class SignalDataloader(GwakBaseDataloader):
             self.sample_rate,
             highpass = 30,
         )
+
+        self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
         self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
         self.rescaler = rescaler.to('cuda') if torch.cuda.is_available() else rescaler
 
@@ -949,27 +1041,23 @@ class SignalDataloader(GwakBaseDataloader):
         else:
             injected = batch
 
-        bandpass_filter = BandpassFilter([30], [2047], 4096)
-        injected = bandpass_filter(injected.detach().cpu())
-        injected = torch.Tensor(injected).to('cuda')
+        injected = self.bandpass(injected)
 
-        whitened = self.whitener(injected.double(), psds.double())
-        if torch.any(torch.isnan(whitened)):
-            self._logger.info('whitened fucked')
+        # Conditionally whiten
+        if self.do_whiten:
+            out = self.whitener(injected.double(), psds.double())
+            if torch.any(torch.isnan(out)):
+                self._logger.info('whitened fucked')
+        else:
+            out = injected.double()
 
         if output_snrs:
-            psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
-            #psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
-            psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='nearest')
-            # use same resampling mode ('nearest', default) as the rescaler
-
-            snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
-            # if waveforms is not None:
+            snrs = torch.zeros(len(out)).to('cuda' if torch.cuda.is_available() else 'cpu')
             if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
-                snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
-            return whitened, snrs
+                snrs = compute_network_snr(rescaled_waveforms, psds, self.sample_rate, highpass=30)
+            return out, snrs
         else:
-            return whitened
+            return out
 
     def multiInject(self,waveforms,batch):
         """
