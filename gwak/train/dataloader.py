@@ -1052,7 +1052,12 @@ class SignalDataloader(GwakBaseDataloader):
             out = injected.double()
 
         if output_snrs:
-            snrs = torch.zeros(len(out)).to('cuda' if torch.cuda.is_available() else 'cpu')
+            psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
+            psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='nearest')
+            # use same resampling mode ('nearest', default) as the rescaler
+
+            snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
+            # if waveforms is not None:
             if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
                 snrs = compute_network_snr(rescaled_waveforms, psds, self.sample_rate, highpass=30)
             return out, snrs
