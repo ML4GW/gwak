@@ -23,6 +23,7 @@ def export(
     fftlength: int,
     inference_sampling_rate: float,
     sample_rate: int,
+    snapshotter_instances:int,
     preproc_instances: int,
     # model_weights: str,
     highpass: Optional[float] = None,
@@ -155,6 +156,8 @@ def export(
     snapshotter.config.sequence_batching.max_sequence_idle_microseconds = int(
         6e10
     )
+    if snapshotter_instances is not None:
+        scale_model(snapshotter, snapshotter_instances)
     snapshotter.config.write()
     logging.info(f"Model saved at {output_dir}")
     # Todo:

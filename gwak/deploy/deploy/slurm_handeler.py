@@ -53,7 +53,7 @@ def slurm_infer_wrapper(
 
         export_job_dir.mkdir(parents=True, exist_ok=True)
         infer_job_dir.mkdir(parents=True, exist_ok=True)
-        slurm_kwargs["job-name"] = f"Triton_{batch:02d}"
+        slurm_kwargs["job-name"] = f"TS_{batch:02d}"
         slurm_kwargs["output"] = job_dir / f"output.log"
         slurm_kwargs["error"] = job_dir / f"error.log"
         grpc_port = int(grpc_port+3)

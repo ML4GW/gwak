@@ -137,7 +137,8 @@ if __name__ == '__main__':
         num_workers=num_workers,
         ifos='HL',
         snr_prior=torch.distributions.Uniform(low=3, high=30),
-        glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
+        # glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL/'
+        glitch_root="/fred/oz016/Andy/New_Data/gwak/omicron/HL"
     )
 
     test_loader = loader.test_dataloader()

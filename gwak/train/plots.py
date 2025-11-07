@@ -135,7 +135,8 @@ if __name__=='__main__':
         data_saving_file=data_saving_file,
         ifos=args.ifos,
         snr_prior=PowerLaw(index=3, minimum=4, maximum=30),
-        glitch_root=f'/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{args.ifos}/'
+        # glitch_root=f'/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{args.ifos}/'
+        glitch_root=f"/fred/oz016/Andy/New_Data/gwak/omicron/{args.ifos}"
     )
 
     all_background_classes = ['Background', 'Glitch'] #, 'FakeGlitch']
@@ -186,7 +187,9 @@ if __name__=='__main__':
             clean_batch = clean_batch.to(device)
             glitch_batch = glitch_batch.to(device)
 
-            processed, labels, snrs = loader.on_after_batch_transfer([clean_batch, glitch_batch], None,
+            processed, labels, snrs = loader.on_after_batch_transfer(
+                [clean_batch, glitch_batch], 
+                None,
                 local_test=True)
 
             embeddings = embed_model(processed)
@@ -344,9 +347,18 @@ if __name__=='__main__':
 
     # Collect all scores in a list
     score_list = []
+    noise_score = []
     for i, c in enumerate(all_classes):
         scores_sel = all_scores[all_labels == i + 1]
         score_list.append(scores_sel)
+
+        if c in ('Background', 'Glitch', 'FakeGlitch'):
+            noise_sel = all_scores[all_labels == i + 1]
+            noise_score.append(noise_sel)
+
+    all_score = np.concatenate(score_list)
+    max_noise_score = np.concatenate(noise_score).max()
+    range_min, range_max = all_score.min(), all_score.max()
 
     # Plot all at once
     plt.hist(
@@ -354,11 +366,11 @@ if __name__=='__main__':
         bins=100,
         label=all_classes,
         alpha=0.8,
-        range=(0, 500),
+        range=(range_min, range_max),
         stacked=True,
         color=custom_colors[:len(all_classes)]  # trim color list if needed
     )
-
+    plt.axvline(x=max_noise_score, color='r', linestyle='--', label=f'Max noise score {max_noise_score:.2f}')
     plt.xlabel(f"{args.ifos} NF log probability")
     plt.legend()
     plt.savefig(f'{args.output}/metric.png')
@@ -417,3 +429,52 @@ if __name__=='__main__':
     plt.legend()
     plt.grid(True)
     plt.savefig(f'{args.output}/fraction_1overYearFAR_SNR.png')
+
+
+    threshold_1yr = max_noise_score
+
+    anom_mask = ~np.isin(all_labels, background_labels)
+    if np.any(anom_mask):
+        snr_min, snr_max = all_snrs[anom_mask].min(), all_snrs[anom_mask].max()
+    else:
+        raise ValueError("No anomaly samples found in the test set!")
+
+    num_bins = 10
+    bin_edges = np.linspace(4, 30, num_bins + 1)  # 10 bins between 4 and 100
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    plt.figure(figsize=(8,6))
+
+    for i, anom_class_name in enumerate(signal_classes):
+        class_label = i + 1  # classes are 1..7
+
+        mask = (all_labels == class_label)
+        if not np.any(mask):
+            # If no samples for that class, skip
+            continue
+
+        class_scores = all_scores[mask]
+        class_snrs = all_snrs[mask]
+
+        # Bin by SNR
+        bin_idx = np.digitize(class_snrs, bin_edges) - 1  # bin indices in [0..num_bins-1]
+
+        frac_detected = []
+        for b in range(num_bins):
+            in_bin = (bin_idx == b)
+            if not np.any(in_bin):
+                frac_detected.append(np.nan)  # or 0.0 if you prefer
+            else:
+                # fraction that exceed threshold
+                frac = np.mean(class_scores[in_bin] > threshold_1yr)
+                frac_detected.append(frac)
+        plt.plot(bin_centers, frac_detected, marker='o', label=anom_class_name)
+
+    plt.xlabel("SNR")
+    plt.ylabel("Fraction of events detected")
+    plt.title(f"{args.ifos} Fraction of Events Detected at thershold: {max_noise_score:.2f} FAR vs. SNR")
+    plt.ylim([0, 1.05])
+    # plt.xscale('log')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f'{args.output}/fraction_1overYearFAR_SNR_local_test.png')
