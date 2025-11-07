@@ -157,7 +157,7 @@ def main(ifos, num_samples_per_class, dataset,
         anneal_snr=False,
         snr_prior=snr_prior,
         rebalance_classes=False,
-        whiten=False
+        whiten=True
     )
 
     if dataset == "train":
