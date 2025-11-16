@@ -98,6 +98,14 @@ rule deploy:
         --Tb {params.timeslide}'
         # --ifos {wildcards.ifo_mode}# Resolve HL to ["H1", "L1"]
 
+rule scan_outlier:
+    input:
+        config = 'deploy/deploy/config/outlier.yaml'
+    shell:
+        'set -x; cd deploy; poetry run python \
+        deploy/cli.py post_analyze \
+        --config ../{input.config}'
+
 
 rule export_all:
     input: expand(rules.export.output, deploymodels='combination')
@@ -115,13 +123,15 @@ rule deploy_all:
         expand(
             rules.deploy.output,
             cl_config=[
-                "torch_rbw_zp_resnet_do64_dcs128_epoch25", 
+                "torch_rbw_zp_resnet_do6_dcs064_epoch25",
+                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
+                "torch_rbw_zp_resnet_do64_dcs128_epoch25"
             ], 
             fm_config=[
                 "NF_from_file_conditioning",
             ], 
             ifo_mode=["HL"], 
-            run_name=["test_run"]
+            run_name=["one_month"]
         )
 
 rule estimate_far:

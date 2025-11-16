@@ -21,7 +21,6 @@ class TorchBandpassFIR(torch.nn.Module):
         lowcut: float,
         highcut: float,
         sample_rate: int = 4096,
-        # order: int = 8,
         num_taps: int = 4096,
         zero_phase: bool = True,
     ):
@@ -184,13 +183,12 @@ class BatchWhitener(torch.nn.Module):
         fsize = int(fduration * sample_rate)
         size = strides + self.kernel_size + fsize
         length = size / sample_rate
-        
-        self.bandpass = TorchBandpassFIR(
-                    lowcut=highpass,
-                    highcut=2047,
-                    sample_rate=sample_rate
-        )
-        
+        print("I am length:")
+        print(length)
+        print(length)
+        print(length)
+        print(length)
+        print()        
         self.psd_estimator = PsdEstimator(
             length,
             sample_rate,
@@ -200,7 +198,16 @@ class BatchWhitener(torch.nn.Module):
             # fast=highpass is not None,
             fast=False
         )
-        self.whitener = Whiten(fduration, sample_rate, highpass)
+        self.bandpass = TorchBandpassFIR(
+            lowcut=highpass,
+            highcut=2047,
+            sample_rate=sample_rate
+        )
+        self.whitener = Whiten(
+            fduration, 
+            sample_rate, 
+            highpass
+        )
 
     def forward(self, x: Tensor) -> Tensor:
 

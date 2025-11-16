@@ -52,7 +52,7 @@ def main(args=None):
         from deploy.slurm_handeler import slurm_infer_wrapper as main_cli
 
     if subcommand == "post_analyze":
-        pass
+        from deploy.analyzer import scan as main_cli
         # from deploy.analyzer import slurm_infer_wrapper as main_cli
 
     # Create subparser

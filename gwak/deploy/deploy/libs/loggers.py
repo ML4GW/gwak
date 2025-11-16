@@ -81,7 +81,18 @@ class Pathfinder:
             logging.info(f"    {self.project_path}")
         return self.project_path
 
-class project_data_dir(Pathfinder):
+class gwak_base_dir(Pathfinder):
+
+    def __init__(
+        self,
+    ):
+        super().__init__(
+            dir_var="GWAK_BASE_DIR",
+            path_function_name="gwak directory",
+        )
+
+
+class gwak_data_dir(Pathfinder):
 
     def __init__(
         self,
@@ -91,7 +102,7 @@ class project_data_dir(Pathfinder):
             path_function_name="data directory",
         )
 
-class project_output_dir(Pathfinder):
+class gwak_output_dir(Pathfinder):
 
     def __init__(
         self,
@@ -101,7 +112,18 @@ class project_output_dir(Pathfinder):
             path_function_name="output directory",
         )
 
-class project_image_dir(Pathfinder):
+class gwak_timeslide_dir(Pathfinder):
+
+    def __init__(
+        self,
+    ):
+        super().__init__(
+            dir_var="GWAK_TIMESLIDE_DIR",
+            path_function_name="timeslide directory",
+        )
+
+
+class gwak_image_dir(Pathfinder):
 
     def __init__(
         self,
@@ -109,4 +131,14 @@ class project_image_dir(Pathfinder):
         super().__init__(
             dir_var="GWAK_IMAGE_DIR",
             path_function_name="image directory",
+        )
+
+class gwak_louvre_dir(Pathfinder):
+
+    def __init__(
+        self,
+    ):
+        super().__init__(
+            dir_var="GWAK_LOUVRE_DIR",
+            path_function_name="figure directory",
         )

@@ -116,4 +116,4 @@ def slurm_infer_wrapper(
         )
 
         grpc_port = int(grpc_port+3)
-        # subprocess.run(["sbatch", f"{slurm_file}"])
+        subprocess.run(["sbatch", f"{slurm_file}"])
