@@ -26,7 +26,7 @@ def main(ifos, num_samples_per_class, dataset,
     kernel_length = 1.0
     psd_length = 64
     fduration = 2
-    fftlength = 3
+    fftlength = kernel_length + fduration # 3
     batch_size = 128
     num_workers = 1
     duration = fduration + kernel_length
