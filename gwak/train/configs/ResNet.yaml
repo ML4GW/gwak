@@ -57,6 +57,6 @@ data:
     sample_rate: 4096
     kernel_length: 1.0
     psd_length: 64
-    fduration: 1
-    fftlength: 2
+    fduration: 2
+    fftlength: 3
     data_saving_file: null
