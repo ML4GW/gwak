@@ -106,7 +106,7 @@ rule precompute_embeddings:
             ifos='{ifos}'),
         data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
         config = 'train/configs/{cl_config}.yaml',
-        saved_dataset = 'output/dataset_train_HL_SR4096_kernel1.0_preselected_large.h5'
+        saved_dataset = 'output/dataset_train_HL_SR4096_kernel1.0.h5'
     output:
         means = 'output/{cl_config}_{ifos}/means.npy',
         stds = 'output/{cl_config}_{ifos}/stds.npy',
@@ -132,19 +132,21 @@ rule train_fm:
     input:
         # means = 'output/{cl_config}_{ifos}/means.npy',
         # stds = 'output/{cl_config}_{ifos}/stds.npy',
+        # embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
+        # correlations = 'output/{cl_config}_{ifos}/correlations.npy',
+    params:
         embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
         correlations = 'output/{cl_config}_{ifos}/correlations.npy',
-    params:
         artefact = directory('output/{cl_config}_{fm_config}_{ifos}/'),
         config = 'train/configs/{fm_config}.yaml',
-        conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
-    output:
+        conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False",
+    # output:
         model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     shell:
         'python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
-            --data.embedding_path {input.embeddings} \
-            --data.c_path {input.correlations} \
+            --data.embedding_path {params.embeddings} \
+            --data.c_path {params.correlations} \
             --model.conditioning {params.conditioning} '
 
             # --model.means {params.means} \
@@ -247,7 +249,7 @@ rule combine_models:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        fm_model = expand(rules.train_fm.output.model,
+        fm_model = expand(rules.train_fm.params.model,
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
@@ -262,7 +264,7 @@ rule combine_models:
 
 rule make_plots_i:
     input:
-        fm_model = expand(rules.train_fm.output.model,
+        fm_model = expand(rules.train_fm.params.model,
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
@@ -285,8 +287,7 @@ rule make_plots_i:
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 20000 \
-            --threshold-1yr 60 '
+            --nevents 20000 '
 
 rule make_plots:
     input:
