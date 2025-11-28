@@ -62,19 +62,20 @@ rule make_offline_dataset:
 rule train_cl:
     input:
         config = 'train/configs/{cl_config}.yaml',
-        # data_dir = 'output/O4_MDC_background/{ifos}/'
-        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
+        data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/'
+        # data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
     output:
         model = 'output/{cl_config}_{ifos}/model_JIT.pt'
     params:
-        artefact = directory('output/{cl_config}_{ifos}/')
+        artefact = directory('output/{cl_config}_{ifos}/'),
+        omicron = "/home/hongyin.chen/anti_gravity/gwak/gwak/output/O4b_AnalysisReady_Cat12/omicron/"
     shell:
         'python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
-            --model.num_ifos {wildcards.ifos} '
-            # --data.glitch_root /fred/oz016/Andy/New_Data/gwak/omicron/{wildcards.ifos}'
+            --model.num_ifos {wildcards.ifos} \
+            --data.init_args.glitch_root {params.omicron}'
 
 rule compare_embeddings:
     input:
@@ -92,12 +93,13 @@ rule compare_embeddings:
             --nevents 1024'
 
 rule precompute_embeddings:
-    params:
+    input:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        # data_dir = 'output/O4_MDC_background/{ifos}/',
-        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
+    params:
+        data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
+        # data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
         config = 'train/configs/{cl_config}.yaml'
     output:
         means = 'output/{cl_config}_{ifos}/means.npy',
@@ -107,7 +109,7 @@ rule precompute_embeddings:
         correlations = 'output/{cl_config}_{ifos}/correlations.npy'
     shell:
         'python train/precompute_embeddings.py \
-            --embedding-model {params.embedding_model} \
+            --embedding-model {input.embedding_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
             --ifos {wildcards.ifos} \
@@ -119,12 +121,13 @@ rule precompute_embeddings:
             --nevents 100000 '
 
 rule train_fm:
+    input:
+        embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
     params:
         artefact = directory('output/{cl_config}_{fm_config}_{ifos}/'),
         config = 'train/configs/{fm_config}.yaml',
-        means = 'output/{cl_config}_{ifos}/means.npy',
-        stds = 'output/{cl_config}_{ifos}/stds.npy',
-        embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
+        # means = 'output/{cl_config}_{ifos}/means.npy',
+        # stds = 'output/{cl_config}_{ifos}/stds.npy',
         correlations = 'output/{cl_config}_{ifos}/correlations.npy',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
@@ -132,7 +135,7 @@ rule train_fm:
     shell:
         'python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
-            --data.embedding_path {params.embeddings} \
+            --data.embedding_path {input.embeddings} \
             --data.c_path {params.correlations} \
             --model.conditioning {params.conditioning} '
 
@@ -250,7 +253,7 @@ rule combine_models:
             --outfile {output} '
 
 rule make_plots_i:
-    params:
+    input:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
@@ -258,8 +261,9 @@ rule make_plots_i:
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        # data_dir = 'output/O4_MDC_background/{ifos}/',
-        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
+    params:
+        data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
+        # data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
@@ -267,15 +271,14 @@ rule make_plots_i:
     shell:
         'mkdir -p {output}; '
         'python train/plots.py \
-            --embedding-model {params.embedding_model} \
-            --fm-model {params.fm_model} \
+            --embedding-model {input.embedding_model} \
+            --fm-model {input.fm_model} \
             --data-dir {params.data_dir} \
             --ifos {wildcards.ifos} \
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 30000 \
-            --threshold-1yr 20 '
+            --nevents 30000 '
 
 rule make_plots:
     input:
