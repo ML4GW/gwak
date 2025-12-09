@@ -45,7 +45,7 @@ def client_action(
     job_tag=None
 ):
     
-
+    result_dir = Path(result_dir)
     submit_count = 0
     bash_files = []
 
@@ -61,7 +61,7 @@ def client_action(
             if Tb == 0: 
                 _shifts = [0, 0]
             resolved_job_dir = job_dir / f"batch_job/job_{submit_count:07d}" # Make this to flexable
-            _result_dir = Path(result_dir) / "inference_result" # infer_result_dir
+            _result_dir = result_dir.parent / "inference_result" / result_dir.name # infer_result_dir
             job_dir.mkdir(parents=True, exist_ok=True)
             logging.info(f"Creating config at {resolved_job_dir}.")
             config_file = make_infer_config(

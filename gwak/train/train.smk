@@ -29,7 +29,10 @@ cl_configs = [
     'resnet_kl1.0_bs512',
     'Astroconformer',
     'iTransformer',
-    'ResNet'
+    'ResNet',
+    'ResNet_cat12',
+    'ResNet_separate-glitch',
+    'torch_rbw_zp_resnet_do6_dcs128_epoch25',
     ]
 fm_configs = [
     'NF_onlyBkg',

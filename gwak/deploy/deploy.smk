@@ -123,15 +123,15 @@ rule deploy_all:
         expand(
             rules.deploy.output,
             cl_config=[
-                "torch_rbw_zp_resnet_do6_dcs064_epoch25",
+                "ResNet_cat12",
+                "ResNet_separate-glitch",
                 "torch_rbw_zp_resnet_do6_dcs128_epoch25",
-                "torch_rbw_zp_resnet_do64_dcs128_epoch25"
             ], 
             fm_config=[
                 "NF_from_file_conditioning",
             ], 
             ifo_mode=["HL"], 
-            run_name=["one_month"]
+            run_name=["one_year"]
         )
 
 rule estimate_far:

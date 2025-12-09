@@ -187,14 +187,14 @@ def scan(
 
     if plotting:
         # Plot Timeslide outputs
-        plt.title(f"Timeslide Output distribution: {project}")
+        plt.title(f"{project.capitalize()} \n{model} \nTimeslide Output distribution")
         plt.hist(
             tslide_data, 
             bins=100,
             zorder=2,
-            # label=f"Most extrem ourlier value{np.min(tslide_data):.2f}",
+            label=f"Max Outlier: {np.min(tslide_data):.2f} \n{thereshold_level*100}% Outlier: {thereshold:.2f}",
         )
-        # plt.legend()
+        plt.legend()
         plt.axvline(thereshold, color="red")
         plt.grid(zorder=0)
         plt.yscale("log")
