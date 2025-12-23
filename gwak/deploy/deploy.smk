@@ -44,7 +44,7 @@ rule export:
         artefact = 'tmp/export_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3373bbe4-760e-7251-acff-4b96025e29c9 poetry run python \
         deploy/cli.py export \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
@@ -59,7 +59,7 @@ rule infer:
         artefact = 'tmp/infer_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3373bbe4-760e-7251-acff-4b96025e29c9 poetry run python \
         deploy/cli.py infer \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
@@ -75,7 +75,7 @@ rule infer_condor:
         artefact = 'tmp/infer_condor_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=0 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3373bbe4-760e-7251-acff-4b96025e29c9 poetry run python \
         deploy/cli.py infer_condor \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'

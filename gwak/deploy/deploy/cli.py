@@ -7,7 +7,8 @@ subcommands_keys = [
     "infer", 
     "infer_condor", 
     "deploy", 
-    "post_analyze"
+    "post_analyze",
+    "resolve_O4_bbc"
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
@@ -53,7 +54,9 @@ def main(args=None):
 
     if subcommand == "post_analyze":
         from deploy.analyzer import scan as main_cli
-        # from deploy.analyzer import slurm_infer_wrapper as main_cli
+
+    if subcommand == "resolve_O4_bbc":
+        from deploy.analyzer import resolve_bbc as main_cli
 
     # Create subparser
     subparser = build_parser(action=ActionConfigFile)

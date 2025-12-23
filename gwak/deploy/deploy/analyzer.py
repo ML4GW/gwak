@@ -271,3 +271,63 @@ def scan(
                 plt.savefig(model_snapshot_dir / f"GWAK-Stream_{seg_name}_error_rate.png", dpi=300, bbox_inches='tight')
                 plt.close()
 
+def resolve_bbc(
+    project: Path,
+    inference_sampling_rate: int,
+    **kwargs
+):
+
+    project = Path(project)
+    breakpoint()
+    # plot_dir = project.parent / "inference_plot"
+
+    # plot_dir.mkdir(parents=True, exist_ok=True)
+    # # Plot each stream 
+    # stream_files = list(sorted(project.glob("*.h5")))
+    # bbc_results = []
+    # for stream_file in tqdm(stream_files):
+
+    #     fname_re = re.compile(r"(?P<t0>\d{10}\.*\d*)-(?P<length>\d+\.*\d*)_(?P<shift>\d+\.*\d*)")
+    #     match = fname_re.search(str(stream_file))
+
+    #     if match is None:
+    #         print(f"Couldn't parse file {stream_file.path}")
+    #         # logging.warning(f"Couldn't parse file {fname.path}")
+
+    #     start = int(match.group("t0"))
+    #     length = int(match.group("length"))
+    #     shift = int(float(match.group("shift")))
+
+    #     gps_tag = f"{start}-{length}_{shift}"
+    #     with h5py.File(stream_file, "r") as h5_data:
+    #         stream_data = h5_data["data"][0, :]
+    #     # print(stream_data.shape[0])
+    #     time = np.arange(
+    #         0, 
+    #         stream_data.shape[0]
+    #     )/inference_sampling_rate
+
+    #     plt.figure(figsize=(10, 3), dpi=300)
+    #     plt.title(f"{gps_tag}")
+    #     plt.plot(time, stream_data)
+    #     plt.scatter(time, stream_data, s=1)
+    #     plt.xlabel("Time (s)")
+    #     plt.ylabel("GWAK output")
+    #     plt.savefig(plot_dir / f"bbc_{gps_tag}_stream.png", bbox_inches='tight')
+    #     plt.close()
+
+
+    #     bbc_results.append(stream_data)
+    # all_data = np.concatenate(bbc_results)
+
+    # plt.figure(dpi=300)
+    # plt.title("GWAK distribution\n")
+    # plt.hist(
+    #     all_data,
+    #     bins=100,
+    # )
+    # plt.xlabel("Metric output")
+    # plt.yscale("log")
+    # plt.savefig(plot_dir / "distribtion.png", bbox_inches='tight')
+    # plt.close()
+

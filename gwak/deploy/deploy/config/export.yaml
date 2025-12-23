@@ -3,7 +3,7 @@ model_dir: null # overwriteble
 output_dir: null # overwriteble
 clean: True
 background_batch_size: 2
-stride_batch_size: 64 # overwriteble
+stride_batch_size: 256 # overwriteble
 ifos: ["H1", "L1"] # overwriteble
 gwak_instances: 8
 platform: TORCHSCRIPT
@@ -18,5 +18,5 @@ snapshotter_instances: 8
 preproc_instances: 8
 inference_sampling_rate: 4 # overwriteble
 device: cuda:0 # cuda:0
-cl_config: torch_rbw_zp_resnet_do64_dcs128_epoch25 # overwriteble
+cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25 # overwriteble
 fm_config: NF_from_file_conditioning # overwriteble

@@ -39,7 +39,7 @@ def run_infer(
 
     # File and Path management
     gwak_logger(job_dir / "log.log")
-    # result_dir =  job_dir.resolve().parents[1] / "inference_result"
+    result_dir =  job_dir.resolve().parents[1] / "inference_result"
     result_dir.mkdir(parents=True, exist_ok=True)
     seg_start, seg_end = get_seg_start_end(strain_file)
     result_file = result_dir / f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
