@@ -1,0 +1,157 @@
+Bootstrap: docker
+From: python:3.10.12-slim-bullseye
+
+
+%files
+./deploy /opt/gwak/gwak/deploy
+../ml4gw /opt/gwak/ml4gw
+../hermes /opt/gwak/hermes
+
+%post
+apt-get update
+apt-get install -y build-essential
+apt-get clean
+
+# install pytest so we can run 
+# unit tests during CI inside container
+pip install poetry
+# cd /opt/gwak/gwak/deploy
+# poetry config virtualenvs.create false
+# poetry install
+
+# pip install -r requirements.txt --no-deps --no-cache-dir
+# pip install -e . --no-deps --no-cache-dir
+# pip install pytest
+
+# DEFFILE SECTIONS:
+# 
+# The following sections are presented in the order of processing, with the exception
+# that labels and environment can also be manipulated in %post.
+# 
+# %pre
+#     echo "This is a scriptlet that will be executed on the host, as root before"
+#     echo "the container has been bootstrapped. This section is not commonly used."
+# 
+# %setup
+#     echo "This is a scriptlet that will be executed on the host, as root, after"
+#     echo "the container has been bootstrapped. To install things into the container"
+#     echo "reference the file system location with $APPTAINER_ROOTFS."
+# 
+# %files
+#     /path/on/host/file.txt /path/on/container/file.txt
+#     relative_file.txt /path/on/container/relative_file.txt
+# 
+# %post
+#     echo "This scriptlet section will be executed from within the container after"
+#     echo "the bootstrap/base has been created and setup."
+# 
+# %environment
+#     LUKE=goodguy
+#     VADER=badguy
+#     HAN=someguy
+#     export HAN VADER LUKE
+# 
+# %test
+#     echo "Define any test commands that should be executed after container has been"
+#     echo "built. This scriptlet will be executed from within the running container"
+#     echo "as the root user. Pay attention to the exit/return value of this scriptlet"
+#     echo "as any non-zero exit code will be assumed as failure."
+#     exit 0
+# 
+# %runscript
+#     echo "Define actions for the container to be executed with the run command or"
+#     echo "when container is executed."
+# 
+# %startscript
+#     echo "Define actions for container to perform when started as an instance."
+# 
+# %labels
+#     HELLO MOTO
+#     KEY VALUE
+# 
+# %help
+#     This is a text file to be displayed with the run-help command.
+
+
+
+# %environment
+#     export POETRY_VIRTUALENVS_IN_PROJECT=true
+#     export POETRY_NO_INTERACTION=1
+#     export PYTHONUNBUFFERED=1
+# 
+#     # HARD REQUIREMENT for Triton / PyTorch
+#     export OMP_NUM_THREADS=1
+#     export MKL_NUM_THREADS=1
+#     export OPENBLAS_NUM_THREADS=1
+#     export NUMEXPR_NUM_THREADS=1
+#     export TORCH_NUM_THREADS=1
+#     export TORCH_NUM_INTEROP_THREADS=1
+# 
+# %post
+#     apt-get update && apt-get install -y \
+#         python3 python3-pip curl git \
+#         && rm -rf /var/lib/apt/lists/*
+# 
+#     # Install Poetry
+#     pip install --no-cache-dir poetry
+# 
+#     # Set working directory
+#     mkdir -p /opt/gwak
+#     cd /opt/gwak
+# 
+#     # Copy project metadata
+#     cp pyproject.toml poetry.lock ./
+# 
+#     # Install deps (NO dev deps)
+#     poetry install --no-root --without dev
+# 
+# %files
+#     . /opt/gwak2/gwak/deploy
+#     ../../ml4gw /opt/gwak2/ml4gw
+#     ../../hermes /opt/gwak2/hermes
+# 
+# 
+# 
+# 
+# Bootstrap: docker
+# From: python:3.10.12-slim-bullseye
+# Stage: build
+# 
+# %files
+# . /opt/gwak2/gwak/export
+# ../../ml4gw /opt/gwak2/ml4gw
+# ../../hermes /opt/gwak2/hermes
+# 
+# %post
+# # installing the local package editably via pip
+# # works, but none of the dependencies (e.g. ml4gw)
+# # are installed editably. Instead, use poetry export
+# # to export to a requirements.txt, and use sed 
+# # to prepend the -e flag to all relevant 
+# # local packages that require editable installs.
+# # poetry has already done dependency resolution for us,
+# # so turn that off with the --no-deps flag to increase performance.
+# # Lastly, install the export project itself
+# python -m pip install poetry==1.7.1
+# cd /opt/gwak2/gwak/export
+# poetry export -o requirements.txt --without-hashes \
+#     && sed -i 's|\(.*\) @ file://|-e |' requirements.txt
+# 
+# Bootstrap: docker
+# From: python:3.10.12-slim-bullseye
+# Stage: final
+# 
+# %files from build
+# /opt/gwak2 /opt/gwak2
+# 
+# %post
+# apt-get update
+# apt-get install -y --no-install-recommends git
+# apt-get clean
+# 
+# # install pytest so we can run 
+# # unit tests during CI inside container
+# cd /opt/gwak2/gwak/export
+# pip install -r requirements.txt --no-deps --no-cache-dir
+# pip install -e . --no-deps --no-cache-dir
+# pip install pytest

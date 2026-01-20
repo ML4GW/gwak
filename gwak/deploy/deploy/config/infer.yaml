@@ -2,7 +2,7 @@ ifos: ["H1", "L1"]
 # ifos: ["H1", "V1"]
 # ifos: ["L1", "V1"]
 psd_length: 64
-Tb: 1
+Tb: 31536000
 # Tb: 2592000 # 30 Days
 # Tb: 31536000 # One Year
 stride_batch_size: 256
@@ -10,19 +10,21 @@ sample_rate: 4096
 # fname: /home/hongyin.chen/Data/GWAK_data/gwak_infer_data_4K
 # fname: /home/hongyin.chen/Data/GWAK_data/gwak_inspect
 # fname: /home/eric.moreno/gwak2_temp/gwak/gwak/output/O4_MDC_background/HL
-fname: /home/hongyin.chen/Data/GWAK_data/O4_MDC_short-0/HL
+# fname: /home/hongyin.chen/Data/GWAK_data/O4_MDC_short-0/HL
 # fname: /fred/oz994/andy/Data/gwak/HL_test
+fname: /home/katya.govorkova/gwak2/gwak/output/O4_MDC_short-1/HL
 ccsn_repo: /home/hongyin.chen/Data/3DCCSN_PREMIERE/Resampled # 1 kpc
 data_format: h5 # gwf
-shifts: [0, 10]
+shifts: [0, 1]
 project: null
-grpc_port: 9001
+grpc_port: 8501
 image: hermes/tritonserver:23.01
 # image: /fred/oz016/Andy/tritonserver_23.01.sif
 model_repo_dir: null 
 result_dir: null  
-job_rate_limit: 8
-monitor_patients: 60
+# job_rate_limit: 16
+condor_nodes: 16
+monitor_patients: 180
 inference_sampling_rate: 4
 inj_type: null
 cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25

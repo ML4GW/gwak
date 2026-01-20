@@ -7,6 +7,8 @@ ifo_modes = [
 
 runs = [
     'background', 
+    'bbc-short-0', 
+    'bbc-short-1', 
     'one_day',
     'one_month',
     'one_year', 
@@ -27,6 +29,8 @@ wildcard_constraints:
 
 runs_TS_converter = {
     'background': 0,
+    'bbc-short-0': 0, 
+    'bbc-short-1': 0, 
     'one_day': 86400,
     'one_month': 2678400,
     'one_year': 31557600, 
@@ -44,7 +48,7 @@ rule export:
         artefact = 'tmp/export_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3373bbe4-760e-7251-acff-4b96025e29c9 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f poetry run python \
         deploy/cli.py export \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
@@ -59,7 +63,7 @@ rule infer:
         artefact = 'tmp/infer_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3373bbe4-760e-7251-acff-4b96025e29c9 poetry run python \
+        'set -x; cd deploy; poetry run python \
         deploy/cli.py infer \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
@@ -67,7 +71,7 @@ rule infer:
 
 rule infer_condor:
     input:
-        config = 'deploy/deploy/config/infer.yaml',
+        config = 'deploy/deploy/config/infer_condor.yaml',
     params:
         cli = lambda wildcards: wildcards.deploymodels,
         output = 'output/infer/{deploymodels}'
@@ -75,15 +79,15 @@ rule infer_condor:
         artefact = 'tmp/infer_condor_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-3373bbe4-760e-7251-acff-4b96025e29c9 poetry run python \
+        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f poetry run python \
         deploy/cli.py infer_condor \
         --config ../{input.config} \
         --project {params.cli} | tee ../{output.artefact}'
         # --result_dir {params.output} 
 
-rule deploy:
+rule infer_slurm:
     input:
-        config = 'deploy/deploy/config/deploy.yaml',
+        config = 'deploy/deploy/config/infer_slurm.yaml',
     params:
         timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
     output:
@@ -118,10 +122,10 @@ rule infer_condor_all:
 
 
 # snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F 
-rule deploy_all:
+rule infer_slurm_all:
     input: 
         expand(
-            rules.deploy.output,
+            rules.infer_slurm.output,
             cl_config=[
                 "ResNet_cat12",
                 "ResNet_separate-glitch",

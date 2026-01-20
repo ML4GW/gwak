@@ -61,6 +61,86 @@ def write_export_config(
 
     return export_config
 
+
+def make_subfile(
+    job_dir,
+    kwargs,
+    arguments,
+    config
+):
+    
+    condor_config = {}
+    submit_file = job_dir / "condor.sub"
+
+    condor_config["universe"] = "vanilla" #"local"
+    condor_config["executable"] = sys.executable
+    condor_config["arguments"] = f"{arguments} --config {config}"
+    
+    
+    condor_config["log"] = "job.log"
+    condor_config["output"] = "job.out"
+    condor_config["error"] = "job.err"
+    
+    # condor_config["getenv"] = True
+    condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
+    
+    
+    condor_config["request_cpus"] = 2
+    condor_config["request_memory"] = "8G"
+    condor_config["request_disk"] = "2G"
+    condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
+    
+    with open(submit_file, "w") as f:
+        for key, value in condor_config.items():
+            f.write(f"{key} = {value}\n")
+        
+        f.write("queue 0")
+
+    return submit_file
+
+def write_condor_config(
+    condor_kwargs,
+    job_dir,
+    arguments,
+    config
+):
+    
+    condor_config = {}
+    submit_file = job_dir / "condor.sub"
+
+    condor_config["universe"] = "vanilla" #"local"
+    # condor_config["executable"] = sys.executable
+    # condor_config["arguments"] = f"{arguments} --config {config}"
+    # condor_config["executable"] = "/bin/bash"
+    # condor_config["arguments"] = "/home/hongyin.chen/condor_cmd.sh"
+    condor_config["executable"] = "/home/hongyin.chen/condor_cmd.sh"
+
+    condor_config["log"] = "job.log"
+    condor_config["output"] = "job.out"
+    condor_config["error"] = "job.err"
+    
+    # condor_config["getenv"] = True
+    condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
+    
+    
+    # condor_config["request_cpus"] = 2
+    # condor_config["request_memory"] = "8G"
+    # condor_config["request_disk"] = "2G"
+    # condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
+
+    for key in condor_kwargs.keys():
+
+        condor_config[key] = condor_kwargs[key]
+    # breakpoint()
+    with open(submit_file, "w") as f:
+        for key, value in condor_config.items():
+            f.write(f"{key} = {value}\n")
+        
+        f.write("queue")
+
+    return submit_file
+
+
 def write_slurm_config(
     kwargs,
     job_dir,
@@ -119,42 +199,6 @@ def write_slurm_config(
     print(f"SLURM script written to: {filename}")
     return filename
 
-
-
-def make_subfile(
-    job_dir,
-    arguments,
-    config
-):
-    
-    condor_config = {}
-    submit_file = job_dir / "condor.sub"
-
-    condor_config["universe"] = "vanilla" #"local"
-    condor_config["executable"] = sys.executable
-    condor_config["arguments"] = f"{arguments} --config {config}"
-    
-    
-    condor_config["log"] = "job.log"
-    condor_config["output"] = "job.out"
-    condor_config["error"] = "job.err"
-    
-    # condor_config["getenv"] = True
-    condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
-    
-    
-    condor_config["request_cpus"] = 4
-    condor_config["request_memory"] = "16G"
-    condor_config["request_disk"] = "16G"
-    condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
-    
-    with open(submit_file, "w") as f:
-        for key, value in condor_config.items():
-            f.write(f"{key} = {value}\n")
-        
-        f.write("queue 0")
-
-    return submit_file
 
 def make_infer_config(
     job_dir: Path,
@@ -246,4 +290,4 @@ def condor_submit_with_rate_limit(
 
                 job_status["Done"].append(sub_file)
                 job_status["Running"].pop(idx)
-                print(f"Job {job_id} done!")
+                logging.info(f"Job {job_id} done!")

@@ -82,7 +82,7 @@ def client_action(
                 inference_sampling_rate=inference_sampling_rate,
             )
 
-            cmd = f"python {str(arguments)} --config {config_file}"
+            cmd = f"/home/hongyin.chen/.cache/pypoetry/virtualenvs/deploy-Jg3IdjSR-py3.9/bin/python {str(arguments)} --config {config_file}"
             bash_files.append(bash_commnad_files(resolved_job_dir, cmd))
 
             submit_count += 1

@@ -65,8 +65,10 @@ def scan(
     **kwargs
 ):
     
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
-    tslide_data_dir = Path(f"/fred/oz016/Andy/Output/gwak-bbc/{model}/{project}/inference_result")
+    # model = f"{cl_config}_{fm_config}_{ifo_mode}"
+    model = f"{cl_config}_{fm_config}_{ifo_mode}-O4_MDC_short-0"
+    # tslide_data_dir = Path(f"/fred/oz016/Andy/Output/gwak-bbc/{model}/{project}/inference_result")
+    tslide_data_dir = Path(f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/combination/{model}/inference_result")
     model_louvre_dir, model_snapshot_dir = lovure_file_handler(
         louvre_dir=out_dir,
         model=model
@@ -112,7 +114,8 @@ def scan(
         start = int(match.group("t0"))
         length = int(match.group("length"))
         shift = int(float(match.group("shift")))
-
+        print(np.min(ts_data))
+            # breakpoint()
         if np.min(ts_data) < thereshold: 
             segment_name = f"{start}-{length}"
 

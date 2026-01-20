@@ -5,6 +5,8 @@ clean: True
 background_batch_size: 2
 stride_batch_size: 256 # overwriteble
 ifos: ["H1", "L1"] # overwriteble
+snapshotter_instances: 8
+preproc_instances: 8
 gwak_instances: 8
 platform: TORCHSCRIPT
 # platform: TENSORRT
@@ -14,8 +16,6 @@ kernel_length: 1
 fduration: 2
 fftlength: 2
 sample_rate: 4096 # overwriteble
-snapshotter_instances: 8
-preproc_instances: 8
 inference_sampling_rate: 4 # overwriteble
 device: cuda:0 # cuda:0
 cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25 # overwriteble

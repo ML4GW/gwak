@@ -3,7 +3,8 @@ import sys
 from jsonargparse import ArgumentParser, ActionConfigFile
 
 subcommands_keys = [
-    "export", 
+    "export",
+    "condor_client", 
     "infer", 
     "infer_condor", 
     "deploy", 
@@ -43,13 +44,16 @@ def main(args=None):
     if subcommand == "export":
         from deploy.export import export as main_cli
 
+    if subcommand == "condor_client":
+        from deploy.condor_infer_module import infer as main_cli
+
     if subcommand == "infer":
         from deploy.infer_module import infer as main_cli
 
     if subcommand == "infer_condor":
-        from deploy.infer import infer as main_cli
+        from deploy.condor_handler import condor_infer_wrapper as main_cli
 
-    if subcommand == "deploy":
+    if subcommand == "infer_slurm":
         from deploy.slurm_handeler import slurm_infer_wrapper as main_cli
 
     if subcommand == "post_analyze":
