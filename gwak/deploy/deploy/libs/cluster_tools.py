@@ -11,26 +11,29 @@ from typing import Union
 from pathlib import Path
 
 
-def write_infer_core_config(
-    **infer_core_kwargs
+def write_bash_file(
+    bash_root: Path,
+    files: list,
+    command: str
 ):
 
-    yaml_file = Path(infer_core_kwargs["job_dir"]) / "config.yaml"
+    bash_file = bash_root / "condor_cmd.sh"
+    with bash_file.open("w") as sh_file:
 
-    with open(yaml_file, "w") as f:
-        for key, value in infer_core_kwargs.items():
-            if key in ("fnames", "segments") and isinstance(value, list):
-                f.write(f"{key}:\n")
-                for item in value:
-                    f.write(f"  - {item}\n")
+        sh_file.write("#!/bin/bash\n\n")
+        sh_file.write("echo $HDF5_USE_FILE_LOCKING\n")
+        sh_file.write("export HDF5_USE_FILE_LOCKING=FALSE\n")
+        sh_file.write("echo HDF5_USE_FILE_LOCKING status: $HDF5_USE_FILE_LOCKING\n")
+        for file in files:
+            sh_file.write(f"cp {file} $_CONDOR_SCRATCH_DIR\n")
 
-            else:
-                if value is None:
-                    value = "null"
-                f.write(f"{key}: {value}\n")
-
-    return yaml_file
-
+        sh_file.write("echo ' '\n")
+        sh_file.write("echo Files under $_CONDOR_SCRATCH_DIR\n")
+        sh_file.write("ls $_CONDOR_SCRATCH_DIR\n")
+        sh_file.write("echo ' '\n")
+        sh_file.write(f"{command}\n")
+    bash_file.chmod(0o755)
+    return bash_file
 
 
 def write_export_config(
@@ -62,46 +65,47 @@ def write_export_config(
     return export_config
 
 
-def make_subfile(
-    job_dir,
-    kwargs,
-    arguments,
-    config
-):
+# def make_subfile(
+#     job_dir,
+#     kwargs,
+#     arguments,
+#     config
+# ):
     
-    condor_config = {}
-    submit_file = job_dir / "condor.sub"
+#     condor_config = {}
+#     submit_file = job_dir / "condor.sub"
 
-    condor_config["universe"] = "vanilla" #"local"
-    condor_config["executable"] = sys.executable
-    condor_config["arguments"] = f"{arguments} --config {config}"
+#     condor_config["universe"] = "vanilla" #"local"
+#     condor_config["executable"] = sys.executable
+#     condor_config["arguments"] = f"{arguments} --config {config}"
     
     
-    condor_config["log"] = "job.log"
-    condor_config["output"] = "job.out"
-    condor_config["error"] = "job.err"
+#     condor_config["log"] = "job.log"
+#     condor_config["output"] = "job.out"
+#     condor_config["error"] = "job.err"
     
-    # condor_config["getenv"] = True
-    condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
+#     # condor_config["getenv"] = True
+#     condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
     
     
-    condor_config["request_cpus"] = 2
-    condor_config["request_memory"] = "8G"
-    condor_config["request_disk"] = "2G"
-    condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
+#     condor_config["request_cpus"] = 2
+#     condor_config["request_memory"] = "8G"
+#     condor_config["request_disk"] = "2G"
+#     condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
     
-    with open(submit_file, "w") as f:
-        for key, value in condor_config.items():
-            f.write(f"{key} = {value}\n")
+#     with open(submit_file, "w") as f:
+#         for key, value in condor_config.items():
+#             f.write(f"{key} = {value}\n")
         
-        f.write("queue 0")
+#         f.write("queue 0")
 
-    return submit_file
+#     return submit_file
+
 
 def write_condor_config(
     condor_kwargs,
     job_dir,
-    arguments,
+    executable,
     config
 ):
     
@@ -109,29 +113,17 @@ def write_condor_config(
     submit_file = job_dir / "condor.sub"
 
     condor_config["universe"] = "vanilla" #"local"
-    # condor_config["executable"] = sys.executable
-    # condor_config["arguments"] = f"{arguments} --config {config}"
-    # condor_config["executable"] = "/bin/bash"
-    # condor_config["arguments"] = "/home/hongyin.chen/condor_cmd.sh"
-    condor_config["executable"] = "/home/hongyin.chen/condor_cmd.sh"
+    condor_config["executable"] = executable
 
     condor_config["log"] = "job.log"
     condor_config["output"] = "job.out"
     condor_config["error"] = "job.err"
-    
-    # condor_config["getenv"] = True
-    condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
-    
-    
-    # condor_config["request_cpus"] = 2
-    # condor_config["request_memory"] = "8G"
-    # condor_config["request_disk"] = "2G"
-    # condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
 
+    condor_config["getenv"] = True
     for key in condor_kwargs.keys():
 
         condor_config[key] = condor_kwargs[key]
-    # breakpoint()
+
     with open(submit_file, "w") as f:
         for key, value in condor_config.items():
             f.write(f"{key} = {value}\n")
@@ -199,8 +191,32 @@ def write_slurm_config(
     print(f"SLURM script written to: {filename}")
     return filename
 
+def write_infer_core_config(
+    **infer_core_kwargs
+):
 
-def make_infer_config(
+    yaml_file = Path(infer_core_kwargs["job_dir"]) / "config.yaml"
+
+    with open(yaml_file, "w") as f:
+        for key, value in infer_core_kwargs.items():
+            if key in ("fnames") and isinstance(value, list):
+                f.write(f"{key}:\n")
+                for item in value:
+                    f.write(f"  - {Path(item).name}\n")
+
+            elif key in ("segments") and isinstance(value, list):
+                f.write(f"{key}:\n")
+                for item in value:
+                    f.write(f"  - {item}\n")
+
+            else:
+                if value is None:
+                    value = "null"
+                f.write(f"{key}: {value}\n")
+
+    return yaml_file
+
+def write_infer_config(
     job_dir: Path,
     result_dir: Path,
     triton_server_ip,
@@ -291,3 +307,5 @@ def condor_submit_with_rate_limit(
                 job_status["Done"].append(sub_file)
                 job_status["Running"].pop(idx)
                 logging.info(f"Job {job_id} done!")
+                if result.returncode != 0:
+                    logging.info(f"Job failed check: {sub_file}")

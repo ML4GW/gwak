@@ -41,17 +41,37 @@ runs_TS_converter = {
 
 rule export:
     input:
-        config = 'deploy/deploy/config/export.yaml',
+        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
+        config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
     params:
         cli = lambda wildcards: wildcards.deploymodels,
+        gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f"
     output:
         artefact = 'tmp/export_{deploymodels}.log'
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f poetry run python \
-        deploy/cli.py export \
-        --config ../{input.config} \
+        'set -x; cd deploy; {params.gpu} uv run python \
+        {input.arg} export \
+        --config {input.config} \
         --project {params.cli} | tee ../{output.artefact}'
+
+
+# python deploy/cli.py export --config deploy/config/export.yaml --project combination
+rule production_export:
+    input:
+        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
+        image = IMAGE_DIR / "deploy.sif",
+        config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
+    params:
+        bind_1 = f"{CONTAIN_OUTPUT_DIR}:/production",
+        bind_2 = f"{OUTPUT_DIR}:/opt/gwak/gwak/output",
+    shell: 
+        'set -x; apptainer exec --nv \
+        --bind {params.bind_1},{params.bind_2} \
+        {input.image} \
+        python {input.arg} export  \
+        --config {input.config} \
+        --project combination'
 
 rule infer:
     input:
@@ -69,23 +89,29 @@ rule infer:
         --project {params.cli} | tee ../{output.artefact}'
         # --result_dir {params.output} 
 
-rule infer_condor:
+rule condor_infer:
+    resources:
+        sequential=1
     input:
-        config = 'deploy/deploy/config/infer_condor.yaml',
+        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
+        config = GWAK_DIR / "gwak/deploy/deploy/config/infer_condor.yaml"
     params:
-        cli = lambda wildcards: wildcards.deploymodels,
-        output = 'output/infer/{deploymodels}'
+        gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f",
+        timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
     output:
-        artefact = 'tmp/infer_condor_{deploymodels}.log'
+        artefact = directory('output/infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/')
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f poetry run python \
-        deploy/cli.py infer_condor \
-        --config ../{input.config} \
-        --project {params.cli} | tee ../{output.artefact}'
-        # --result_dir {params.output} 
+        'set -x; cd deploy; {params.gpu} uv run python \
+        {input.arg} infer_condor \
+        --config {input.config} \
+        --run_name {wildcards.run_name} \
+        --cl_config {wildcards.cl_config} \
+        --fm_config {wildcards.fm_config} \
+        --Tb {params.timeslide}'
+        # --project {params.cli} | tee ../{output.artefact}'
 
-rule infer_slurm:
+rule slurm_infer:
     input:
         config = 'deploy/deploy/config/infer_slurm.yaml',
     params:
@@ -93,7 +119,7 @@ rule infer_slurm:
     output:
         artefact = directory('output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/')
     shell:
-        'set -x; cd deploy; poetry run python \
+        'set -x; cd deploy; uv run python \
         deploy/cli.py deploy \
         --config ../{input.config} \
         --run_name {wildcards.run_name} \
@@ -117,15 +143,11 @@ rule export_all:
 rule infer_all:
     input: expand(rules.infer.output, deploymodels='combination')
 
-rule infer_condor_all:
-    input: expand(rules.infer_condor.output, deploymodels='combination')
-
-
 # snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F 
-rule infer_slurm_all:
+rule slurm_infer_all:
     input: 
         expand(
-            rules.infer_slurm.output,
+            rules.slurm_infer.output,
             cl_config=[
                 "ResNet_cat12",
                 "ResNet_separate-glitch",
@@ -136,6 +158,21 @@ rule infer_slurm_all:
             ], 
             ifo_mode=["HL"], 
             run_name=["one_year"]
+        )
+
+rule condor_infer_all:
+    input: 
+        expand(
+            rules.condor_infer.output,
+            cl_config=[
+                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
+            ], 
+            fm_config=[
+                "NF_from_file_conditioning",
+            ], 
+            ifo_mode=["HL"], 
+            # run_name=["bbc-short-0"]
+            run_name=["test_run"]
         )
 
 rule estimate_far:

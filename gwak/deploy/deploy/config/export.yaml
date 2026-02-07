@@ -1,6 +1,8 @@
 project: null # overwritebleb
 model_dir: null # overwriteble
-output_dir: null # overwriteble
+# output_dir: null # overwriteble
+output_dir:
+  class_path: gwak_output_dir
 clean: True
 background_batch_size: 2
 stride_batch_size: 256 # overwriteble

@@ -13,9 +13,12 @@ subcommands_keys = [
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
+# The skipped keys should only by string types variables. 
+# Avoid passing non string type variables to skip list. 
+# Otherwise, you would have to add an additinaol type check to 
 skip_keys = [
     "project", 
-    "output_dir", 
+    # "output_dir", 
     "run_name", 
     "cl_config", 
     "fm_config",

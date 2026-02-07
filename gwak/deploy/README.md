@@ -3,6 +3,16 @@ The deploy application provides two major utilities:
 - Exporting trained NN model to excutibles
 - Producing inference results on sequential data
 
+Follow the following command if want to install or update the enviroment only for deploy.
+
+```
+$ cd $GWAK_DIR/gwak/deploy
+$ uv sync
+$ uv venv
+# uv python pin 3.10
+```
+
+
 # Use the following command to deploy your NN model #
 ### Via ```Snakemake``` ###
 

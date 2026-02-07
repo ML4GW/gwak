@@ -11,21 +11,21 @@ import h5py
 import logging
 import shutil
 import subprocess
-
+from contextlib import nullcontext
 import numpy as np
 
 from tqdm import tqdm
 from zlib import adler32
 from pathlib import Path
 from typing import Optional
-from concurrent.futures import ThreadPoolExecutor
 
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
 from deploy.libs.infer_utils import get_ip_address 
-from deploy.libs import gwak_logger
-from deploy.libs.cluster_tools import make_infer_config, make_subfile, condor_submit_with_rate_limit
+from deploy.libs import gwak_logger, Pathfinder
+from deploy.libs import gwak_dir, gwak_output_dir, O4_bbc_short_0_data_dir, O4_bbc_short_1_data_dir
+from deploy.libs.cluster_tools import condor_submit_with_rate_limit, write_bash_file
 from infer_data import get_shifts_meta_data
 
 EXTREME_CCSN = [
@@ -34,40 +34,28 @@ EXTREME_CCSN = [
 ]
 
 
-def bash_commnad_files(bash_file, command):
-    bash_file = bash_file / "triton.sh"
-    with open(bash_file, "w") as f:
-        f.write(command)
-
-    return bash_file
-
-
-def run_bash(bash_file):
-
-    subprocess.run(
-        ["bash", f"{bash_file}"],  
-    )
-
+# Add a wapper for each GPU?
 def condor_infer_wrapper(
     condor_nodes: int,
     condor_kwargs: dict,
+    run_name: str,
     ifos: list[str],
     psd_length: float,
     Tb: int,
     stride_batch_size: int,
     sample_rate: int,
-    fname: Path, 
     data_format: str,
-    ccsn_repo: Path,
     shifts: list[float], 
     project: str,
     image: str,
     grpc_port: int = 8001,
-    model_repo_dir: Optional[Path] = None,
-    result_dir: Optional[Path] = None,
-    monitor_patients: int=3,
+    fname: Optional[Pathfinder] = None, 
+    model_repo_dir: Optional[Pathfinder] = None,
+    result_dir: Optional[Pathfinder] = None,
+    server_patients: int=3, 
+    monitor_patients: Optional[int]=3,
     job_rate_limit: int = 1,
-    inference_sampling_rate: float = 2,
+    inference_rate: float = 2,
     inj_type: Optional[str]=None,
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
     fm_config: str='NF_onlyBkg',
@@ -96,123 +84,154 @@ def condor_infer_wrapper(
         inference_sampling_rate -- Numbers of kernel to run in one second. (default: {2})
         inj_type -- Class of wavform to inject on timeslide. (default: {None})
     """
-    result_dir = None
-    # File handling 
-    file_path = Path(__file__).resolve()
+    Tb = int(Tb)
+    output_dir = gwak_output_dir()
+    deploy_dir = gwak_dir(suffix="gwak/deploy")()
+    
     ifo_str = ''.join(ifo[0] for ifo in ifos)
-
     prefix = f"{cl_config}_{fm_config}_{ifo_str}"
+    # File handling     
     if model_repo_dir is None: 
-        model_repo_dir = file_path.parents[2] / "output/export"
-    model_repo_dir = model_repo_dir / prefix / project
-    if result_dir is None: 
-        result_dir = file_path.parents[2] / "output/infer"
-
-    result_dir = result_dir / project / prefix # already passed through snakemake
-    result_dir = result_dir.resolve()
-
-    shutil.rmtree(result_dir)
+        model_repo_dir = output_dir(
+            additional_path=f"export/{prefix}/{project}"
+        )
+    if result_dir is None:
+        result_dir = output_dir(
+            additional_path=f"infer/{prefix}/{run_name}"
+        )
+    if result_dir.exists():
+        shutil.rmtree(result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
+
+    # Define fname    
+    if run_name == "bbc-short-0":
+        fname = O4_bbc_short_0_data_dir(suffix=ifo_str)()
+    if run_name == "bbc-short-1":
+        fname = O4_bbc_short_1_data_dir(suffix=ifo_str)()
+    if fname is not None:
+        fname = fname(additional_path=ifo_str)
+    else:
+        fname = gwak_output_dir(suffix=f"O4_MDC_background/{ifo_str}")()
+
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
     gwak_logger(log_file)
 
     # Sequence preperation
     logging.info(f"Estimating required time slide to apply.")
-    num_shifts, fnames, segments = get_shifts_meta_data(fname, Tb, shifts, data_format)
+    num_shifts, fnames, segments = get_shifts_meta_data(
+        fname, Tb, shifts, data_format
+    )
     fnames = [str(p) for p in fnames]
+
+    if condor_nodes > len(fnames):
+        condor_nodes = len(fnames)
     files_per_node = int(len(fnames)/condor_nodes)
-    if files_per_node == 0:
-        files_per_node = 1
-    # breakpoint()
-    kernel_size = int(sample_rate * stride_batch_size / inference_sampling_rate)
-    
+    extra = len(fnames)%condor_nodes
+    kernel_size = int(sample_rate * stride_batch_size / inference_rate)
+
+    idx = 0
+    width = len(str(condor_nodes))
+    node_job_dir, node_fnames, node_segments = [], [], []
+    for i in range(condor_nodes):
+        job_dir = result_dir / f"Node_{i:0{width}d}"
+        job_dir.mkdir(parents=True, exist_ok=True)
+        node_job_dir.append(job_dir)
+        size = files_per_node + (1 if i < extra else 0)
+        node_fnames.append(fnames[idx:idx+size])
+        node_segments.append(segments[idx:idx+size])
+        idx += size
+
     # Triton server setup
     ip = get_ip_address()
-    # ip = "10.14.0.160"
+    cli = deploy_dir / "deploy/cli.py"
     gwak_streamer = f"gwak-{project}-streamer"
     serve_context = serve(
-        model_repo_dir, 
-        image, 
-        grpc_port, 
+        model_repo_dir,
+        image,
+        grpc_port,
         log_file=triton_log, 
-        # wait=True
         wait=False,
-        singularity_path="/apps/system/software/apptainer/latest/bin/singularity"
     )
+
     # The Triton excution to run
-    arguments=Path("deploy/triton_excution.py").resolve()
-    if inj_type is not None:
-        arguments=Path("deploy/triton_inj_excution.py").resolve()
-        os.environ["CCSN_FILE"] = str(Path("deploy/config/ccsn.yaml").resolve())
-    # arguments=Path("deploy/triton_inj_excution.py").resolve()
-
     with serve_context:
-        # monitor_patients = 15
-        logging.info(f"Waiting {monitor_patients} seconds to recieve connetion to port {grpc_port}!")
-        time.sleep(monitor_patients)
-        # print("Model Loaded")
-        # monitor = ServerMonitor(
-        #     model_name=gwak_streamer,
-        #     ips="localhost",
-        #     filename=result_dir / f"server-stats-{stride_batch_size}.csv",
-        #     grpc_port=grpc_port,
-        #     model_version=-1,
-        #     name="monitor",
-        #     max_request_rate=1,
-        # )
-        # with monitor:
-
-        sub_files = []
-        # breakpoint()
-        width = len(str(condor_nodes))
-        start = time.time()
-        for node in range(condor_nodes):
-
-            files = fnames[node*files_per_node:(node+1)*files_per_node]
-            # job_dir = output_dir / f"Slurm_Jobs/{prefix}/{run_name}" / f"Node_{node:02d}"
-            job_dir = result_dir / f"Node_{node:0{width}d}"
-            job_dir.mkdir(parents=True, exist_ok=True)
-            # print(job_dir, flush=True)
-
-            infer_config = write_infer_core_config(
-                deploy_dir="deploy_dir",
-                output_dir="output_dir",
-                job_dir=job_dir,
-                result_dir=result_dir,
-                project=project,
-                ip=ip,
-                model_repo_dir=model_repo_dir or export_job_dir / "models", # Can be null, cause we export at node level=# model_repo_dir, # Can be null, cause we export at node level.
-                image=image,
-                grpc_port=grpc_port,
-                patients=15,
-                ifos=ifos,
-                fnames=files,
-                num_shifts=num_shifts,
-                data_format=data_format,
-                segments=segments[node*files_per_node:(node+1)*files_per_node],
-                shifts=shifts,
-                Tb=Tb,
-                psd_length=psd_length,
-                stride_batch_size=stride_batch_size,
-                kernel_size=kernel_size,
-                sample_rate=sample_rate,
-                inference_sampling_rate=int(inference_sampling_rate),
-                job_rate_limit=job_rate_limit,
-            )
-
-            condor_subs = write_condor_config(
-                condor_kwargs=condor_kwargs,
-                job_dir=job_dir,
-                arguments=f"{file_path.parent}/cli.py condor_client",
-                config=infer_config
-            )
-            sub_files.append(condor_subs)
-
-        condor_submit_with_rate_limit(
-            sub_files=sub_files,
-            rate_limit=condor_nodes
+        logging.info(
+            f"Waiting {server_patients} seconds "
+            f"to receive connection to port {grpc_port}!"
         )
+        time.sleep(server_patients)
 
-        # time.sleep(monitor_patients)
-        logging.info(f"Time spent for inference: {(time.time() - start)/60:.02f}mins")
+        monitor = nullcontext()
+        if monitor_patients:
+            monitor = ServerMonitor(
+                model_name=gwak_streamer,
+                ips="localhost",
+                filename=result_dir / f"server-stats.csv",
+                grpc_port=grpc_port,
+                model_version=-1,
+                name="monitor",
+                max_request_rate=1,
+            )
+            logging.info(
+                f"Waiting {monitor_patients} seconds "
+                f"to receive connection to monitor!"
+            )
+            time.sleep(monitor_patients)
+        with monitor:
+            start_time = time.time()
+            sub_files = []
+            for node in range(condor_nodes):
+
+                infer_config = write_infer_core_config(
+                    run_name=run_name,
+                    job_dir=node_job_dir[node],
+                    result_dir=result_dir,
+                    project=project,
+                    ip=ip,
+                    grpc_port=grpc_port,
+                    ifos=ifos,
+                    fnames=node_fnames[node],
+                    num_shifts=num_shifts,
+                    data_format=data_format,
+                    segments=node_segments[node],
+                    shifts=shifts,
+                    Tb=Tb,
+                    psd_length=psd_length,
+                    stride_batch_size=stride_batch_size,
+                    kernel_size=kernel_size,
+                    sample_rate=sample_rate,
+                    inference_sampling_rate=int(inference_rate),
+                    job_rate_limit=job_rate_limit,
+                )
+
+                cmd = f"python {cli} condor_client --config {infer_config}"
+                bash_file = write_bash_file(
+                    bash_root=node_job_dir[node],
+                    files=node_fnames[node],
+                    command=cmd
+                )
+                condor_subs = write_condor_config(
+                    condor_kwargs=condor_kwargs,
+                    job_dir=node_job_dir[node],
+                    executable=bash_file,
+                    config=infer_config
+                )
+                sub_files.append(condor_subs)
+
+            condor_submit_with_rate_limit(
+                sub_files=sub_files,
+                rate_limit=condor_nodes
+            )
+            # time.sleep(5)
+            run_time = (time.time() - start_time)
+
+    days, rem = divmod(run_time, 86400)
+    hrs, rem = divmod(rem, 3600)
+    mins, secs = divmod(rem, 60)
+    logging.info(
+        f"Time spent for inference: "
+        f"{int(days)}--{int(hrs):02d}:{int(mins):02d}:{int(secs):02d}"
+    )
+
+ 

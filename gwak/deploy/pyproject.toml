@@ -1,41 +1,51 @@
-[tool.poetry]
+[project]
 name = "deploy"
 version = "0.1.0"
-description = ""
-authors = ["Andy Chen <andy.c.80297@gmail.com>"]
+description = "Triton inference for GWAK"
+authors = [
+    { name = "Andy Chen", email = "andy.c.80297@gmail.com" }
+]
 readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "bokeh>=3.8.2",
+    "cowsay>=6.1",
+    "h5py>=3.15.1",
+    "jsonargparse>=4.45.0",
+    "ml4gw",
+    "ml4gw-hermes",
+    "onnx>=1.17.0",
+    "pyrate-limiter>=4.0.2",
+    "scipy>=1.15.3",
+    "torch<2.6",
+    "tqdm>=4.67.1",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.9,<3.12"
+[dependency-groups]
+dev = [
+    "pytest~=7.0",
+    "ipykernel>=7.1.0",
+    "jupyter>=1.0.0,<2",
+    "pytest~=7.3",
+]
 
-# ml4gw applications (local) 
-ml4gw = {path = "../../ml4gw", develop = true}
-ml4gw-hermes = {path = "../../hermes", develop = true}
+test = [
+    "cowsay>=6.1",
+]
 
-spython = "0.3.14"
-nvidia-cudnn-cu11 = "8.9.6.50"
-tensorrt = "8.5.2.2"
+[tool.uv]
+extra-index-url = ["https://pypi.nvidia.com/"]
 
-# workaround for: https://github.com/python-poetry/poetry-plugin-export/issues/183
-urllib3 = ">=1.25.4,<1.27"
-jsonargparse = "^4.36.0"
-onnx = "^1.17.0"
-psutil = "^6.1.1"
-h5py = "^3.12.1"
-tqdm = "^4.67.1"
-torch = "^2.6.0"
-ratelimiter = "^1.2.0.post0"
-ipykernel = "^6.29.5"
-matplotlib = "^3.9"
-bokeh = "^3.4"
-notebook = "^7.4.4"
-scipy = "<1.12"
-
-[[tool.poetry.source]]
+[[tool.uv.index]]
 name = "torch"
 url = "https://download.pytorch.org/whl/cpu"
-priority = "explicit"
+explicit = true
+
+[tool.uv.sources]
+ml4gw = { path = "../../ml4gw", editable = true }
+ml4gw-hermes = { path = "../../hermes", editable = true }
+
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

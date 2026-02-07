@@ -76,12 +76,19 @@ $ snakemake -c1 train_all
 $ pip install -e .
 ```
 
-- Installation for deployment
+## Enviroment setup for deploy
+Install uv, python, workflow manaage at base eviroment.  
+```
+$ curl -LsSf https://astral.sh/uv/install.sh | sh
+$ uv python install 3.11
+$ uv python pin 3.11
+$ uv tool install "snakemake>=8"
+$ snakemake -c1 build_envs_containers -f
+```
 
-Run the following command at base enviroment. 
+## Running the project
+Run the project as follow, after installing the enviroment as the README.md in each application. 
 ```
-(base)$ pip install snakemake==7.32.4 pulp==2.6.0
-(base)$ cd gwak/gwak/deploy
-(base)$ poetry install
-```
-Use ```poetry add <package>``` to add new packages to the deploy application. 
+$ snakemake -c1 dev_infer -f
+$ snakemake -c1 production_infer -f
+$ snakemake -c1 tune -f
