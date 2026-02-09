@@ -92,7 +92,7 @@ if __name__=='__main__':
         "CCSN",
         "Background",
         "Glitch",
-        "FakeGlitch"
+        # "FakeGlitch"
         ]
 
     # Computed variable
@@ -102,7 +102,7 @@ if __name__=='__main__':
     priors = [
         MultiSineGaussianBBC(), SineGaussianBBC(), LAL_BBHPrior(), GaussianBBC(),
         CuspBBC(), KinkBBC(), KinkkinkBBC(), WhiteNoiseBurstBBC(),
-        None, None, None, None
+        None, None, None #, None
     ]
     waveforms = [
         MultiSineGaussian(sample_rate=sample_rate, duration=duration),
@@ -113,11 +113,11 @@ if __name__=='__main__':
         GenerateString(sample_rate=sample_rate),
         GenerateString(sample_rate=sample_rate),
         WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
-        None, None, None, None
+        None, None, None #, None
     ]
     extra_kwargs = [
         None, None, {"ringdown_duration": 0.9}, None, None, None, None, None,
-        None, None, None, None
+        None, None, None # , None
     ]
 
     # DataLoader
@@ -155,7 +155,8 @@ if __name__=='__main__':
         'all_labels': f'{args.output}_precomputed/labels_{args.nevents}.npy',
         'all_scores': f'{args.output}_precomputed/scores_{args.nevents}.npy',
         'all_embeddings': f'{args.output}_precomputed/embeddings_{args.nevents}.npy',
-        'all_snrs': f'{args.output}_precomputed/snrs_{args.nevents}.npy'
+        'all_snrs': f'{args.output}_precomputed/snrs_{args.nevents}.npy',
+        'all_hrss': f'{args.output}_precomputed/hrss_{args.nevents}.npy'
     }
     datasets = {}
     for key, filepath in filenames.items():
@@ -170,6 +171,7 @@ if __name__=='__main__':
         all_labels = datasets['all_labels']
         all_context = datasets['all_context']
         all_snrs = datasets['all_snrs']
+        all_hrss = datasets['all_hrss']
 
     else:
         all_binary_labels = []
@@ -178,6 +180,7 @@ if __name__=='__main__':
         all_labels = []
         all_context = []
         all_snrs = []
+        all_hrss = []
 
         n_iter = int(args.nevents/batch_size)
         test_loader = loader.test_dataloader()
@@ -187,8 +190,8 @@ if __name__=='__main__':
             clean_batch = clean_batch.to(device)
             glitch_batch = glitch_batch.to(device)
 
-            processed, labels, snrs = loader.on_after_batch_transfer(
-                [clean_batch, glitch_batch], 
+            processed, labels, snrs, hrss = loader.on_after_batch_transfer(
+                [clean_batch, glitch_batch],
                 None,
                 local_test=True)
 
@@ -217,8 +220,9 @@ if __name__=='__main__':
             all_scores.append(scores)
             all_embeddings.append(embeddings)
             all_snrs.append(snrs.detach().cpu().numpy())
+            all_hrss.append(hrss.detach().cpu().numpy())
 
-            del clean_batch, glitch_batch, processed, embeddings, binary_labels, labels, scores, snrs
+            del clean_batch, glitch_batch, processed, embeddings, binary_labels, labels, scores, snrs, hrss
             torch.cuda.empty_cache()
 
         if args.conditioning:
@@ -228,6 +232,7 @@ if __name__=='__main__':
         all_scores = np.concatenate(all_scores, axis=0)
         all_embeddings = np.concatenate(all_embeddings, axis=0)
         all_snrs = np.concatenate(all_snrs, axis=0)
+        all_hrss = np.concatenate(all_hrss, axis=0)
 
         os.makedirs(f"{args.output}_precomputed", exist_ok=True)
         np.save(f'{args.output}_precomputed/context_{args.nevents}.npy', all_context)
@@ -236,6 +241,7 @@ if __name__=='__main__':
         np.save(f'{args.output}_precomputed/scores_{args.nevents}.npy', all_scores)
         np.save(f'{args.output}_precomputed/embeddings_{args.nevents}.npy', all_embeddings)
         np.save(f'{args.output}_precomputed/snrs_{args.nevents}.npy', all_snrs)
+        np.save(f'{args.output}_precomputed/hrss_{args.nevents}.npy', all_hrss)
 
     # PLOT SNR HISTS
     # Find unique labels, excluding 10, 11, 12
@@ -429,6 +435,69 @@ if __name__=='__main__':
     plt.legend()
     plt.grid(True)
     plt.savefig(f'{args.output}/fraction_1overYearFAR_SNR.png')
+
+
+    # -----------------------------------------------------------------------------
+    # 3) BIN ANOMALIES BY hrss AND COMPUTE FRACTION DETECTED (SCORE > threshold_1yr)
+    # -----------------------------------------------------------------------------
+    # We'll define 10 bins in hrss from the minimum anomaly hrss to the maximum
+    # anomaly hrss across all anomaly classes (labels 1..7).
+
+    threshold_1yr = args.threshold_1yr
+
+    anom_mask = ~np.isin(all_labels, background_labels)
+    if np.any(anom_mask):
+        hrss_min, hrss_max = all_hrss[anom_mask].min(), all_hrss[anom_mask].max()
+    else:
+        raise ValueError("No anomaly samples found in the test set!")
+
+    num_bins = 10
+    bin_edges = np.linspace(1e-22, 1e-21, num_bins + 1)  # 10 bins between 4 and 100
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    plt.figure(figsize=(8,6))
+
+    for i, anom_class_name in enumerate(signal_classes):
+        class_label = i + 1  # classes are 1..7
+        mask = (all_labels == class_label)
+        if not np.any(mask):
+            # If no samples for that class, skip
+            continue
+
+        class_scores = all_scores[mask]
+        class_hrss = all_hrss[mask]
+
+        # Bin by SNR
+        bin_idx = np.digitize(class_hrss, bin_edges) - 1  # bin indices in [0..num_bins-1]
+
+        frac_detected = []
+        for b in range(num_bins):
+            in_bin = (bin_idx == b)
+            if not np.any(in_bin):
+                frac_detected.append(np.nan)  # or 0.0 if you prefer
+            else:
+                # fraction that exceed threshold
+                frac = np.mean(class_scores[in_bin] > threshold_1yr)
+                frac_detected.append(frac)
+
+        plt.plot(bin_centers, frac_detected, marker='o', label=anom_class_name)
+
+    plt.xlabel("hrss")
+    plt.ylabel("Fraction of events detected")
+    plt.title(f"{args.ifos} Fraction of Events Detected at 1 per Year FAR vs. hrss")
+    plt.ylim([0, 1.05])
+    # plt.xscale('log')
+    plt.legend()
+    plt.grid(True)
+
+    import matplotlib.ticker as mticker
+
+    plt.gca().xaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda x, pos: f"{x/1e-22:.2f}×10⁻²²")
+    )
+
+    plt.savefig(f'{args.output}/fraction_1overYearFAR_hrss.png')
+
 
 
     threshold_1yr = max_noise_score

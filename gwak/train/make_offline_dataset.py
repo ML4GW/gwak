@@ -33,35 +33,35 @@ def main(ifos, num_samples_per_class, dataset):
 
     signal_classes = ["SineGaussian",
                     "BBH",
-                    # "Gaussian",
-                    # "Cusp",
-                    # "Kink",
-                    # "KinkKink",
+                    "Gaussian",
+                    "Cusp",
+                    "Kink",
+                    "KinkKink",
                     "WhiteNoiseBurst",
-                    # "CCSN",
+                    "CCSN",
                     "Background",
                     "Glitch"]
     priors = [
         SineGaussianBBC(),
         LAL_BBHPrior(),
-        # GaussianBBC(),
-        # CuspBBC(),
-        # KinkBBC(),
-        # KinkkinkBBC(),
+        GaussianBBC(),
+        CuspBBC(),
+        KinkBBC(),
+        KinkkinkBBC(),
         WhiteNoiseBurstBBC(),
-        # None,
+        None,
         None,
         None
     ]
     waveforms = [
         SineGaussian(sample_rate=sample_rate, duration=duration),
         IMRPhenomPv2(),
-        # Gaussian(sample_rate=sample_rate, duration=duration),
-        # GenerateString(sample_rate=sample_rate),
-        # GenerateString(sample_rate=sample_rate),
-        # GenerateString(sample_rate=sample_rate),
+        Gaussian(sample_rate=sample_rate, duration=duration),
+        GenerateString(sample_rate=sample_rate),
+        GenerateString(sample_rate=sample_rate),
+        GenerateString(sample_rate=sample_rate),
         WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
-        # None,
+        None,
         None,
         None
     ]
@@ -69,12 +69,12 @@ def main(ifos, num_samples_per_class, dataset):
     extra_kwargs = [
         None,
         {"ringdown_duration":0.9},
-        # None,
-        # None,
-        # None,
-        # None,
         None,
-        # None,
+        None,
+        None,
+        None,
+        None,
+        None,
         None,
         None
     ]
@@ -85,7 +85,7 @@ def main(ifos, num_samples_per_class, dataset):
     num_samples = num_classes * num_samples_per_class
     batches_per_epoch = num_samples // batch_size + 1
 
-    def write_file(filename, data, labels, snrs):
+    def write_file(filename, data, labels, snrs, hrss):
         with h5py.File(filename, "a") as f:
             uniq_labels = sorted(list(set(labels)))
             for l in uniq_labels:
@@ -94,6 +94,7 @@ def main(ifos, num_samples_per_class, dataset):
                 class_data = data[indices]
                 class_labels = labels[indices]
                 class_snrs = snrs[indices]
+                class_hrss = hrss[indices]
                 # Check if datasets exist
                 if f"{sig_name}_data" in f.keys():
                     # Append to existing datasets
@@ -105,6 +106,10 @@ def main(ifos, num_samples_per_class, dataset):
 
                     f[f"{sig_name}_snrs"].resize(f[f"{sig_name}_snrs"].shape[0] + class_snrs.shape[0], axis=0)
                     f[f"{sig_name}_snrs"][-class_snrs.shape[0]:] = class_snrs
+
+                    f[f"{sig_name}_hrss"].resize(f[f"{sig_name}_hrss"].shape[0] + class_hrss.shape[0], axis=0)
+                    f[f"{sig_name}_hrss"][-class_hrss.shape[0]:] = class_hrss
+
                 else:
                     # Create new datasets with chunks for efficient appending later
                     f.create_dataset(f"{sig_name}_data", data=class_data,
@@ -113,6 +118,9 @@ def main(ifos, num_samples_per_class, dataset):
                     #                    maxshape=(None,), chunks=True)
                     f.create_dataset(f"{sig_name}_snrs", data=class_snrs,
                                         maxshape=(None,), chunks=True)
+                    f.create_dataset(f"{sig_name}_hrss", data=class_hrss,
+                                        maxshape=(None,), chunks=True)
+
 
     sig_loader = SignalDataloader(signal_classes,
         priors,
@@ -147,22 +155,25 @@ def main(ifos, num_samples_per_class, dataset):
     data = []
     labels = []
     snrs = []
+    hrsss = []
     num_loaded = 0
     max_in_memory = 5_000
     for i in tqdm(range(num_batches)):
         clean_batch, glitch_batch = next(data_iter)
         clean_batch = clean_batch.to(device)
         glitch_batch = glitch_batch.to(device)
-        batch, indexed_labels, snr = sig_loader.on_after_batch_transfer([clean_batch,glitch_batch],None,local_test=True)
+        batch, indexed_labels, snr, hrss = sig_loader.on_after_batch_transfer([clean_batch,glitch_batch], None, local_test=True)
         data.append(batch.cpu().numpy().astype(np.float32))
         labels.append(indexed_labels.cpu().numpy().astype(np.int32))
         snrs.append(snr.cpu().numpy().astype(np.float32))
+        hrsss.append(hrss.cpu().numpy().astype(np.float32))
         num_loaded += batch.shape[0]
         if num_loaded >= max_in_memory:
             data = np.concatenate(data, axis=0)
             labels = np.concatenate(labels, axis=0)
             snrs = np.concatenate(snrs, axis=0)
-            write_file(OUTFILE, data, labels, snrs)
+            hrsss = np.concatenate(hrsss, axis=0)
+            write_file(OUTFILE, data, labels, snrs, hrsss)
 
             # clean up
             del data, labels, snrs
@@ -171,13 +182,15 @@ def main(ifos, num_samples_per_class, dataset):
             data = []
             labels = []
             snrs = []
+            hrsss = []
             num_loaded = 0
     if num_loaded > 0:
         print('Loaded data ', data)
         data = np.concatenate(data, axis=0)
         labels = np.concatenate(labels, axis=0)
         snrs = np.concatenate(snrs, axis=0)
-        write_file(OUTFILE, data, labels, snrs)
+        hrsss = np.concatenate(hrsss, axis=0)
+        write_file(OUTFILE, data, labels, snrs, hrsss)
 
 
 if __name__ == "__main__":

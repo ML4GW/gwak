@@ -48,6 +48,26 @@ def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
     return coeffs
 
 
+def hrrs_value(
+    h_plus: torch.Tensor,
+    h_cross: torch.Tensor,
+    dim: int = -1,
+):
+    """
+    Args:
+        h_plus:  Tensor of shape (..., T)
+        h_cross: Tensor of shape (..., T)
+        dim:     Dimension over which to sum (default: last)
+
+    Returns:
+        Tensor of shape (...) with HRRS per batch element
+    """
+    hrrs = torch.sqrt(
+        torch.sum(h_plus**2 + h_cross**2, dim=dim)
+    )
+    return hrrs
+
+
 class BandpassFilter:
     def __init__(
         self,
@@ -882,9 +902,10 @@ class SignalDataloader(GwakBaseDataloader):
         output_ras = [] if ras is None else ras
         output_decs = [] if decs is None else decs
         output_phics = []
+        output_hrss_raw = []
         for i, signal_class in enumerate(self.signal_classes):
             if signal_class == 'BBH':
-                responses, params, ra, dec, phic = generate_waveforms_bbh(
+                responses, params, ra, dec, phic, hrss_raw = generate_waveforms_bbh(
                     self.num_per_class[i],
                     self.priors[i],
                     self.waveforms[i],
@@ -896,12 +917,13 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             elif signal_class == "CCSN":
-                responses, dec, phic = self.generate_waveforms_ccsn(
+                responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i]
                 )
                 params, ra = None, None
             elif signal_class in ["Background", "Glitch"]:
                 responses, params, ra, dec, phic = None, None, None, None, None
+                hrss_raw = torch.zeros(self.num_per_class[i])
             elif signal_class == "FakeGlitch":
                 responses, params, ra, dec, phic = self.fakeGlitchMaker.generate_waveforms(self.num_per_class[i],self,self.ifos)
                 for i in range(len(responses)):
@@ -913,7 +935,7 @@ class SignalDataloader(GwakBaseDataloader):
                     mask[torch.arange(B), random_features, :] = 1.0
                     responses[i] = responses[i] * mask
             else:
-                responses, params, ra, dec, phic = generate_waveforms_standard(
+                responses, params, ra, dec, phic, hrss_raw = generate_waveforms_standard(
                     self.num_per_class[i],
                     self.priors[i],
                     self.waveforms[i],
@@ -933,10 +955,11 @@ class SignalDataloader(GwakBaseDataloader):
             if decs is None:
                 output_decs.append(dec)
             output_phics.append(phic)
+            output_hrss_raw.extend(hrss_raw.detach().cpu().tolist())
 
-        return all_responses, output_params, output_ras, output_decs, output_phics
+        return all_responses, output_params, output_ras, output_decs, output_phics, output_hrss_raw
 
-    def inject(self, batch, waveforms, waveform_class, output_snrs = False):
+    def inject(self, batch, waveforms, waveform_class, output_snrs=False):
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
         splits = [batch.size(-1) - split_size, split_size]
@@ -993,7 +1016,7 @@ class SignalDataloader(GwakBaseDataloader):
 
             snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
 
-            rescaled_waveforms = self.rescaler.forward(
+            rescaled_waveforms, snrs_scaling = self.rescaler.forward(
                 responses=waveforms,
                 psds=psds,
                 target_snrs=snr_factor
@@ -1004,7 +1027,7 @@ class SignalDataloader(GwakBaseDataloader):
         elif waveform_class == "CCSN":
 
             snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
-            rescaled_waveforms = self.rescaler.forward(
+            rescaled_waveforms, snrs_scaling = self.rescaler.forward(
                 responses=waveforms,
                 psds=psds,
                 target_snrs=snr_factor
@@ -1031,7 +1054,11 @@ class SignalDataloader(GwakBaseDataloader):
             # if waveforms is not None:
             if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
                 snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
-            return whitened, snrs
+
+            if waveform_class in ["Background", "Glitch", "FakeGlitch"]:
+                snrs_scaling = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
+
+            return whitened, snrs, snrs_scaling
         else:
             return whitened
 
@@ -1070,9 +1097,10 @@ class SignalDataloader(GwakBaseDataloader):
         batch = torch.cat(sub_batches)
         return batch
 
-    def multiInject_SNR(self,waveforms,batch):
+    def multiInject_SNR_hrss(self, waveforms, batch, hrss_raw):
         sub_batches = []
         sub_batches_snr = []
+        sub_batches_snr_scaling = []
         idx_lo = 0
         for i in range(self.num_classes):
             wave_cl = self.signal_classes[i]
@@ -1080,34 +1108,41 @@ class SignalDataloader(GwakBaseDataloader):
                 # multiple waveforms for a given class: relevant for the fake glitch where it uses several classes
                 whitened = []
                 snrs = []
+                snr_scaling = []
                 i1 = idx_lo
                 for wf in waveforms[i]:
-                    iw_, isnr_ = self.inject(
+                    iw_, isnr_, isnr_scaling_ = self.inject(
                         batch[i1:i1+wf.shape[0]],
                         wf,
                         wave_cl,
-                        output_snrs=True
+                        output_snrs=True,
                     )
                     whitened.append(iw_)
                     snrs.append(isnr_)
+                    snr_scaling.append(isnr_scaling_)
                     i1 += wf.shape[0]
                 whitened = torch.cat(whitened, dim=0)
                 snrs = torch.cat(snrs, dim=0)
+                snr_scaling = torch.cat(snr_scaling, dim=0)
             else:
-                whitened, snrs = self.inject(
+                whitened, snrs, snr_scaling = self.inject(
                     batch[idx_lo:idx_lo+self.num_per_class[i]],
                     waveforms[i],
                     wave_cl,
-                    output_snrs=True
+                    output_snrs=True,
                 )
             sub_batches.append(whitened)
             sub_batches_snr.append(snrs)
+            sub_batches_snr_scaling.append(snr_scaling)
             idx_lo += self.num_per_class[i]
             if torch.any(torch.isnan(sub_batches[-1])):
                 self._logger.info(f'had a nan batch with class {self.signal_classes[i]}')
         batch = torch.cat(sub_batches)
         snrs = torch.cat(sub_batches_snr)
-        return batch, snrs
+        snr_scaling = torch.cat(sub_batches_snr_scaling)
+        hrss_raw = torch.tensor(hrss_raw, device=snr_scaling.device, dtype=snr_scaling.dtype)
+        hrss = hrss_raw * snr_scaling
+        return batch, snrs, hrss
 
 
     def on_after_batch_transfer(self, batch, dataloader_idx, local_test=False):
@@ -1117,7 +1152,7 @@ class SignalDataloader(GwakBaseDataloader):
             clean_batch = clean_batch.to('cuda' if torch.cuda.is_available() else 'cpu')
             glitch_batch = glitch_batch.to('cuda' if torch.cuda.is_available() else 'cpu') if glitch_batch is not None else glitch_batch
 
-            waveforms, params, ras, decs, phics = self.generate_waveforms(clean_batch.shape[0])
+            waveforms, params, ras, decs, phics, hrss_raw = self.generate_waveforms(clean_batch.shape[0])
 
             for wf in waveforms:
                 if wf is None:
@@ -1133,7 +1168,7 @@ class SignalDataloader(GwakBaseDataloader):
                 self._logger.info('batch fucked')
             # inject waveforms; maybe also whiten data preprocess etc..
             if local_test:
-                _clean_batch, _snrs = self.multiInject_SNR(waveforms, clean_batch)
+                _clean_batch, _snrs, _hrss = self.multiInject_SNR_hrss(waveforms, clean_batch, hrss_raw)
             else:
                 _clean_batch = self.multiInject(waveforms, clean_batch)
             if self.has_glitch:
@@ -1141,9 +1176,9 @@ class SignalDataloader(GwakBaseDataloader):
 
             while torch.any(torch.isnan(_clean_batch)):
                 self._logger.info('batch fucked after inject, regenerating')
-                waveforms, params, ras, decs, phics = self.generate_waveforms(_clean_batch.shape[0])
+                waveforms, params, ras, decs, phics, hrss_raw = self.generate_waveforms(_clean_batch.shape[0])
                 if local_test:
-                    _clean_batch, _snrs = self.multiInject_SNR(waveforms, clean_batch)
+                    _clean_batch, _snrs, _hrss = self.multiInject_SNR_hrss(waveforms, clean_batch, hrss_raw)
                 else:
                     _clean_batch = self.multiInject(waveforms, clean_batch)
 
@@ -1163,12 +1198,13 @@ class SignalDataloader(GwakBaseDataloader):
             batch = clean_batch[perm]
             if local_test:
                 snrs = _snrs[perm]
+                hrss = _hrss[perm]
             labels = labels[perm]
             indexed_labels = indexed_labels.to('cuda') if torch.cuda.is_available() else indexed_labels
             indexed_labels = indexed_labels[perm]
 
         if local_test:
-            return batch, indexed_labels, snrs
+            return batch, indexed_labels, snrs, hrss
 
         if self.trainer.training and (self.data_saving_file is not None):
             # Set a warning that when the global_step exceed 1e6,
@@ -1304,6 +1340,7 @@ def generate_waveforms_standard(
     phic = loader.phic_prior.sample((batch_size,))
 
     cross, plus = waveform(**parameters)
+    hrss = hrrs_value(plus,cross)
 
     # compute detector responses
     responses = compute_observed_strain(
@@ -1318,7 +1355,7 @@ def generate_waveforms_standard(
     )
     responses = responses.to('cuda') if torch.cuda.is_available() else responses
 
-    return responses, parameters, ra, dec, phic
+    return responses, parameters, ra, dec, phic, hrss
 
 def generate_waveforms_bbh(
     batch_size,
@@ -1353,7 +1390,7 @@ def generate_waveforms_bbh(
     ringdown_size = int(config['ringdown_duration'] * config['sample_rate'])
     cross = torch.roll(cross, -ringdown_size, dims=-1)
     plus = torch.roll(plus, -ringdown_size, dims=-1)
-
+    hrss = hrrs_value(plus,cross)
 
     # compute detector responses
     responses = compute_observed_strain(
@@ -1370,7 +1407,7 @@ def generate_waveforms_bbh(
     )
     responses = responses.to('cuda') if torch.cuda.is_available() else responses
 
-    return responses, parameters, ra, dec, parameters['phic']
+    return responses, parameters, ra, dec, parameters['phic'], hrss
 
 
 def load_h5_as_dict(
@@ -1557,9 +1594,9 @@ class CCSN_Injector:
         )
 
         ht = ht.to('cuda') if torch.cuda.is_available() else ht
+        hrss = hrrs_value(X[:,0,:], X[:,1,:])
 
-
-        return ht, dec, phi
+        return ht, dec, phi, hrss
 
 from ml4gw.waveforms import MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 class FakeGlitchWaveform:
@@ -1621,7 +1658,7 @@ class FakeGlitchMaker:
                 )
                 params, ra = None, None
             else:
-                responses, params, ra, dec, phic = generate_waveforms_standard(
+                responses, params, ra, dec, phic, _ = generate_waveforms_standard(
                     num,
                     prior,
                     waveform,

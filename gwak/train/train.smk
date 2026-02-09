@@ -48,10 +48,21 @@ wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs])
 
 
+rule make_offline_dataset_O3a:
+    params:
+        ifos = 'HL',
+        num_samples = 50_000,
+        dataset = 'train',
+    output:
+    shell:
+        'python data/offline_dataset_o3.py {params.ifos} \
+            {params.num_samples} \
+            {params.dataset}'
+
 rule make_offline_dataset:
     params:
         ifos = 'HL',
-        num_samples = 100_000,
+        num_samples = 10_000,
         dataset = 'train',
     output:
     shell:
@@ -258,8 +269,7 @@ rule make_plots_i:
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        # data_dir = 'output/O4_MDC_background/{ifos}/',
-        data_dir = '/fred/oz016/Andy/New_Data/gwak/{ifos}',
+        data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
@@ -274,8 +284,8 @@ rule make_plots_i:
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 30000 \
-            --threshold-1yr 20 '
+            --nevents 50000 \
+            --threshold-1yr 10 '
 
 rule make_plots:
     input:
