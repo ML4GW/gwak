@@ -245,18 +245,27 @@ def segment_and_embed(
                 # If float, might be time in seconds - convert to samples
                 sample_idx = int(vt * sample_rate)
 
-            if sample_idx + total_samples_per_segment <= total_samples:
+            # Need psd_samples BEFORE sample_idx and kernel+fduration AFTER
+            if sample_idx >= psd_samples and sample_idx + kernel_samples + fduration_samples <= total_samples:
                 segment_starts.append(sample_idx)
 
         logger.info(f"Valid segments after filtering: {len(segment_starts)}")
     else:
         # For signals: process all non-overlapping 1-second segments
-        num_segments = (total_samples - psd_samples - fduration_samples) // kernel_samples
-        segment_starts = [
-            psd_samples + i * kernel_samples
-            for i in range(num_segments)
-        ]
-        logger.info(f"Processing {num_segments} segments")
+        # Each segment needs: psd_samples before + kernel_samples + fduration_samples
+        # First segment starts at psd_samples (so PSD goes from 0 to psd_samples)
+        # Calculate how many complete segments we can fit
+        available_for_segments = total_samples - psd_samples
+        num_segments = (available_for_segments - fduration_samples) // kernel_samples
+
+        segment_starts = []
+        for i in range(num_segments):
+            start_idx = psd_samples + i * kernel_samples
+            # Verify this segment has enough data
+            if start_idx + kernel_samples + fduration_samples <= total_samples:
+                segment_starts.append(start_idx)
+
+        logger.info(f"Processing {len(segment_starts)} segments (of {num_segments} calculated)")
 
     embeddings_list = []
     segment_times_list = []
@@ -271,6 +280,7 @@ def segment_and_embed(
 
             batch_segments = []
             batch_psd_data = []
+            batch_times = []
 
             for seg_idx in range(batch_start, batch_end):
                 start_sample = segment_starts[seg_idx]
@@ -284,9 +294,31 @@ def segment_and_embed(
                 seg_end = start_sample + kernel_samples + fduration_samples
                 segment = continuous_data[:, start_sample:seg_end]
 
+                # Validate segment sizes
+                expected_psd_size = psd_samples
+                expected_seg_size = kernel_samples + fduration_samples
+
+                if psd_segment.shape[1] != expected_psd_size:
+                    logger.warning(
+                        f"Skipping segment {seg_idx}: PSD has {psd_segment.shape[1]} samples, "
+                        f"expected {expected_psd_size}"
+                    )
+                    continue
+
+                if segment.shape[1] != expected_seg_size:
+                    logger.warning(
+                        f"Skipping segment {seg_idx}: segment has {segment.shape[1]} samples, "
+                        f"expected {expected_seg_size}"
+                    )
+                    continue
+
                 batch_segments.append(segment)
                 batch_psd_data.append(psd_segment)
-                segment_times_list.append(start_sample / sample_rate)
+                batch_times.append(start_sample / sample_rate)
+
+            # Skip empty batches
+            if len(batch_segments) == 0:
+                continue
 
             # Stack into tensors [batch, num_ifos, samples]
             batch_tensor = torch.tensor(
@@ -324,6 +356,7 @@ def segment_and_embed(
 
                 # Move to CPU and store
                 embeddings_list.append(embeddings_batch.cpu().numpy())
+                segment_times_list.extend(batch_times)
 
             except Exception as e:
                 logger.error(f"Error processing batch {batch_idx}: {e}")
