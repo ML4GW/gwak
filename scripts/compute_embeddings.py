@@ -523,7 +523,7 @@ def main():
     parser.add_argument(
         '--model',
         type=Path,
-        default='gwak/output/ResNet_HK/model_JIT.pt',
+        default='gwak/output/ResNet_HL/model_JIT.pt',
         help='Path to JIT model'
     )
 

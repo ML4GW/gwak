@@ -14,7 +14,7 @@ python scripts/compute_embeddings.py
 With custom paths:
 ```bash
 python scripts/compute_embeddings.py \
-    --model gwak/output/ResNet_HK/model_JIT.pt \
+    --model gwak/output/ResNet_HL/model_JIT.pt \
     --bbc-dir gwak/output/BBC_AnalysisReady_Cat12/HL \
     --o4-dir gwak/output/O4_test_MDC_short-0/HL \
     --output-dir gwak/output/embeddings \
@@ -23,7 +23,7 @@ python scripts/compute_embeddings.py \
 
 ### Arguments
 
-- `--model`: Path to JIT-compiled model (default: `gwak/output/ResNet_HK/model_JIT.pt`)
+- `--model`: Path to JIT-compiled model (default: `gwak/output/ResNet_HL/model_JIT.pt`)
 - `--bbc-dir`: Directory with BBC background h5 files (default: `gwak/output/BBC_AnalysisReady_Cat12/HL`)
 - `--o4-dir`: Directory with O4 test signal h5 files (default: `gwak/output/O4_test_MDC_short-0/HL`)
 - `--output-dir`: Output directory for embeddings (default: `gwak/output/embeddings`)
