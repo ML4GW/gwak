@@ -168,8 +168,6 @@ def main():
     if args.computed is None:
         # Try to find the most recent embeddings
         possible_paths = [
-            Path('output/embeddings/o4_test_embeddings.h5'),
-            Path('output/embeddings/bbc_background_embeddings.h5'),
             Path('gwak/output/embeddings/o4_test_embeddings.h5'),
             Path('gwak/output/embeddings/bbc_background_embeddings.h5'),
         ]

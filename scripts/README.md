@@ -14,19 +14,19 @@ python scripts/compute_embeddings.py
 With custom paths:
 ```bash
 python scripts/compute_embeddings.py \
-    --model output/ResNet_HK/model_JIT.pt \
-    --bbc-dir output/BBC_AnalysisReady_Cat12/HL \
-    --o4-dir output/O4_test_MDC_short-0/HL \
-    --output-dir output/embeddings \
+    --model gwak/output/ResNet_HK/model_JIT.pt \
+    --bbc-dir gwak/output/BBC_AnalysisReady_Cat12/HL \
+    --o4-dir gwak/output/O4_test_MDC_short-0/HL \
+    --output-dir gwak/output/embeddings \
     --batch-size 64
 ```
 
 ### Arguments
 
-- `--model`: Path to JIT-compiled model (default: `output/ResNet_HK/model_JIT.pt`)
-- `--bbc-dir`: Directory with BBC background h5 files (default: `output/BBC_AnalysisReady_Cat12/HL`)
-- `--o4-dir`: Directory with O4 test signal h5 files (default: `output/O4_test_MDC_short-0/HL`)
-- `--output-dir`: Output directory for embeddings (default: `output/embeddings`)
+- `--model`: Path to JIT-compiled model (default: `gwak/output/ResNet_HK/model_JIT.pt`)
+- `--bbc-dir`: Directory with BBC background h5 files (default: `gwak/output/BBC_AnalysisReady_Cat12/HL`)
+- `--o4-dir`: Directory with O4 test signal h5 files (default: `gwak/output/O4_test_MDC_short-0/HL`)
+- `--output-dir`: Output directory for embeddings (default: `gwak/output/embeddings`)
 - `--sample-rate`: Sampling rate in Hz (default: 4096)
 - `--kernel-length`: Segment length in seconds (default: 1.0)
 - `--psd-length`: PSD estimation length in seconds (default: 64.0)

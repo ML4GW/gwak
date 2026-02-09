@@ -523,28 +523,28 @@ def main():
     parser.add_argument(
         '--model',
         type=Path,
-        default='output/ResNet_HK/model_JIT.pt',
+        default='gwak/output/ResNet_HK/model_JIT.pt',
         help='Path to JIT model'
     )
 
     parser.add_argument(
         '--bbc-dir',
         type=Path,
-        default='output/BBC_AnalysisReady_Cat12/HL',
+        default='gwak/output/BBC_AnalysisReady_Cat12/HL',
         help='Directory containing BBC background h5 files'
     )
 
     parser.add_argument(
         '--o4-dir',
         type=Path,
-        default='output/O4_test_MDC_short-0/HL',
+        default='gwak/output/O4_test_MDC_short-0/HL',
         help='Directory containing O4 test signal h5 files'
     )
 
     parser.add_argument(
         '--output-dir',
         type=Path,
-        default='output/embeddings',
+        default='gwak/output/embeddings',
         help='Output directory for embeddings'
     )
 
