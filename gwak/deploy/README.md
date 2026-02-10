@@ -10,11 +10,11 @@ Follow the following command to install or update the deploy enviroment.
 We use [uv](https://docs.astral.sh/uv/) to manage our enviroment. One benefit is that the enviroment will be install when you run the job via uv for the first time. So there is no need to run poetry, conda or whatever install before the run. <br>
 Run the following command to interact with your project enviroment and uv. <br>(These command should run under `$GWAK_DIR/gwak/deploy`)
 ```
-$ uv run python --version            # Check the python version
-$ uv add <pacakge_name>          # Install new package 
-$ uv sync                                      # Resolve the depedcies version and update the uv.lock 
-$ uv venv 
-$ source .venv/bin/activate          # Activate the virtual enviroment 
+$ uv run python --version        # Check the python version.
+$ uv add <pacakge_name>          # Install new package.
+$ uv sync                        # Resolve the depedcies version and update the uv.lock.
+$ uv venv                        # Create a .venv/ file under you project.
+$ source .venv/bin/activate      # Activate the virtual enviroment.
 ```
 
 
@@ -49,7 +49,7 @@ $ snakemake -c1 scan_all -F
 # Help 
 Use the following commad if VScode did not recognize the jupyter kernel correctly. 
 ```
-$ uv venv                                     # Create a .venv/ file under you project 
-$ source .venv/bin/activate          # Activate the virtual enviroment 
-$ which python                            # Copy paste the python path and use it as jupyter kernel
+$ uv venv                        # Create a .venv/ file under you project 
+$ source .venv/bin/activate      # Activate the virtual enviroment 
+$ which python                   # Copy paste the python path and use it as jupyter kernel
 ```

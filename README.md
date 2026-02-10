@@ -77,18 +77,47 @@ $ pip install -e .
 ```
 
 ## Enviroment setup for deploy
-Install uv, python, workflow manaage at base eviroment.  
+ 
+### First: Install uv, python, Snakemake at base eviroment  ###
 ```
 $ curl -LsSf https://astral.sh/uv/install.sh | sh
 $ uv python install 3.11
 $ uv python pin 3.11
 $ uv tool install "snakemake>=8"
-$ snakemake -c1 build_envs_containers -f
 ```
+You might need to remove the base snakemake if you have one already. 
 
-## Running the project
-Run the project as follow, after installing the enviroment as the README.md in each application. 
+
+### Second: Set you gwak enviroment vairable ###
+Add the following to your `.bashrc` file. 
+```bash
+# ~/.bashrc
+# --------------------------------------------------
+# GWAK environment variables
+# --------------------------------------------------
+
+export GWAK_IMAGE_DIR=/path/to/containers
+export GWAK_CONTAIN_OUTPUT_DIR=/path/to/containers/output
+
+export GWAK_DIR=/path/to/gwak_repo
+export GWAK_DATA_DIR=/path/to/data
+export GWAK_OUTPUT_DIR=/path/to/output
+export GWAK_LOUVRE_DIR=/path/to/louvre
+
+export GWAK_BBC_SHORT_0_DATA_DIR=/path/to/O4_MDC_short-0
+export GWAK_BBC_SHORT_1_DATA_DIR=/path/to/O4_MDC_short-1
 ```
-$ snakemake -c1 dev_infer -f
-$ snakemake -c1 production_infer -f
-$ snakemake -c1 tune -f
+After the enviroment vairable were set (`source ~/.bashrc`), you can run the following snakemake command without further enviroment installation. 
+
+### Third: Run GWAK's tasks ###
+```
+$ snakemake -c1 scan_all
+```
+#### Experimental ####
+
+Run with container. 
+```
+$ snakemake -c1 build_containers
+$ snakemake -c1 production_export
+```
+The result will from the container will redirect to `GWAK_CONTAIN_OUTPUT_DIR`.
