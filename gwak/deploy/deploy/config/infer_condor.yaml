@@ -5,11 +5,11 @@ condor_kwargs:
   request_disk: 16G
   accounting_group: ligo.dev.o4.burst.explore.test
 run_name: one_test
-ifos: ["H1", "L1"]
-psd_length: 64
+ifos: ["H1", "L1"] # export overwrite
+psd_length: 64 # export overwrite
 Tb: 0
-stride_batch_size: 256
-sample_rate: 4096
+stride_batch_size: 256 # export overwrite
+sample_rate: 4096 # export overwrite
 fname:
   class_path: gwak_data_dir
   init_args:
@@ -22,10 +22,8 @@ image: hermes/tritonserver:23.01
 model_repo_dir: null
 result_dir: null
 server_patients: 20
-monitor_patients: null
+monitor_patients: 5
 job_rate_limit: 1
-inference_rate: 4
+inference_rate: 4 # export overwrite
 cl_config: null
 fm_config: null
-# cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25
-# fm_config: NF_from_file_conditioning

@@ -7,6 +7,7 @@ IMAGE_DIR          = Path(os.environ["GWAK_IMAGE_DIR"])
 GWAK_DIR           = Path(os.environ["GWAK_DIR"])
 DATA_DIR           = Path(os.environ["GWAK_DATA_DIR"])
 OUTPUT_DIR         = Path(os.environ["GWAK_OUTPUT_DIR"])
+LOUVRE_DIR         = Path(os.environ["GWAK_LOUVRE_DIR"])
 
 rule build_envs_containers:
     input:

@@ -13,23 +13,24 @@ from matplotlib import pyplot as plt
 
 # from bokeh.plotting import figure 
 # from bokeh.io import output_notebook, save, show, reset_output, export_png
+from deploy.libs import gwak_dir, gwak_output_dir, gwak_louvre_dir, O4_bbc_short_0_data_dir, O4_bbc_short_1_data_dir
 
 def lovure_file_handler(
-    louvre_dir,
+    model_louvre_dir: Path,
     model,
     remake: bool=False,
     caching: bool=True,
 ):
 
     
-    model_louvre_dir = louvre_dir(model)
+    # model_louvre_dir = louvre_dir(model)
     model_snapshot_dir = model_louvre_dir / "snapshot"
-
+    # breakpoint()
     if (model_louvre_dir).exists() and remake:
-        shutil.rmtree(model_louvre_dir)
 
         model_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
+        shutil.rmtree(model_louvre_dir)
         return model_louvre_dir, model_snapshot_dir
 
     # Check if cache exists
@@ -51,11 +52,11 @@ def lovure_file_handler(
 
 
 def scan(
-    out_dir: Pathfinder,
+    # louvre_dir: Pathfinder,
     cl_config: str, 
     fm_config: str,
     ifo_mode: str, 
-    project: str,
+    run_name: str,
     seg_num: int,
     thereshold_level: float,
     infer_sample_rate: int,
@@ -64,23 +65,26 @@ def scan(
     plotting: bool,
     **kwargs
 ):
-    
-    # model = f"{cl_config}_{fm_config}_{ifo_mode}"
-    model = f"{cl_config}_{fm_config}_{ifo_mode}-O4_MDC_short-0"
-    # tslide_data_dir = Path(f"/fred/oz016/Andy/Output/gwak-bbc/{model}/{project}/inference_result")
-    tslide_data_dir = Path(f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/combination/{model}/inference_result")
-    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
-        louvre_dir=out_dir,
-        model=model
-    )
-    stream_cut = int(infer_sample_rate*psd_length)
+
     anomaly_dict = {}
     anomaly_data = {}
+    tslide_data_list = []
 
+    model = f"{cl_config}_{fm_config}_{ifo_mode}"
+    louvre_dir = gwak_louvre_dir(suffix=f"{model}/{run_name}")()
+    tslide_data_dir = gwak_output_dir()(
+        append_path=f"infer/{model}/{run_name}/inference_result"
+    )
+
+    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
+        model_louvre_dir=louvre_dir,
+        model=model
+    )
+
+    stream_cut = int(infer_sample_rate*psd_length)
     file_list = list(sorted(tslide_data_dir.glob("*.h5")))
 
-    tslide_data_list = []
-    # # The stream_cut will be effected stride_batch_size is too small/large
+    # The stream_cut will be effected stride_batch_size is too small/large
     for fname in tqdm(file_list):
 
         with h5py.File(fname, "r") as h5_file: 
@@ -94,13 +98,13 @@ def scan(
     if thereshold_level >= 1: 
         thereshold = np.sort(tslide_data)[int(thereshold_level)]
         print()
-        print(f"    The top {int(thereshold_level)}th of {project} outlier of {model} is at : {round(thereshold, 2)}.")
+        print(f"    The top {int(thereshold_level)}th of {run_name} outlier of {model} is at : {round(thereshold, 2)}.")
         print()
 
     if thereshold_level < 1: 
         thereshold = np.quantile(tslide_data, thereshold_level)
         print()
-        print(f"    The {project} {thereshold_level} thereshold of {model} is at : {round(thereshold, 2)}.")
+        print(f"    The {run_name} {thereshold_level} thereshold of {model} is at : {round(thereshold, 2)}.")
         print()
     for ts_data, fname in zip(tslide_data_list, file_list):
 
@@ -114,9 +118,16 @@ def scan(
         start = int(match.group("t0"))
         length = int(match.group("length"))
         shift = int(float(match.group("shift")))
-        print(np.min(ts_data))
-            # breakpoint()
-        if np.min(ts_data) < thereshold: 
+
+        if length <= int(psd_length): # Skip data that are too short
+
+            print(f"Skip {fname}")
+            continue
+        try:
+            np.min(ts_data) < thereshold
+        except:
+            breakpoint()
+        if np.min(ts_data) < thereshold:
             segment_name = f"{start}-{length}"
 
             indices = np.where(ts_data < thereshold)[0]
@@ -190,7 +201,7 @@ def scan(
 
     if plotting:
         # Plot Timeslide outputs
-        plt.title(f"{project.capitalize()} \n{model} \nTimeslide Output distribution")
+        plt.title(f"{run_name.capitalize()} \n{model} \nTimeslide Output distribution")
         plt.hist(
             tslide_data, 
             bins=100,
@@ -273,64 +284,3 @@ def scan(
                 plt.legend()
                 plt.savefig(model_snapshot_dir / f"GWAK-Stream_{seg_name}_error_rate.png", dpi=300, bbox_inches='tight')
                 plt.close()
-
-def resolve_bbc(
-    project: Path,
-    inference_sampling_rate: int,
-    **kwargs
-):
-
-    project = Path(project)
-    breakpoint()
-    # plot_dir = project.parent / "inference_plot"
-
-    # plot_dir.mkdir(parents=True, exist_ok=True)
-    # # Plot each stream 
-    # stream_files = list(sorted(project.glob("*.h5")))
-    # bbc_results = []
-    # for stream_file in tqdm(stream_files):
-
-    #     fname_re = re.compile(r"(?P<t0>\d{10}\.*\d*)-(?P<length>\d+\.*\d*)_(?P<shift>\d+\.*\d*)")
-    #     match = fname_re.search(str(stream_file))
-
-    #     if match is None:
-    #         print(f"Couldn't parse file {stream_file.path}")
-    #         # logging.warning(f"Couldn't parse file {fname.path}")
-
-    #     start = int(match.group("t0"))
-    #     length = int(match.group("length"))
-    #     shift = int(float(match.group("shift")))
-
-    #     gps_tag = f"{start}-{length}_{shift}"
-    #     with h5py.File(stream_file, "r") as h5_data:
-    #         stream_data = h5_data["data"][0, :]
-    #     # print(stream_data.shape[0])
-    #     time = np.arange(
-    #         0, 
-    #         stream_data.shape[0]
-    #     )/inference_sampling_rate
-
-    #     plt.figure(figsize=(10, 3), dpi=300)
-    #     plt.title(f"{gps_tag}")
-    #     plt.plot(time, stream_data)
-    #     plt.scatter(time, stream_data, s=1)
-    #     plt.xlabel("Time (s)")
-    #     plt.ylabel("GWAK output")
-    #     plt.savefig(plot_dir / f"bbc_{gps_tag}_stream.png", bbox_inches='tight')
-    #     plt.close()
-
-
-    #     bbc_results.append(stream_data)
-    # all_data = np.concatenate(bbc_results)
-
-    # plt.figure(dpi=300)
-    # plt.title("GWAK distribution\n")
-    # plt.hist(
-    #     all_data,
-    #     bins=100,
-    # )
-    # plt.xlabel("Metric output")
-    # plt.yscale("log")
-    # plt.savefig(plot_dir / "distribtion.png", bbox_inches='tight')
-    # plt.close()
-

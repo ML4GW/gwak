@@ -17,10 +17,9 @@ subcommands_keys = [
 # Avoid passing non string type variables to skip list. 
 # Otherwise, you would have to add an additinaol type check to 
 skip_keys = [
-    "project", 
-    # "output_dir", 
-    "run_name", 
-    "cl_config", 
+    "project",
+    "run_name",
+    "cl_config",
     "fm_config",
     "Tb"
 ]
@@ -38,6 +37,24 @@ def build_parser(
         parser.add_argument(f"--{key}", required=False)
 
     return parser
+
+def export_args_hook():
+
+    import yaml
+    from deploy.libs import gwak_dir
+
+    export_cfg = gwak_dir()(append_path="gwak/deploy/deploy/config/export.yaml")
+
+    with open(export_cfg) as f:
+        export_args = yaml.safe_load(f)
+
+    return dict(
+        ifos = export_args.get("ifos"),
+        psd_length = export_args.get("psd_length"),
+        stride_batch_size=export_args.get("stride_batch_size"),
+        sample_rate=export_args.get("sample_rate"),
+        inference_rate=export_args.get("inference_rate"),
+    )
 
 def main(args=None):
 
@@ -75,7 +92,9 @@ def main(args=None):
     # Parse and instantiate classes
     args = subparser.parse_args()
     args = subparser.instantiate_classes(args)
-
+    if subcommand == "infer_condor":
+        for key, value in export_args_hook().items():
+            setattr(args, key, value)
     delattr(args, "subcommand")
     main_cli(**args)
 

@@ -24,7 +24,7 @@ def export(
     kernel_length: float,
     fduration: float,
     fftlength: int,
-    inference_sampling_rate: float,
+    inference_rate: float,
     sample_rate: int,
 
     # model_weights: str,
@@ -49,7 +49,7 @@ def export(
         model_dir = gwak_folder / "output" / prefix / project / "model_JIT.pt"
 
     # weights = model_dir
-    output_dir = output_dir(additional_path=f"export/{prefix}/{project}")
+    output_dir = output_dir(append_path=f"export/{prefix}/{project}")
     if output_dir is None: 
         output_dir = gwak_folder / "output/export" / prefix / project
 
@@ -129,7 +129,7 @@ def export(
             psd_length=psd_length,
             sample_rate=sample_rate,
             kernel_length=kernel_length,
-            inference_sampling_rate=inference_sampling_rate,
+            inference_sampling_rate=inference_rate,
             fduration=fduration,
             fftlength=fftlength,
             highpass=highpass,

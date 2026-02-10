@@ -28,11 +28,6 @@ from deploy.libs import gwak_dir, gwak_output_dir, O4_bbc_short_0_data_dir, O4_b
 from deploy.libs.cluster_tools import condor_submit_with_rate_limit, write_bash_file
 from infer_data import get_shifts_meta_data
 
-EXTREME_CCSN = [
-    "Pan_2021/FR",
-    "Powell_2020/y20"
-]
-
 
 # Add a wapper for each GPU?
 def condor_infer_wrapper(
@@ -93,11 +88,11 @@ def condor_infer_wrapper(
     # File handling     
     if model_repo_dir is None: 
         model_repo_dir = output_dir(
-            additional_path=f"export/{prefix}/{project}"
+            append_path=f"export/{prefix}/{project}"
         )
     if result_dir is None:
         result_dir = output_dir(
-            additional_path=f"infer/{prefix}/{run_name}"
+            append_path=f"infer/{prefix}/{run_name}"
         )
     if result_dir.exists():
         shutil.rmtree(result_dir)
@@ -105,13 +100,14 @@ def condor_infer_wrapper(
 
     # Define fname    
     if run_name == "bbc-short-0":
-        fname = O4_bbc_short_0_data_dir(suffix=ifo_str)()
+        fname = O4_bbc_short_0_data_dir()
     if run_name == "bbc-short-1":
-        fname = O4_bbc_short_1_data_dir(suffix=ifo_str)()
+        fname = O4_bbc_short_1_data_dir()
+
     if fname is not None:
-        fname = fname(additional_path=ifo_str)
+        fname = fname(append_path=ifo_str, verbose=True)
     else:
-        fname = gwak_output_dir(suffix=f"O4_MDC_background/{ifo_str}")()
+        fname = output_dir(append_path=f"O4_MDC_background/{ifo_str}")
 
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
@@ -223,7 +219,7 @@ def condor_infer_wrapper(
                 sub_files=sub_files,
                 rate_limit=condor_nodes
             )
-            # time.sleep(5)
+
             run_time = (time.time() - start_time)
 
     days, rem = divmod(run_time, 86400)

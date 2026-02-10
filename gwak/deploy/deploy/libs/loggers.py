@@ -69,13 +69,13 @@ class Pathfinder:
 
     def __call__(
         self,
-        additional_path: Optional[str] = None,
+        append_path: Optional[str] = None,
         verbose: bool = False,
     ) -> Path:
 
-        if additional_path is not None:
+        if append_path is not None:
 
-            return self.project_path / additional_path
+            return self.project_path / append_path
 
         if verbose:
             logging.info(f"Resolved {self.path_function_name} at:")
