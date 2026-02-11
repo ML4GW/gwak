@@ -537,7 +537,7 @@ def main():
     parser.add_argument(
         '--o4-dir',
         type=Path,
-        default='gwak/output/O4_test_MDC_short-0/HL',
+        default='gwak/output/O4_MDC_short-0/HL',
         help='Directory containing O4 test signal h5 files'
     )
 
@@ -635,7 +635,7 @@ def main():
     logger.info(f"Found {len(o4_files)} O4 files")
 
     # Process O4 files (all of them)
-    o4_output = args.output_dir / 'o4_test_embeddings.h5'
+    o4_output = args.output_dir / 'o4_short-0_embeddings.h5'
 
     process_files(
         o4_files,
