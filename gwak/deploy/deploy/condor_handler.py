@@ -1,16 +1,12 @@
-import yaml
 import shutil
-import subprocess
 from pathlib import Path
-from infer_data import get_shifts_meta_data
 from deploy.libs.cluster_tools import write_condor_config, write_export_config, write_infer_core_config
 from typing import Optional
-import os
+
 import time
-import h5py
+
 import logging
 import shutil
-import subprocess
 from contextlib import nullcontext
 import numpy as np
 
@@ -105,13 +101,16 @@ def condor_infer_wrapper(
         fname = O4_bbc_short_1_data_dir()
 
     if fname is not None:
-        fname = fname(append_path=ifo_str, verbose=True)
+        fname = fname(append_path=ifo_str)
     else:
         fname = output_dir(append_path=f"O4_MDC_background/{ifo_str}")
 
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
     gwak_logger(log_file)
+
+    logging.info(f"The source of the timeslide data is at:")
+    logging.info(f"    {fname}")
 
     # Sequence preperation
     logging.info(f"Estimating required time slide to apply.")

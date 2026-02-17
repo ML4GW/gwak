@@ -6,8 +6,6 @@ import logging
 import numpy as np
 
 from pathlib import Path
-# from ratelimiter import RateLimiter
-# from aiolimiter import AsyncLimiter
 from pyrate_limiter import Duration, Rate, Limiter
 from libs.time_slides import segments_from_paths, get_num_shifts_from_Tb
 from deploy.libs.infer_utils import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding

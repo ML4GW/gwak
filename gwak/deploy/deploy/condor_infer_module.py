@@ -21,13 +21,13 @@ def infer(
     # Triron and model
     project: str,
     ip: str,
-    grpc_port: int, # >>> Dicided after slurm_batc
+    grpc_port: int,
     # Data setting
     ifos: list,
-    fnames: list, # >>> Dicided after slurm_batch (Data Cut)
-    num_shifts: int, # >>> Dicided after slurm_batch (Tb)
+    fnames: list,
+    num_shifts: int,
     data_format: str,
-    segments: list, # >>> Dicided after slurm_batch (Data Cut)
+    segments: list,
     shifts: list,
     Tb: int,
     psd_length: float,
