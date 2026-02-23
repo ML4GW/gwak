@@ -9,4 +9,4 @@ from .loggers import (
     gwak_louvre_dir, 
     gwak_timeslide_dir
 )
-from .infer_utils import get_seg_start_end, accumlator
+from .infer_utils import get_seg_start_end, accumlator, get_ip_address

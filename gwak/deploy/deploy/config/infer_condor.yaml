@@ -13,7 +13,7 @@ sample_rate: 4096 # export overwrite
 fname:
   class_path: gwak_data_dir
   init_args:
-    suffix: BBC_AnalysisReady_Cat12
+    suffix: O4_MDC_background_small_scale
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination

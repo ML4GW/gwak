@@ -1,27 +1,23 @@
-import shutil
-from pathlib import Path
-from deploy.libs.cluster_tools import write_condor_config, write_export_config, write_infer_core_config
-from typing import Optional
+from deploy.libs.find_gpus import gpu_selector
+import os 
+
+gpu_list = gpu_selector()
+os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
 
 import time
-
-import logging
 import shutil
-from contextlib import nullcontext
-import numpy as np
+import logging
 
-from tqdm import tqdm
-from zlib import adler32
-from pathlib import Path
+
 from typing import Optional
-
+from contextlib import nullcontext
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
-from deploy.libs.infer_utils import get_ip_address 
+from deploy.libs import get_ip_address 
 from deploy.libs import gwak_logger, Pathfinder
 from deploy.libs import gwak_dir, gwak_output_dir, O4_bbc_short_0_data_dir, O4_bbc_short_1_data_dir
-from deploy.libs.cluster_tools import condor_submit_with_rate_limit, write_bash_file
+from deploy.libs.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
 from infer_data import get_shifts_meta_data
 
 
@@ -109,8 +105,10 @@ def condor_infer_wrapper(
     triton_log = result_dir / "triton.log"
     gwak_logger(log_file)
 
-    logging.info(f"The source of the timeslide data is at:")
+    logging.info(f"")
+    logging.info(f"Generating timeslide data from:")
     logging.info(f"    {fname}")
+    logging.info(f"")
 
     # Sequence preperation
     logging.info(f"Estimating required time slide to apply.")
@@ -224,6 +222,9 @@ def condor_infer_wrapper(
     days, rem = divmod(run_time, 86400)
     hrs, rem = divmod(rem, 3600)
     mins, secs = divmod(rem, 60)
+    logging.info(
+        f"Infer result at: {result_dir}/inference_result"
+    )
     logging.info(
         f"Time spent for inference: "
         f"{int(days)}--{int(hrs):02d}:{int(mins):02d}:{int(secs):02d}"

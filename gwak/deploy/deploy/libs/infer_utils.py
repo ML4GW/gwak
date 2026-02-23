@@ -1,8 +1,5 @@
-import re
 import h5py
-import time
 import yaml
-import logging
 import psutil
 import socket
 
@@ -10,8 +7,7 @@ import numpy as np
 
 from tqdm import tqdm
 from pathlib import Path
-from typing import List, Tuple, Optional
-from hermes.aeriel.client import InferenceClient
+from typing import Optional
 
 
 

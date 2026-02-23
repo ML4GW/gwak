@@ -31,12 +31,12 @@ rule export:
     input:
         arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
         config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
-    params:
-        gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f"
+    # params:
+        # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f" {params.gpu} 
     output:
         artefact = directory(OUTPUT_DIR / "export/{cl_config}_{fm_config}_{ifo_mode}")
     shell:
-        "set -x; cd deploy; {params.gpu} uv run python \
+        "set -x; cd deploy; uv run python \
         {input.arg} export \
         --config {input.config} \
         --cl_config {wildcards.cl_config} \
@@ -67,13 +67,13 @@ rule condor_infer:
         config = GWAK_DIR / "gwak/deploy/deploy/config/infer_condor.yaml",
         plan_model = rules.export.output
     params:
-        gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f",
+        # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f", {params.gpu}
         timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
     output:
         artefact = directory(OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}")
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; {params.gpu} uv run python \
+        'set -x; cd deploy; uv run python \
         {input.arg} infer_condor \
         --config {input.config} \
         --run_name {wildcards.run_name} \

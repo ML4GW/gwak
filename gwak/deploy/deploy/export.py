@@ -1,3 +1,8 @@
+from deploy.libs.find_gpus import gpu_selector
+import os 
+gpu_list = gpu_selector()
+os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
+
 import torch
 import logging
 
