@@ -52,18 +52,20 @@ def hrrs_value(
     h_plus: torch.Tensor,
     h_cross: torch.Tensor,
     dim: int = -1,
+    dt: float = 1.0/4096,
 ):
     """
     Args:
         h_plus:  Tensor of shape (..., T)
         h_cross: Tensor of shape (..., T)
         dim:     Dimension over which to sum (default: last)
+        dt:      Time interval between samples (default: 1.0/4096)
 
     Returns:
         Tensor of shape (...) with HRRS per batch element
     """
     hrrs = torch.sqrt(
-        torch.sum(h_plus**2 + h_cross**2, dim=dim)
+        torch.sum((h_plus**2 + h_cross**2) * dt, dim=dim)
     )
     return hrrs
 
@@ -1340,7 +1342,7 @@ def generate_waveforms_standard(
     phic = loader.phic_prior.sample((batch_size,))
 
     cross, plus = waveform(**parameters)
-    hrss = hrrs_value(plus,cross)
+    hrss = hrrs_value(plus,cross,1.0/config['sample_rate'])
 
     # compute detector responses
     responses = compute_observed_strain(
