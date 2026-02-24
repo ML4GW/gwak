@@ -53,12 +53,10 @@ def export(
     if model_dir is None: 
         model_dir = gwak_folder / "output" / prefix / project / "model_JIT.pt"
 
-    # weights = model_dir
     output_dir = output_dir(append_path=f"export/{prefix}/{project}")
     if output_dir is None: 
         output_dir = gwak_folder / "output/export" / prefix / project
 
-    # output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)
 

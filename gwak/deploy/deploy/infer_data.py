@@ -52,7 +52,6 @@ class Sequence:
         # state_shape: tuple,
     ):
 
-        # self.fname = fname
         self.shifts = shifts
         self.psd_length = psd_length
         self.stride_batch_size = stride_batch_size
@@ -68,7 +67,6 @@ class Sequence:
         self.sample_rate = sample_rate
         self.stride = int(sample_rate / inference_sampling_rate)
         self.step_size = self.stride * (kernel_size / sample_rate)
-        # self.step_size = (kernel_size * stride_batch_size) / (sample_rate * inference_sampling_rate)        
         self.strain_dict = {}
         self.fname = fname
         
@@ -131,7 +129,6 @@ class Sequence:
 
     def __len__(self):
 
-        # return math.ceil((self.size - max(self.shifts)) / self.step_size)
         return math.ceil((self.size - (max(self.shifts)) * self.sample_rate) / self.kernel_size)
 
     def __iter__(self):

@@ -13,7 +13,7 @@ sample_rate: 4096 # export overwrite
 fname:
   class_path: gwak_data_dir
   init_args:
-    suffix: O4_MDC_background_small_scale
+    suffix: BBC_AnalysisReady_Cat12
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
@@ -21,7 +21,7 @@ grpc_port: 8101
 image: hermes/tritonserver:23.01
 model_repo_dir: null
 result_dir: null
-server_patients: 60
+server_patients: 55
 monitor_patients: null
 job_rate_limit: 1
 inference_rate: 4 # export overwrite

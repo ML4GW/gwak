@@ -143,11 +143,9 @@ rule scan_all:
         expand(
             rules.scan_outlier.output,
             cl_config=[
-                # "ResNet_cat12",
                 "torch_rbw_zp_resnet_do6_dcs128_epoch25",
             ], 
             fm_config=[
-                # "NF_onlyBkg",
                 "NF_from_file_conditioning",
             ], 
             ifo_mode=["HL"], 

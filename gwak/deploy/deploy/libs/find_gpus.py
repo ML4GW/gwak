@@ -31,18 +31,22 @@ def query_gpus():
     ]
 
 
-def gpu_selector():
+def gpu_selector(
+    cc: float=8.0,
+    total_mem: int=16000,
+    free_mem: int=10000,
+):
 
     gpu_infos = query_gpus()
     gpu_list = []
     for gpu_info in gpu_infos:
-        if gpu_info["cc"] < 8.0:
+        if gpu_info["cc"] < cc:
             continue
 
-        if gpu_info["total_mem"] < 16000:
+        if gpu_info["total_mem"] < total_mem:
             continue
 
-        if gpu_info["free_mem"] < 10000:
+        if gpu_info["free_mem"] < free_mem:
             continue
 
         gpu_list.append(gpu_info)

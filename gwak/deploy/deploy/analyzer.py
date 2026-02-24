@@ -22,10 +22,7 @@ def lovure_file_handler(
     caching: bool=True,
 ):
 
-    
-    # model_louvre_dir = louvre_dir(model)
     model_snapshot_dir = model_louvre_dir / "snapshot"
-    # breakpoint()
     if (model_louvre_dir).exists() and remake:
 
         model_snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -126,7 +123,7 @@ def scan(
         try:
             np.min(ts_data) < thereshold
         except:
-            breakpoint()
+            continue
         if np.min(ts_data) < thereshold:
             segment_name = f"{start}-{length}"
 
@@ -148,7 +145,7 @@ def scan(
             for idx in indices:
                 ts_data[indices]
                 if ts_data[idx - start_pad: idx + (start_pad + 1)].shape[0] != (start_pad + start_pad + 1):
-                    breakpoint()
+                    continue
                 anomaly_data[segment_name][f"{shift}"].append(ts_data[idx - start_pad: idx + (start_pad + 1)])
 
     # Make Problematic Segments data
@@ -284,3 +281,5 @@ def scan(
                 plt.legend()
                 plt.savefig(model_snapshot_dir / f"GWAK-Stream_{seg_name}_error_rate.png", dpi=300, bbox_inches='tight')
                 plt.close()
+
+    print(f"Plots saved at: {louvre_dir}")

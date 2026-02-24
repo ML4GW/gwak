@@ -1,15 +1,21 @@
 
 import re
-import os, sys
+import io
+import os
 import time
 import yaml
 import logging
 import subprocess
 
-
 from typing import Union
 from pathlib import Path
 
+def wait_for_file(path, timeout=6000, interval=1):
+    start = time.time()
+    while not os.path.exists(path):
+        if time.time() - start > timeout:
+            raise TimeoutError(f"Timed out waiting for {path}")
+        time.sleep(interval)
 
 def write_bash_file(
     bash_root: Path,
@@ -60,46 +66,7 @@ def write_export_config(
                 value = "null"
             yaml_file.write(f"{key}: {value}\n")
 
-    
-
     return export_config
-
-
-# def make_subfile(
-#     job_dir,
-#     kwargs,
-#     arguments,
-#     config
-# ):
-    
-#     condor_config = {}
-#     submit_file = job_dir / "condor.sub"
-
-#     condor_config["universe"] = "vanilla" #"local"
-#     condor_config["executable"] = sys.executable
-#     condor_config["arguments"] = f"{arguments} --config {config}"
-    
-    
-#     condor_config["log"] = "job.log"
-#     condor_config["output"] = "job.out"
-#     condor_config["error"] = "job.err"
-    
-#     # condor_config["getenv"] = True
-#     condor_config["environment"] = f"PYTHONPATH={os.environ.get('PYTHONPATH')}; \PATH={os.environ.get('PATH')}"
-    
-    
-#     condor_config["request_cpus"] = 2
-#     condor_config["request_memory"] = "8G"
-#     condor_config["request_disk"] = "2G"
-#     condor_config["accounting_group"] = "ligo.dev.o4.burst.explore.test"
-    
-#     with open(submit_file, "w") as f:
-#         for key, value in condor_config.items():
-#             f.write(f"{key} = {value}\n")
-        
-#         f.write("queue 0")
-
-#     return submit_file
 
 
 def write_condor_config(
@@ -260,7 +227,7 @@ def submit_condor_job(sub_file:Path):
     if match:
         
         job_id = match.group(1) + ".0"  # Format as "12345.0"
-        logging.info(f"Job submitted successfully! Job ID: {job_id}")
+        logging.info(f"Job {job_id} submitted successfully!")
 
         return job_id
     else:
@@ -285,7 +252,6 @@ def condor_submit_with_rate_limit(
 
         # Check if we need to submit new jobs
         if len(job_status["Running"]) < rate_limit:
-            # time.sleep(15)
             try: 
                 logging.info(f"Submitting {job_status['Waiting'][0]}")
                 job_id = submit_condor_job(sub_file=job_status["Waiting"][0])
@@ -299,13 +265,25 @@ def condor_submit_with_rate_limit(
 
         time.sleep(10)
         # Check if any job is done
-        result = subprocess.run("condor_q", capture_output=True, text=True)
         for idx, (sub_file, job_id) in enumerate(job_status["Running"]):
+            result = subprocess.run(["condor_q", f"{job_id}"], capture_output=True, text=True)
 
+            if "SECMAN" in result.stderr:
+                time.sleep(1)
+                continue
             if not (job_id in result.stdout):
-
+                error_file = Path(sub_file).parent / "job.err"
                 job_status["Done"].append(sub_file)
                 job_status["Running"].pop(idx)
-                logging.info(f"Job {job_id} done!")
-                if result.returncode != 0:
-                    logging.info(f"Job failed check: {sub_file}")
+                
+                wait_for_file(error_file)
+                condor_success = (result.returncode == 0)
+                triton_success = (os.path.getsize(error_file) == 0)
+
+                if condor_success and triton_success:
+                    logging.info(f"Job {job_id} ran successfully!")
+                if not condor_success:
+                    logging.error(f"Job {job_id} failed check: {sub_file}")
+                if not triton_success:
+                    logging.warning(f"Error file not empty: {error_file}")
+            time.sleep(0.1)

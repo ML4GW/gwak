@@ -1,13 +1,12 @@
 from deploy.libs.find_gpus import gpu_selector
 import os 
 
-gpu_list = gpu_selector()
+gpu_list = gpu_selector(free_mem=10000)
 os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
 
 import time
 import shutil
 import logging
-
 
 from typing import Optional
 from contextlib import nullcontext
@@ -21,7 +20,6 @@ from deploy.libs.cluster_tools import write_bash_file, write_condor_config, writ
 from infer_data import get_shifts_meta_data
 
 
-# Add a wapper for each GPU?
 def condor_infer_wrapper(
     condor_nodes: int,
     condor_kwargs: dict,
@@ -99,7 +97,7 @@ def condor_infer_wrapper(
     if fname is not None:
         fname = fname(append_path=ifo_str)
     else:
-        fname = output_dir(append_path=f"O4_MDC_background/{ifo_str}")
+        fname = output_dir(append_path=f"BBC_AnalysisReady_Cat12/{ifo_str}")
 
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
@@ -153,6 +151,7 @@ def condor_infer_wrapper(
             f"Waiting {server_patients} seconds "
             f"to receive connection to port {grpc_port}!"
         )
+        logging.info(f"Triton logs saved at {triton_log}")
         time.sleep(server_patients)
 
         monitor = nullcontext()

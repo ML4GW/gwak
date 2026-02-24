@@ -45,6 +45,7 @@ $ snakemake -c1 $GWAK_LOUVRE_DIR/{cl_config}_{fm_config}_{ifo_mode}/{run_name}
 ```
 $ snakemake -c1 scan_all -F
 ```
+Also, you can change the enviroment variables together with the snakemake command like `GWAK_DATA_DIR=new/assigned/path snakemake -c1 scan_all -F` to run the rule with new variables. 
 
 # Help 
 Use the following commad if VScode did not recognize the jupyter kernel correctly. 
