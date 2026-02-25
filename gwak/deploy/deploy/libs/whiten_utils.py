@@ -183,12 +183,7 @@ class BatchWhitener(torch.nn.Module):
         fsize = int(fduration * sample_rate)
         size = strides + self.kernel_size + fsize
         length = size / sample_rate
-        print("I am length:")
-        print(length)
-        print(length)
-        print(length)
-        print(length)
-        print()        
+
         self.psd_estimator = PsdEstimator(
             length,
             sample_rate,

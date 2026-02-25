@@ -401,7 +401,6 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         # calculate psds
         psds = spectral_density(psd_data.double())
 
-
         whitened = self.whitener(batch.double(), psds.double())
         return whitened
 
@@ -681,6 +680,7 @@ class SignalDataloader(GwakBaseDataloader):
         snr_init_factor: float = 1.0, # initial multiplier for SNR if we are annealing it i.e. curriculum learning
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
+        whiten: bool = True,   # make whitening optional
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -696,6 +696,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.has_glitch = "Glitch" in self.signal_classes
         self.cache_dir = cache_dir
         self.rebalance_classes = rebalance_classes
+        self.do_whiten = whiten
 
         self.all_signal_labels = {
             "SineGaussian":1,
@@ -1042,18 +1043,16 @@ class SignalDataloader(GwakBaseDataloader):
 
         injected = self.bandpass(injected)
 
-        whitened = self.whitener(injected.double(), psds.double())
-        if torch.any(torch.isnan(whitened)):
-            self._logger.info('whitened fucked')
+        # Conditionally whiten
+        if self.do_whiten:
+            out = self.whitener(injected.double(), psds.double())
+            if torch.any(torch.isnan(out)):
+                self._logger.info('whitened fucked')
+        else:
+            out = injected.double()
 
         if output_snrs:
-            psd_resample_size = 1+injected.shape[-1]//2 if injected.shape[-1] % 2 == 0 else (injected.shape[-1]+1)//2
-            #psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='linear', align_corners=False)
-            psds_resampled = F.interpolate(psds.double(), size=psd_resample_size, mode='nearest')
-            # use same resampling mode ('nearest', default) as the rescaler
-
-            snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
-            # if waveforms is not None:
+            snrs = torch.zeros(len(out)).to('cuda' if torch.cuda.is_available() else 'cpu')
             if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
                 snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
 
@@ -1063,7 +1062,7 @@ class SignalDataloader(GwakBaseDataloader):
             snrs_scaling = snrs_scaling.squeeze(-1).squeeze(-1)
             return whitened, snrs, snrs_scaling
         else:
-            return whitened
+            return out
 
     def multiInject(self,waveforms,batch):
         """
