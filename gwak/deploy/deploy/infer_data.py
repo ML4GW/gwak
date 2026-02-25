@@ -6,7 +6,7 @@ import logging
 import numpy as np
 
 from pathlib import Path
-from ratelimiter import RateLimiter
+from pyrate_limiter import Duration, Rate, Limiter
 from libs.time_slides import segments_from_paths, get_num_shifts_from_Tb
 from deploy.libs.infer_utils import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
 
@@ -52,7 +52,6 @@ class Sequence:
         # state_shape: tuple,
     ):
 
-        # self.fname = fname
         self.shifts = shifts
         self.psd_length = psd_length
         self.stride_batch_size = stride_batch_size
@@ -68,7 +67,6 @@ class Sequence:
         self.sample_rate = sample_rate
         self.stride = int(sample_rate / inference_sampling_rate)
         self.step_size = self.stride * (kernel_size / sample_rate)
-        # self.step_size = (kernel_size * stride_batch_size) / (sample_rate * inference_sampling_rate)        
         self.strain_dict = {}
         self.fname = fname
         
@@ -91,6 +89,7 @@ class Sequence:
         self._done = {"state": False}
         result_size = len(self) * self.stride_batch_size
         self._sequences = {"result": np.zeros(result_size)}
+        self.limiter = Limiter(Rate(1, Duration.SECOND * 0.2))
 
     @property
     def started(self):
@@ -130,13 +129,11 @@ class Sequence:
 
     def __len__(self):
 
-        # return math.ceil((self.size - max(self.shifts)) / self.step_size)
         return math.ceil((self.size - (max(self.shifts)) * self.sample_rate) / self.kernel_size)
 
     def __iter__(self):
 
         # Check if this line will hide potential implmetation error! 
-        limiter = RateLimiter(max_calls=2, period=0.1)
         bg_state = np.empty(self.state_shape, dtype=self.precision) 
         inj_state = None
 
@@ -162,9 +159,8 @@ class Sequence:
                 bg_state[ifo_idx, :] = data
 
             inj_state = bg_state
-            
-            with limiter:
-                yield bg_state, inj_state
+            self.limiter.try_acquire("triton_request")
+            yield bg_state, inj_state
 
 
     def __call__(self, y, request_id, sequence_id):

@@ -12,7 +12,7 @@ def segments_from_paths(paths: Path, data_foramt: str="hdf5"):
     files = []
     segments = []
     path_list = paths.glob(f"*.{data_foramt}")
-    
+
     for fname in path_list:
         match = fname_re.search(str(fname))
         if match is None:

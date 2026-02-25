@@ -60,7 +60,7 @@ def infer(
 
     # The Triton excution to run
     arguments = deploy_dir / "deploy/triton_excution.py"
-
+    # Spin up Triton Serve
     with serve_context:
 
         if patients is not None:

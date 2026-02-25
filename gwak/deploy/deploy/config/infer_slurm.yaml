@@ -1,0 +1,47 @@
+# The configuration values defined here will override corresponding entries in export.yaml.
+slurm_batch: 5
+# Slurm arguments
+slurm_kwargs:
+  job-name: null
+  output: null
+  error: null
+  partition: milan # Sever dependent
+  nodes: 1
+  tmp: 10G
+  gpu_card: null
+  gpu_per_node: 1 
+  cpus-per-task: 4
+  mem: 64G
+  time: 0-02:00:00
+
+  cmd: # null
+    - module load apptainer # Sever dependent
+  deploy_cmd:
+    export: 
+      - poetry run python deploy/cli.py export
+    infer:
+      - poetry run python deploy/cli.py infer
+
+run_name: null
+# Data arguments
+ifos: ["H1", "L1"]
+Tb: 31557600 # Tb = 0 will run zero-lag
+fname: /fred/oz016/Andy/Data/gwak/HL # Sever dependent
+psd_length: 64
+stride_batch_size: 256
+sample_rate: 4096
+shifts: [0, 1]
+data_format: h5 # gwf
+inference_sampling_rate: 4
+
+# Triton and Model arguments
+result_dir: /fred/oz016/Andy/Output/gwak-bbc/
+project: combination
+grpc_port: 8001
+image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent
+job_rate_limit: 4
+patients: 30
+cl_config: null
+fm_config: null
+model_repo_dir: null
+singularity_path: /apps/system/software/apptainer/latest/bin/apptainer # Sever dependent

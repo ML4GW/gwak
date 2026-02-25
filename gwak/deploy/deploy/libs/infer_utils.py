@@ -1,8 +1,5 @@
-import re
 import h5py
-import time
 import yaml
-import logging
 import psutil
 import socket
 
@@ -10,8 +7,7 @@ import numpy as np
 
 from tqdm import tqdm
 from pathlib import Path
-from typing import List, Tuple
-from hermes.aeriel.client import InferenceClient
+from typing import Optional
 
 
 
@@ -148,3 +144,39 @@ def get_seg_start_end(path):
     seg_start = int(parts[0])
     seg_end = int(parts[1])
     return seg_start, seg_end
+
+def accumlator(
+    idx_arr: np.ndarray,
+    val_arr: np.ndarray,
+    accumlation_length:float=1,
+    pad: Optional[float]=None,
+):
+    """
+    idx_arr: Outlier index
+    val_arr: Outlier gwak value
+    accumlation_length: Look around length (sec) for gwak outliers. 
+    If other outliers are found within the accumlation_length, then include it as part of the outlier.
+    pad: Padding length (sec) for outliers. 
+    """
+    if pad == None:
+        pad = accumlation_length/2
+    # Find indices where gap > kernel and split them
+    diff = np.diff(idx_arr)
+    breaks = np.where(diff > accumlation_length)[0] + 1
+    groups_val = np.split(val_arr, breaks)
+    # Split into contiguous groups
+    groups_idx = np.split(idx_arr, breaks)
+
+    # Compute segment bounds (min, max) for each group
+    mins = np.array([g[0] for g in groups_idx])
+    maxs = np.array([g[-1] for g in groups_idx])
+
+    # Expand each segment outward by ±pad
+    mins -= pad
+    maxs += pad
+
+    val_mins = np.round(np.array([np.min(g) for g in groups_val]), 2)
+    
+    segs = np.stack((mins, maxs, maxs - mins, val_mins), axis=1)
+
+    return segs

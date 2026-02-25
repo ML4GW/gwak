@@ -19,25 +19,25 @@ wildcard_constraints:
 
 rule pull_O3a_data:
     input:
-        config = 'data/configs/O3a.yaml',
-        segments = 'output/data/segments.O3a.npy'
+        config = GWAK_DIR / 'gwak/data/configs/O3a.yaml',
+        segments = OUTPUT_DIR / '/data/segments.O3a.npy'
     shell:
         'python data/cli.py --config {input.config} \
             --segments {input.segments} '
 
 rule pull_O3b_data:
     input:
-        config = 'data/configs/O3b.yaml',
-        segments = 'output/data/segments.O3b.npy'
+        config = GWAK_DIR / 'gwak/data/configs/O3b.yaml',
+        segments = OUTPUT_DIR / '/data/segments.O3b.npy'
     shell:
         'python data/cli.py --config {input.config} \
             --segments {input.segments} '
 
 rule find_valid_segments:
     params:
-        segments = 'data/segments/'
+        segments = GWAK_DIR / 'gwak/data/segments/'
     output:
-        save_path = 'output/data/segments.{segment_type}-{ifos}.npy'
+        save_path = OUTPUT_DIR / '/data/segments.{segment_type}-{ifos}.npy'
     shell:
         'python data/segments_intersection.py \
             --folder-segments {params.segments} \
@@ -63,8 +63,8 @@ rule get_token:
 rule pull_data:
     input:
         token_log = "tmp/token_ready.txt",
-        config = 'data/configs/{segment_type}-{ifos}.yaml',
-        segments = 'output/data/segments.{segment_type}-{ifos}.npy'
+        config = GWAK_DIR / 'gwak/data/configs/{segment_type}-{ifos}.yaml',
+        segments = OUTPUT_DIR / '/data/segments.{segment_type}-{ifos}.npy'
     output:
         'tmp/{segment_type}-{ifos}.log'
     shell:
