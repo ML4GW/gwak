@@ -302,7 +302,7 @@ def main(ifos, num_samples_per_class, dataset,
         else:
             ccs_cat = rhos_cat = sccs_cat = edrs_cat = None
 
-        write_file(OUTFILE, data, labels, snrs, ccs_cat, rhos_cat, sccs_cat, edrs_cat)
+        write_file(OUTFILE, data, labels, snrs, hrsss, ccs_cat, rhos_cat, sccs_cat, edrs_cat)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create offline dataset.')

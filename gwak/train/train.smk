@@ -61,7 +61,7 @@ rule make_offline_dataset_O3a:
 rule make_offline_dataset:
     params:
         ifos = 'HL',
-        num_samples = 50_000,
+        num_samples = 1_000,
         dataset = 'train',
     output:
     shell:
@@ -260,12 +260,11 @@ rule combine_models:
             --outfile {output} '
 
 rule make_plots_i:
-    input:
+    params:
         fm_model = expand(rules.train_fm.output.model,
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
-    params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
@@ -278,13 +277,13 @@ rule make_plots_i:
         'mkdir -p {output}; '
         'python train/plots.py \
             --embedding-model {params.embedding_model} \
-            --fm-model {input.fm_model} \
+            --fm-model {params.fm_model} \
             --data-dir {params.data_dir} \
             --ifos {wildcards.ifos} \
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 50000 \
+            --nevents 5000 \
             --threshold-1yr 10 '
 
 rule make_plots:
