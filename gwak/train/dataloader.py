@@ -1723,15 +1723,15 @@ class OfflineLIGOData(GenericDataModule):
         self.glitch_root = glitch_root # same story
 
         # self.data_dir = "/n/holystore01/LABS/iaifi_lab/Lab/sambt/LIGO/O4_MDC_background/offline_dataset_v2/"
-        self.data_dir = "/fred/oz016/Andy/Data/gwak/HL_offline_dataset/"
+        # self.data_dir = "/fred/oz016/Andy/Data/gwak/HL_offline_dataset/"
         self.train_files = [
-            self.data_dir + "dataset_train_HL_SR4096_kernel1.0.h5"
+            self.data_dir + "/dataset_train_HL_PowerLaw-3_4-50.h5"
         ]
         self.val_files = [
-            self.data_dir + "dataset_train_HL_SR4096_kernel1.0.h5"
+            self.data_dir + "/dataset_train_HL_PowerLaw-3_4-50.h5"
         ]
         self.test_files = [
-            self.data_dir + "dataset_train_HL_SR4096_kernel1.0.h5"
+            self.data_dir + "/dataset_train_HL_PowerLaw-3_4-50.h5"
         ]
         self.all_signal_label_names = {i:c for i,c in enumerate(self.signal_classes)}
 

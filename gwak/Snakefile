@@ -1,3 +1,25 @@
-include: "data/data.smk"
-include: "train/train.smk"
-include: "deploy/deploy.smk"
+import os
+from pathlib import Path
+
+CONTAIN_OUTPUT_DIR = Path(os.environ["GWAK_CONTAIN_OUTPUT_DIR"])
+IMAGE_DIR          = Path(os.environ["GWAK_IMAGE_DIR"])
+
+GWAK_DIR           = Path(os.environ["GWAK_DIR"])
+DATA_DIR           = Path(os.environ["GWAK_DATA_DIR"])
+OUTPUT_DIR         = Path(os.environ["GWAK_OUTPUT_DIR"])
+LOUVRE_DIR         = Path(os.environ["GWAK_LOUVRE_DIR"])
+
+rule build_envs_containers:
+    input:
+        deploy_container = GWAK_DIR / "gwak/deploy/deploy.def"
+    output:
+        deploy_image =  IMAGE_DIR / "deploy.sif"
+    params:
+        processors = "--mksquashfs-args '-processors 128'"
+    shell:
+        "set -x; apptainer build {params.processors} \
+        {output.deploy_image} {input.deploy_container}"
+
+include: GWAK_DIR / "gwak/data/data.smk"
+include: GWAK_DIR / "gwak/train/train.smk"
+include: GWAK_DIR / "gwak/deploy/deploy.smk"

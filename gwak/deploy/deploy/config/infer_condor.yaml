@@ -1,0 +1,29 @@
+condor_nodes: 8
+condor_kwargs:
+  request_cpus: 4
+  request_memory: 32G
+  request_disk: 16G
+  accounting_group: ligo.dev.o4.burst.explore.test
+run_name: one_test
+ifos: ["H1", "L1"] # export overwrite
+psd_length: 64 # export overwrite
+Tb: 0
+stride_batch_size: 256 # export overwrite
+sample_rate: 4096 # export overwrite
+fname:
+  class_path: gwak_data_dir
+  init_args:
+    suffix: BBC_AnalysisReady_Cat12
+data_format: h5 # gwf
+shifts: [0, 1]
+project: combination
+grpc_port: 8101
+image: hermes/tritonserver:23.01
+model_repo_dir: null
+result_dir: null
+server_patients: 55
+monitor_patients: null
+job_rate_limit: 1
+inference_rate: 4 # export overwrite
+cl_config: null
+fm_config: null

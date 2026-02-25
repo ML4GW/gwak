@@ -39,10 +39,9 @@ def run_infer(
 
     # File and Path management
     gwak_logger(job_dir / "log.log")
-    # result_dir =  job_dir.resolve().parents[1] / "inference_result"
-    result_dir.mkdir(parents=True, exist_ok=True)
     seg_start, seg_end = get_seg_start_end(strain_file)
-    result_file = result_dir / f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
+    file_name = f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
+    result_file = result_dir / file_name
     
     logging.info(f"Applying shifts = {shifts} to {strain_file}")
     sequence = Sequence(
@@ -57,7 +56,7 @@ def run_infer(
         inference_sampling_rate=inference_sampling_rate,
         inj_type=None,
     )
-
+    logging.info(f"Strain data loaded.")
     # Triton setup
     client = InferenceClient(
         address=f"{triton_server_ip}:{grpc_port}", 
@@ -113,4 +112,3 @@ if __name__ == "__main__":
     args = args.as_dict()
     
     run_infer(**args)
-    

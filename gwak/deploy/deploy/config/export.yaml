@@ -1,22 +1,22 @@
-project: null # overwritebleb
-model_dir: null # overwriteble
-output_dir: null # overwriteble
+project: combination # slurm_overwrite
+model_dir: null # slurm_overwrite
+output_dir:
+  class_path: gwak_output_dir
 clean: True
 background_batch_size: 2
-stride_batch_size: 64 # overwriteble
-ifos: ["H1", "L1"] # overwriteble
+stride_batch_size: 256 # slurm_overwrite
+ifos: ["H1", "L1"] # slurm_overwrite
+snapshotter_instances: 8
+preproc_instances: 8
 gwak_instances: 8
-platform: TORCHSCRIPT
-# platform: TENSORRT
+platform: TORCHSCRIPT # TENSORRT
 highpass: 30
-psd_length: 64 # overwriteble
+psd_length: 64 # slurm_overwrite
 kernel_length: 1
 fduration: 2
 fftlength: 2
-sample_rate: 4096 # overwriteble
-snapshotter_instances: 8
-preproc_instances: 8
-inference_sampling_rate: 4 # overwriteble
+sample_rate: 4096 # slurm_overwrite
+inference_rate: 4 # slurm_overwrite
 device: cuda:0 # cuda:0
-cl_config: torch_rbw_zp_resnet_do64_dcs128_epoch25 # overwriteble
-fm_config: NF_from_file_conditioning # overwriteble
+cl_config: torch_rbw_zp_resnet_do6_dcs128_epoch25 # slurm_overwrite
+fm_config: NF_from_file_conditioning # slurm_overwrite

@@ -1,3 +1,8 @@
+from deploy.libs.find_gpus import gpu_selector
+import os 
+gpu_list = gpu_selector()
+os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
+
 import torch
 import logging
 
@@ -6,30 +11,32 @@ from typing import Callable, Optional
 
 import hermes.quiver as qv
 
-from deploy.libs import gwak_logger
+from deploy.libs import gwak_logger, Pathfinder
 from deploy.libs import scale_model, add_streaming_input_preprocessor
 
 
 def export(
-    project: Path,
+    project: str,
+    # output_dir: Pathfinder,
     clean: bool,
     background_batch_size: int, 
     stride_batch_size: int, 
     ifos: list[str], 
+    snapshotter_instances:int,
+    preproc_instances: int,
     gwak_instances: int, 
     psd_length: float,
     kernel_length: float,
     fduration: float,
     fftlength: int,
-    inference_sampling_rate: float,
+    inference_rate: float,
     sample_rate: int,
-    snapshotter_instances:int,
-    preproc_instances: int,
+
     # model_weights: str,
     highpass: Optional[float] = None,
     # streams_per_gpu: int,
     model_dir: Optional[Path] = None,
-    output_dir: Optional[Path] = None,
+    output_dir: Optional[Pathfinder] = None,
     platform: qv.Platform = qv.Platform.ONNX,
     device: str = "cpu",
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
@@ -46,11 +53,10 @@ def export(
     if model_dir is None: 
         model_dir = gwak_folder / "output" / prefix / project / "model_JIT.pt"
 
-    # weights = model_dir
+    output_dir = output_dir(append_path=f"export/{prefix}/{project}")
     if output_dir is None: 
         output_dir = gwak_folder / "output/export" / prefix / project
 
-    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)
 
@@ -126,7 +132,7 @@ def export(
             psd_length=psd_length,
             sample_rate=sample_rate,
             kernel_length=kernel_length,
-            inference_sampling_rate=inference_sampling_rate,
+            inference_sampling_rate=inference_rate,
             fduration=fduration,
             fftlength=fftlength,
             highpass=highpass,

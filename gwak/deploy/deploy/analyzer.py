@@ -13,23 +13,21 @@ from matplotlib import pyplot as plt
 
 # from bokeh.plotting import figure 
 # from bokeh.io import output_notebook, save, show, reset_output, export_png
+from deploy.libs import gwak_dir, gwak_output_dir, gwak_louvre_dir, O4_bbc_short_0_data_dir, O4_bbc_short_1_data_dir
 
 def lovure_file_handler(
-    louvre_dir,
+    model_louvre_dir: Path,
     model,
     remake: bool=False,
     caching: bool=True,
 ):
 
-    
-    model_louvre_dir = louvre_dir(model)
     model_snapshot_dir = model_louvre_dir / "snapshot"
-
     if (model_louvre_dir).exists() and remake:
-        shutil.rmtree(model_louvre_dir)
 
         model_snapshot_dir.mkdir(parents=True, exist_ok=True)
 
+        shutil.rmtree(model_louvre_dir)
         return model_louvre_dir, model_snapshot_dir
 
     # Check if cache exists
@@ -51,11 +49,11 @@ def lovure_file_handler(
 
 
 def scan(
-    out_dir: Pathfinder,
+    # louvre_dir: Pathfinder,
     cl_config: str, 
     fm_config: str,
     ifo_mode: str, 
-    project: str,
+    run_name: str,
     seg_num: int,
     thereshold_level: float,
     infer_sample_rate: int,
@@ -64,21 +62,26 @@ def scan(
     plotting: bool,
     **kwargs
 ):
-    
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
-    tslide_data_dir = Path(f"/fred/oz016/Andy/Output/gwak-bbc/{model}/{project}/inference_result")
-    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
-        louvre_dir=out_dir,
-        model=model
-    )
-    stream_cut = int(infer_sample_rate*psd_length)
+
     anomaly_dict = {}
     anomaly_data = {}
+    tslide_data_list = []
 
+    model = f"{cl_config}_{fm_config}_{ifo_mode}"
+    louvre_dir = gwak_louvre_dir(suffix=f"{model}/{run_name}")()
+    tslide_data_dir = gwak_output_dir()(
+        append_path=f"infer/{model}/{run_name}/inference_result"
+    )
+
+    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
+        model_louvre_dir=louvre_dir,
+        model=model
+    )
+
+    stream_cut = int(infer_sample_rate*psd_length)
     file_list = list(sorted(tslide_data_dir.glob("*.h5")))
 
-    tslide_data_list = []
-    # # The stream_cut will be effected stride_batch_size is too small/large
+    # The stream_cut will be effected stride_batch_size is too small/large
     for fname in tqdm(file_list):
 
         with h5py.File(fname, "r") as h5_file: 
@@ -92,13 +95,13 @@ def scan(
     if thereshold_level >= 1: 
         thereshold = np.sort(tslide_data)[int(thereshold_level)]
         print()
-        print(f"    The top {int(thereshold_level)}th of {project} outlier of {model} is at : {round(thereshold, 2)}.")
+        print(f"    The top {int(thereshold_level)}th of {run_name} outlier of {model} is at : {round(thereshold, 2)}.")
         print()
 
     if thereshold_level < 1: 
         thereshold = np.quantile(tslide_data, thereshold_level)
         print()
-        print(f"    The {project} {thereshold_level} thereshold of {model} is at : {round(thereshold, 2)}.")
+        print(f"    The {run_name} {thereshold_level} thereshold of {model} is at : {round(thereshold, 2)}.")
         print()
     for ts_data, fname in zip(tslide_data_list, file_list):
 
@@ -113,7 +116,15 @@ def scan(
         length = int(match.group("length"))
         shift = int(float(match.group("shift")))
 
-        if np.min(ts_data) < thereshold: 
+        if length <= int(psd_length): # Skip data that are too short
+
+            print(f"Skip {fname}")
+            continue
+        try:
+            np.min(ts_data) < thereshold
+        except:
+            continue
+        if np.min(ts_data) < thereshold:
             segment_name = f"{start}-{length}"
 
             indices = np.where(ts_data < thereshold)[0]
@@ -134,7 +145,7 @@ def scan(
             for idx in indices:
                 ts_data[indices]
                 if ts_data[idx - start_pad: idx + (start_pad + 1)].shape[0] != (start_pad + start_pad + 1):
-                    breakpoint()
+                    continue
                 anomaly_data[segment_name][f"{shift}"].append(ts_data[idx - start_pad: idx + (start_pad + 1)])
 
     # Make Problematic Segments data
@@ -187,14 +198,14 @@ def scan(
 
     if plotting:
         # Plot Timeslide outputs
-        plt.title(f"Timeslide Output distribution: {project}")
+        plt.title(f"{run_name.capitalize()} \n{model} \nTimeslide Output distribution")
         plt.hist(
             tslide_data, 
             bins=100,
             zorder=2,
-            # label=f"Most extrem ourlier value{np.min(tslide_data):.2f}",
+            label=f"Max Outlier: {np.min(tslide_data):.2f} \n{thereshold_level*100}% Outlier: {thereshold:.2f}",
         )
-        # plt.legend()
+        plt.legend()
         plt.axvline(thereshold, color="red")
         plt.grid(zorder=0)
         plt.yscale("log")
@@ -271,3 +282,4 @@ def scan(
                 plt.savefig(model_snapshot_dir / f"GWAK-Stream_{seg_name}_error_rate.png", dpi=300, bbox_inches='tight')
                 plt.close()
 
+    print(f"Plots saved at: {louvre_dir}")

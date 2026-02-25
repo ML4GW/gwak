@@ -5,9 +5,11 @@ import sys
 from dataloader import SignalDataloader
 import torch
 
-from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 from gwak.train.preselection import cwb_stats_2ifo, cwb_cc_rho_max_over_delay_2ifo
+from ml4gw.distributions import PowerLaw
+
+from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 
 from tqdm import tqdm
 import random
@@ -26,13 +28,13 @@ def main(ifos, num_samples_per_class, dataset,
     kernel_length = 1.0
     psd_length = 64
     fduration = 2
-    fftlength = 3
-    batch_size = 128
-    num_workers = 1
+    fftlength = kernel_length + fduration # 3
+    batch_size = 256
+    num_workers = 4
     duration = fduration + kernel_length
 
-    random_id = random.randint(1000, 9999)
-    OUTFILE = f"output/dataset_{dataset}_{ifos}_SR{int(sample_rate)}_kernel{kernel_length}_{random_id}.h5"
+    OUTFILE = f"/home/katya.govorkova/gwak2/gwak/output/BBC_AnalysisReady_Cat12/{ifos}/offline/dataset_{dataset}_{ifos}_PowerLaw-3_4-50.h5"
+
     os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
 
     signal_classes = [
@@ -84,7 +86,7 @@ def main(ifos, num_samples_per_class, dataset,
         None,
         None
     ]
-    snr_prior = torch.distributions.Uniform(3,30)
+    snr_prior = PowerLaw(index=-3, minimum=4, maximum=50)
 
     # compute number of batches needed to get enough samples (equal number per class per batch)
     num_classes = len(signal_classes)
@@ -165,7 +167,7 @@ def main(ifos, num_samples_per_class, dataset,
         anneal_snr=False,
         snr_prior=snr_prior,
         rebalance_classes=False,
-        whiten=False
+        whiten=True
     )
 
     if dataset == "train":
@@ -193,7 +195,6 @@ def main(ifos, num_samples_per_class, dataset,
         clean_batch, glitch_batch = next(data_iter)
         clean_batch = clean_batch.to(device)
         glitch_batch = glitch_batch.to(device)
-
         batch, indexed_labels, snr, hrss = sig_loader.on_after_batch_transfer([clean_batch,glitch_batch], None, local_test=True)
         # batch: (B, 2, T)
         batch_np = batch.cpu().numpy().astype(np.float32)
@@ -310,7 +311,6 @@ if __name__ == "__main__":
     parser.add_argument('num_samples', type=int, help='per class')
     parser.add_argument('dataset', type=str, help='(train,val,test)')
 
-    # === NEW: toggle preselection ===
     parser.add_argument('--preselection', action='store_true', default=False,
                         help='If set, compute stats, apply cuts, and store cc/rho/scc/edr.')
 

@@ -1,5 +1,3 @@
-import os
-
 cl_configs = [
     'Transformer_SimCLR_multiSignal_all',
     'Transformer_SimCLR_multiSignalAndBkg_noSG',
@@ -29,7 +27,10 @@ cl_configs = [
     'resnet_kl1.0_bs512',
     'Astroconformer',
     'iTransformer',
-    'ResNet'
+    'ResNet',
+    'ResNet_cat12',
+    'ResNet_separate-glitch',
+    'torch_rbw_zp_resnet_do6_dcs128_epoch25',
     ]
 fm_configs = [
     'NF_onlyBkg',
@@ -47,21 +48,11 @@ wildcard_constraints:
     fm_config = '|'.join([x for x in fm_configs]),
     ifos = '|'.join([x for x in ifo_configs])
 
-rule make_offline_dataset_O3a:
-    params:
-        ifos = 'HL',
-        num_samples = 50_000,
-        dataset = 'train',
-    output:
-    shell:
-        'python data/offline_dataset_o3.py {params.ifos} \
-            {params.num_samples} \
-            {params.dataset}'
 
 rule make_offline_dataset:
     params:
         ifos = 'HL',
-        num_samples = 1_000,
+        num_samples = 100_000,
         dataset = 'train',
     output:
     shell:
@@ -70,26 +61,30 @@ rule make_offline_dataset:
             {params.dataset}'
 
 rule train_cl:
+    input:
+        config = GWAK_DIR / 'gwak/train/configs{cl_config}.yaml',
+        data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/'
     output:
-        model = 'output/{cl_config}_{ifos}/model_JIT.pt'
+        model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt'
     params:
-        config = 'train/configs/{cl_config}.yaml',
-        data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
-        artefact = directory('output/{cl_config}_{ifos}/')
+        artefact = directory(OUTPUT_DIR / '{cl_config}_{ifos}/'),
+        # The omicron triggers can only generate on LDG cluster.
+        omicron = OUTPUT_DIR / "O4b_AnalysisReady_Cat12/omicron/"
     shell:
-        'python train/cli.py fit --config {params.config} \
+        'python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
-            --data.init_args.data_dir {params.data_dir} \
+            --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
-            --model.num_ifos {wildcards.ifos} '
+            --model.num_ifos {wildcards.ifos} \
+            --data.init_args.glitch_root {params.omicron}'
 
 rule compare_embeddings:
     input:
-        data_dir = 'output/BBC_AnalysisReady_Cat12/HL/'
+        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/'
     params:
-        config = 'train/configs/resnet_kl1.0_bs512.yaml',
-        models_to_compare = ['output/resnet_kl1.0_bs512_HL/model_JIT.pt', 'output/s4_kl1.0_bs256_HL/model_JIT.pt'],
-        plot_dir = 'output/plots/compare_embeddings/'
+        config = GWAK_DIR / 'gwak/train/configsresnet_kl1.0_bs512.yaml',
+        models_to_compare = [OUTPUT_DIR / 'resnet_kl1.0_bs512_HL/model_JIT.pt', OUTPUT_DIR / 's4_kl1.0_bs256_HL/model_JIT.pt'],
+        plot_dir = OUTPUT_DIR / 'plots/compare_embeddings/'
     shell:
         'mkdir -p {params.plot_dir}; '
         'python train/compare_embeddings.py {params.models_to_compare} \
@@ -99,22 +94,22 @@ rule compare_embeddings:
             --nevents 1024'
 
 rule precompute_embeddings:
-    params:
+    input:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
-        config = 'train/configs/{cl_config}.yaml',
-        saved_dataset = 'output/dataset_train_HL_SR4096_kernel1.0_preselected_large.h5'
+    params:
+        data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/',
+        config = GWAK_DIR / 'gwak/train/configs{cl_config}.yaml'
     output:
-        means = 'output/{cl_config}_{ifos}/means.npy',
-        stds = 'output/{cl_config}_{ifos}/stds.npy',
-        embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
-        labels = 'output/{cl_config}_{ifos}/labels.npy',
-        correlations = 'output/{cl_config}_{ifos}/correlations.npy'
+        means = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
+        stds = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
+        embeddings = OUTPUT_DIR / '{cl_config}_{ifos}/embeddings.npy',
+        labels = OUTPUT_DIR / '{cl_config}_{ifos}/labels.npy',
+        correlations = OUTPUT_DIR / '{cl_config}_{ifos}/correlations.npy'
     shell:
         'python train/precompute_embeddings.py \
-            --embedding-model {params.embedding_model} \
+            --embedding-model {input.embedding_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
             --ifos {wildcards.ifos} \
@@ -123,27 +118,25 @@ rule precompute_embeddings:
             --correlations {output.correlations} \
             --means {output.means} \
             --stds {output.stds} \
-            --dataset-path {params.saved_dataset} \
-            --nevents 20000 \
-            --include-signals all '
+            --nevents 100000 '
 
 rule train_fm:
     input:
-        # means = 'output/{cl_config}_{ifos}/means.npy',
-        # stds = 'output/{cl_config}_{ifos}/stds.npy',
-        embeddings = 'output/{cl_config}_{ifos}/embeddings.npy',
-        correlations = 'output/{cl_config}_{ifos}/correlations.npy',
+        embeddings = OUTPUT_DIR / '{cl_config}_{ifos}/embeddings.npy',
     params:
-        artefact = directory('output/{cl_config}_{fm_config}_{ifos}/'),
-        config = 'train/configs/{fm_config}.yaml',
+        artefact = directory(OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/'),
+        config = GWAK_DIR / 'gwak/train/configs{fm_config}.yaml',
+        # means = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
+        # stds = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
+        correlations = OUTPUT_DIR / '{cl_config}_{ifos}/correlations.npy',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
     output:
-        model = 'output/{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
+        model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     shell:
         'python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.embedding_path {input.embeddings} \
-            --data.c_path {input.correlations} \
+            --data.c_path {params.correlations} \
             --model.conditioning {params.conditioning} '
 
             # --model.means {params.means} \
@@ -155,14 +148,14 @@ rule precompute_wnb_embeddings_classifier:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='ResNet',
             ifos='HL'),
-        data_dir = 'output/BBC_AnalysisReady_Cat12/HL/',
-        config = 'train/configs/ResNet.yaml'
+        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        config = GWAK_DIR / 'gwak/train/configsResNet.yaml'
     output:
-        means = 'output/ResNet_wnb_HL/means.npy',
-        stds = 'output/ResNet_wnb_HL/stds.npy',
-        embeddings = 'output/ResNet_wnb_HL/embeddings.npy',
-        correlations = 'output/ResNet_wnb_HL/correlations.npy',
-        labels = 'output/ResNet_wnb_HL/labels.npy'
+        means = OUTPUT_DIR / 'ResNet_wnb_HL/means.npy',
+        stds = OUTPUT_DIR / 'ResNet_wnb_HL/stds.npy',
+        embeddings = OUTPUT_DIR / 'ResNet_wnb_HL/embeddings.npy',
+        correlations = OUTPUT_DIR / 'ResNet_wnb_HL/correlations.npy',
+        labels = OUTPUT_DIR / 'ResNet_wnb_HL/labels.npy'
     shell:
         'python train/precompute_embeddings.py \
             --embedding-model {params.embedding_model} \
@@ -182,15 +175,14 @@ rule precompute_sg_embeddings_classifier:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='ResNet',
             ifos='HL'),
-        # data_dir = 'output/BBC_AnalysisReady_Cat12/HL/',
-        data_dir = '/fred/oz994/andy/Data/gwak/HL',
-        config = 'train/configs/ResNet.yaml'
+        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        config = GWAK_DIR / 'gwak/train/configsResNet.yaml'
     output:
-        means = 'output/ResNet_sg_HL/means.npy',
-        stds = 'output/ResNet_sg_HL/stds.npy',
-        embeddings = 'output/ResNet_sg_HL/embeddings.npy',
-        correlations = 'output/ResNet_sg_HL/correlations.npy',
-        labels = 'output/ResNet_sg_HL/labels.npy'
+        means = OUTPUT_DIR / 'ResNet_sg_HL/means.npy',
+        stds = OUTPUT_DIR / 'ResNet_sg_HL/stds.npy',
+        embeddings = OUTPUT_DIR / 'ResNet_sg_HL/embeddings.npy',
+        correlations = OUTPUT_DIR / 'ResNet_sg_HL/correlations.npy',
+        labels = OUTPUT_DIR / 'ResNet_sg_HL/labels.npy'
     shell:
         'python train/precompute_embeddings.py \
             --embedding-model {params.embedding_model} \
@@ -207,13 +199,13 @@ rule precompute_sg_embeddings_classifier:
 
 rule train_wnb_classifier:
     params:
-        artefact = directory('output/ResNet_HL_FM_multiSignalAndBkg/'),
-        embeddings = 'output/ResNet_signals_HL/embeddings.npy',
-        data_dir = 'output/BBC_AnalysisReady_Cat12/HL/',
-        config = 'train/configs/FM_multiSignalAndBkg.yaml',
-        means = 'output/ResNet_signals_HL/means.npy',
-        stds = 'output/ResNet_signals_HL/stds.npy',
-        labels = 'output/ResNet_signals_HL/labels.npy'
+        artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
+        embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
+        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        config = GWAK_DIR / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
+        means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
+        stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
+        labels = OUTPUT_DIR / 'ResNet_signals_HL/labels.npy'
     shell:
         'python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
@@ -224,13 +216,13 @@ rule train_wnb_classifier:
 
 rule train_sg_classifier:
     params:
-        artefact = directory('output/ResNet_HL_FM_multiSignalAndBkg/'),
-        embeddings = 'output/ResNet_signals_HL/embeddings.npy',
-        data_dir = 'output/BBC_AnalysisReady_Cat12/HL/',
-        config = 'train/configs/FM_multiSignalAndBkg.yaml',
-        means = 'output/ResNet_signals_HL/means.npy',
-        stds = 'output/ResNet_signals_HL/stds.npy',
-        labels = 'output/ResNet_signals_HL/labels.npy'
+        artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
+        embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
+        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        config = GWAK_DIR / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
+        means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
+        stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
+        labels = OUTPUT_DIR / 'ResNet_signals_HL/labels.npy'
     shell:
         'python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
@@ -241,7 +233,7 @@ rule train_sg_classifier:
 
 rule combine_models:
     input:
-        config = 'train/configs/{cl_config}.yaml',
+        config = GWAK_DIR / 'gwak/train/configs{cl_config}.yaml',
     params:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
@@ -251,7 +243,7 @@ rule combine_models:
             cl_config='{cl_config}',
             ifos='{ifos}'),
     output:
-        'output/{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt'
+        OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt'
     shell:
         'python train/combine_models.py \
             {params.embedding_model} \
@@ -261,11 +253,11 @@ rule combine_models:
 
 rule make_plots_i:
     params:
-        fm_model = expand(rules.train_fm.output.model,
-            fm_config='{fm_config}',
+        embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-        embedding_model = expand(rules.train_cl.output.model,
+        fm_model = expand(rules.train_fm.output.model,
+            fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
         data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
@@ -283,7 +275,7 @@ rule make_plots_i:
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
-            --nevents 5000 \
+            --nevents 15000 \
             --threshold-1yr 10 '
 
 rule make_plots:

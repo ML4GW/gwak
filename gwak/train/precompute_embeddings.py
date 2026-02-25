@@ -13,6 +13,7 @@ from pytorch_lightning import Trainer
 import lightning.pytorch as pl
 from sklearn.metrics import roc_curve, auc
 
+from ml4gw.distributions import PowerLaw
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
@@ -166,7 +167,6 @@ if __name__=='__main__':
     # After loading the YAML config:
     if args.include_signals in ['All', 'ALL', 'all']:
         signal_classes = [
-            "MultiSineGaussian",
             "SineGaussian",
             "BBH",
             "Gaussian",
@@ -179,7 +179,6 @@ if __name__=='__main__':
             "Glitch",
             ]
         priors = [
-            MultiSineGaussianBBC(),
             SineGaussianBBC(),
             LAL_BBHPrior(),
             GaussianBBC(),
@@ -192,7 +191,6 @@ if __name__=='__main__':
             None
         ]
         waveforms = [
-            MultiSineGaussian(sample_rate=sample_rate, duration=duration),
             SineGaussian(sample_rate=sample_rate, duration=duration),
             IMRPhenomPv2(),
             Gaussian(sample_rate=sample_rate, duration=duration),
@@ -204,7 +202,9 @@ if __name__=='__main__':
             None,
             None
         ]
-        extra_kwargs = [None,None,{"ringdown_duration": 0.9},None,None,None,None,None,None,None,None]
+        extra_kwargs = [None,{"ringdown_duration": 0.9},None,None,None,None,None,None,None,None
+        ]
+
     elif args.include_signals in ['WNB', 'wnb']:
         signal_classes = ["WhiteNoiseBurst","Background","Glitch"]
         priors = [WhiteNoiseBurstBBC(), None, None]
@@ -236,9 +236,8 @@ if __name__=='__main__':
         num_workers=num_workers,
         data_saving_file=data_saving_file,
         ifos=args.ifos,
-        snr_prior=torch.distributions.Uniform(3, 30),
-        # glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
-        glitch_root=f"/fred/oz016/Andy/New_Data/gwak/omicron/{args.ifos}"
+        snr_prior=PowerLaw(index=-3, minimum=4, maximum=50),
+        glitch_root=f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/O4b_AnalysisReady_Cat12/omicron/"
     )
 
     # --- helper: same cut logic as your reference ---
