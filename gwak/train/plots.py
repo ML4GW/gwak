@@ -150,6 +150,7 @@ if __name__=='__main__':
     print('and the background labels are ', background_labels)
 
     filenames = {
+        'all_input': f'{args.output}_precomputed/input_{args.nevents}.npy',
         'all_context': f'{args.output}_precomputed/context_{args.nevents}.npy',
         'all_binary_labels': f'{args.output}_precomputed/binary_labels_{args.nevents}.npy',
         'all_labels': f'{args.output}_precomputed/labels_{args.nevents}.npy',
@@ -165,6 +166,7 @@ if __name__=='__main__':
             datasets[key] = np.load(filepath)
 
     if datasets:
+        all_input = datasets['all_input']
         all_binary_labels = datasets['all_binary_labels']
         all_scores = datasets['all_scores']
         all_embeddings = datasets['all_embeddings']
@@ -174,6 +176,7 @@ if __name__=='__main__':
         all_hrss = datasets['all_hrss']
 
     else:
+        all_input = []
         all_binary_labels = []
         all_scores = []
         all_embeddings = []
@@ -214,7 +217,9 @@ if __name__=='__main__':
             labels = labels.detach().cpu().numpy()
             binary_labels = (~np.isin(labels, background_labels)).astype(int)
 
+            processed = processed.detach().cpu().numpy()
 
+            all_input.append(processed)
             all_binary_labels.append(binary_labels)
             all_labels.append(labels)
             all_scores.append(scores)
@@ -230,11 +235,13 @@ if __name__=='__main__':
         all_binary_labels = np.concatenate(all_binary_labels, axis=0)
         all_labels = np.concatenate(all_labels, axis=0)
         all_scores = np.concatenate(all_scores, axis=0)
+        all_input = np.concatenate(all_input, axis=0)
         all_embeddings = np.concatenate(all_embeddings, axis=0)
         all_snrs = np.concatenate(all_snrs, axis=0)
         all_hrss = np.concatenate(all_hrss, axis=0)
 
         os.makedirs(f"{args.output}_precomputed", exist_ok=True)
+        np.save(f'{args.output}_precomputed/input_{args.nevents}.npy', all_input)
         np.save(f'{args.output}_precomputed/context_{args.nevents}.npy', all_context)
         np.save(f'{args.output}_precomputed/binary_labels_{args.nevents}.npy', all_binary_labels)
         np.save(f'{args.output}_precomputed/labels_{args.nevents}.npy', all_labels)
@@ -454,6 +461,12 @@ if __name__=='__main__':
     num_bins = 10
     bin_edges = np.linspace(1e-22, 1e-21, num_bins + 1)  # 10 bins between 4 and 100
     bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+    import matplotlib.ticker as mticker
+
+    plt.gca().xaxis.set_major_formatter(
+        mticker.FuncFormatter(lambda x, pos: f"{x/1e-22:.0f}×10⁻²²")
+    )
 
     plt.figure(figsize=(8,6))
 

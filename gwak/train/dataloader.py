@@ -1060,6 +1060,7 @@ class SignalDataloader(GwakBaseDataloader):
             if waveform_class in ["Background", "Glitch", "FakeGlitch"]:
                 snrs_scaling = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
 
+            snrs_scaling = snrs_scaling.squeeze(-1).squeeze(-1)
             return whitened, snrs, snrs_scaling
         else:
             return whitened
@@ -1342,7 +1343,7 @@ def generate_waveforms_standard(
     phic = loader.phic_prior.sample((batch_size,))
 
     cross, plus = waveform(**parameters)
-    hrss = hrrs_value(plus,cross,1.0/config['sample_rate'])
+    hrss = hrrs_value(plus, cross, dt=1.0/config['sample_rate'])
 
     # compute detector responses
     responses = compute_observed_strain(
