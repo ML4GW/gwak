@@ -150,9 +150,9 @@ rule scan_all:
             ], 
             ifo_mode=["HL"], 
             run_name=[
-                "test_run", 
+                "one_year", 
                 # "bbc-short-0", 
-                # "bbc-short-1"
+                # "bbc-short-1", 
             ]
         )
 

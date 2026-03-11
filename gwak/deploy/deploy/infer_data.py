@@ -89,7 +89,7 @@ class Sequence:
         self._done = {"state": False}
         result_size = len(self) * self.stride_batch_size
         self._sequences = {"result": np.zeros(result_size)}
-        self.limiter = Limiter(Rate(1, Duration.SECOND * 0.2))
+        # self.limiter = Limiter(Rate(50, Duration.SECOND))
 
     @property
     def started(self):
@@ -159,7 +159,7 @@ class Sequence:
                 bg_state[ifo_idx, :] = data
 
             inj_state = bg_state
-            self.limiter.try_acquire("triton_request")
+            # self.limiter.try_acquire("triton_request")
             yield bg_state, inj_state
 
 
