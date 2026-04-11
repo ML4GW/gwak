@@ -62,7 +62,7 @@ rule make_offline_dataset:
 
 rule train_cl:
     input:
-        config = GWAK_DIR / 'gwak/train/configs{cl_config}.yaml',
+        config = GWAK_DIR / 'gwak/train/configs/{cl_config}.yaml',
         data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/'
     output:
         model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt'
@@ -98,9 +98,9 @@ rule precompute_embeddings:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
-    params:
+    #params:
         data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/',
-        config = GWAK_DIR / 'gwak/train/configs{cl_config}.yaml'
+        config = GWAK_DIR / 'gwak/train/configs/{cl_config}.yaml'
     output:
         means = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
         stds = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
@@ -110,8 +110,8 @@ rule precompute_embeddings:
     shell:
         'python train/precompute_embeddings.py \
             --embedding-model {input.embedding_model} \
-            --data-dir {params.data_dir} \
-            --config {params.config} \
+            --data-dir {input.data_dir} \
+            --config {input.config} \
             --ifos {wildcards.ifos} \
             --embeddings {output.embeddings} \
             --labels {output.labels} \
@@ -252,7 +252,7 @@ rule combine_models:
             --outfile {output} '
 
 rule make_plots_i:
-    params:
+    input:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='{cl_config}',
             ifos='{ifos}'),
@@ -260,6 +260,7 @@ rule make_plots_i:
             fm_config='{fm_config}',
             cl_config='{cl_config}',
             ifos='{ifos}'),
+    params:
         data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
         config = 'train/configs/{cl_config}.yaml',
         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
@@ -268,15 +269,15 @@ rule make_plots_i:
     shell:
         'mkdir -p {output}; '
         'python train/plots.py \
-            --embedding-model {params.embedding_model} \
-            --fm-model {params.fm_model} \
+            --embedding-model {input.embedding_model} \
+            --fm-model {input.fm_model} \
             --data-dir {params.data_dir} \
             --ifos {wildcards.ifos} \
             --config {params.config} \
             --output {output} \
             --conditioning {params.conditioning} \
             --nevents 15000 \
-            --threshold-1yr 10 '
+            --threshold-1yr 48 '
 
 rule make_plots:
     input:

@@ -347,7 +347,7 @@ if __name__=='__main__':
             data_saving_file=data_saving_file,
             ifos=args.ifos,
             snr_prior=torch.distributions.Uniform(3, 30),
-            glitch_root=f'/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/{args.ifos}/'
+            glitch_root=f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/O4b_AnalysisReady_Cat12/omicron/"
         )
 
         n_iter = args.nevents // batch_size
