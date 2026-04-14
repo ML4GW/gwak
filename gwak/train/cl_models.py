@@ -280,7 +280,11 @@ class SimCLRBase(GwakBaseModelClass):
                 logits = self.classifier(x_embd)
                 #self.get_logger().info(f"Logits dtype: {logits.dtype}")
                 #self.get_logger().info(f"labels dtype: {labels.dtype}")
-                loss_class = F.cross_entropy(logits, (labels-1).to(torch.long))
+                if getattr(self, 'binary_classifier', False):
+                    clf_labels = (labels > self.n_signal_classes).long()
+                else:
+                    clf_labels = (labels - 1).to(torch.long)
+                loss_class = F.cross_entropy(logits, clf_labels)
                 loss = loss_simclr + self.lambda_classifier * loss_class
             else:
                 loss = loss_simclr
@@ -329,7 +333,11 @@ class SimCLRBase(GwakBaseModelClass):
                 #self.get_logger().info(f"labels dtype: {labels.dtype}")
                 #self.get_logger().info(f"Logits shape: {logits.shape}")
                 #self.get_logger().info(f"labels shape: {labels.shape}")
-                loss_class = F.cross_entropy(logits, (labels-1).to(torch.long))
+                if getattr(self, 'binary_classifier', False):
+                    clf_labels = (labels > self.n_signal_classes).long()
+                else:
+                    clf_labels = (labels - 1).to(torch.long)
+                loss_class = F.cross_entropy(logits, clf_labels)
                 loss = loss_simclr + self.lambda_classifier * loss_class
             else:
                 loss = loss_simclr
@@ -458,11 +466,11 @@ class Crayon(SimCLRBase):
         self.projection_head = MLP(d_input = self.d_output, hidden_dims=[self.d_output], d_output = self.d_contrastive_space)
         if self.use_classifier:
             hidden_dims = self.classifier_hidden_dims if self.classifier_hidden_dims is not None else [4*self.d_output for _ in range(2)]
-            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims,
                                 d_output = self.num_classes)
-        
+
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
-                                                  contrast_mode='all', 
+                                                  contrast_mode='all',
                                                   base_temperature=self.temperature)
 
         self.val_outputs = []
@@ -485,7 +493,7 @@ class Crayon(SimCLRBase):
             optimizer.add_param_group(
                 {"params": params, **hp}
             )
-        
+
         if self.cos_anneal:
             sched = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.cos_anneal_tmax, eta_min=self.min_lr)
             return {"optimizer": optimizer, "lr_scheduler": sched}
@@ -557,7 +565,7 @@ class Tarantula(SimCLRBase):
         self.temperature_init = temperature_init
         self.n_temp_anneal = n_temp_anneal
         self.classifier_hidden_dims = classifier_hidden_dims
-        
+
         # define the self attention blocks
         self.self_attn = EncoderTransformer(
             num_features=self.num_ifos,
@@ -595,11 +603,11 @@ class Tarantula(SimCLRBase):
         )
         if self.use_classifier:
             hidden_dims = [4*self.d_output for _ in range(2)] if self.classifier_hidden_dims is None else self.classifier_hidden_dims
-            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims, 
+            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims,
                                 d_output = self.num_classes)
-            
+
         self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
-                                                  contrast_mode='all', 
+                                                  contrast_mode='all',
                                                   base_temperature=self.temperature)
 
         self.val_outputs = []
@@ -616,7 +624,7 @@ class Tarantula(SimCLRBase):
                 "frequency":1
             }
         }
-    
+
 class Contour(SimCLRBase):
 
     def __init__(
@@ -641,6 +649,8 @@ class Contour(SimCLRBase):
         anneal_classifier: bool = True, # whether to anneal classifier loss
         classifier_hidden_dims: Optional[list[int]] = None,
         projector_hidden_dims: Optional[list[int]] = [64,64],
+        binary_classifier: bool = False, # if True, collapse all signal classes to 0 and background to 1
+        n_signal_classes: int = 7, # number of signal classes (labels 1..n_signal_classes) used when binary_classifier=True
         ):
 
         super().__init__()
@@ -664,6 +674,8 @@ class Contour(SimCLRBase):
         self.class_anneal_epochs = class_anneal_epochs
         self.anneal_classifier = anneal_classifier
         self.classifier_hidden_dims = classifier_hidden_dims
+        self.binary_classifier = binary_classifier
+        self.n_signal_classes = n_signal_classes
         self.model = ResNet1D(
             in_channels=self.num_ifos,
             classes=self.d_output,
@@ -696,12 +708,20 @@ class Contour(SimCLRBase):
 
         self.save_hyperparameters()
 
+    def configure_callbacks(self) -> Sequence[pl.Callback]:
+        from gwak.train.callback import ModelCheckpoint
+        return [ModelCheckpoint(
+            monitor='val/loss',
+            save_last=True,
+            auto_insert_metric_name=False
+        )]
+
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(),lr=self.lr)
         if self.cos_anneal:
             sched = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, 
-                T_max=self.cos_anneal_tmax, 
+                optimizer,
+                T_max=self.cos_anneal_tmax,
                 eta_min=self.min_lr
             )
             return {"optimizer": optimizer, "lr_scheduler": sched}

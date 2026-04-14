@@ -136,7 +136,7 @@ if __name__=='__main__':
         ifos=args.ifos,
         snr_prior=PowerLaw(index=3, minimum=4, maximum=30),
         # glitch_root=f'/n/netscratch/iaifi_lab/Lab/emoreno/O4_MDC_background/omicron/{args.ifos}/'
-        glitch_root=f"/fred/oz016/Andy/New_Data/gwak/omicron/{args.ifos}"
+        glitch_root=f"/home/katya.govorkova/gwak2/gwak/output/O4b_AnalysisReady_Cat12/omicron/"
     )
 
     all_background_classes = ['Background', 'Glitch'] #, 'FakeGlitch']

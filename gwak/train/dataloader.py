@@ -159,16 +159,24 @@ class EmbeddingLoader(pl.LightningDataModule):
 
     def setup(self, stage=None):
         x = torch.tensor(np.load(self.embedding_path), dtype=torch.float32)
+        self.x_mean = x.mean(0)
+        self.x_std = x.std(0).clamp(min=1e-8)
 
         if self.c_path and self.c_path.exists():
             c = torch.tensor(np.load(self.c_path), dtype=torch.float32)
             assert len(x) == len(c), "x and c must have the same number of samples"
+            self.c_mean = c.mean(0)
+            self.c_std = c.std(0).clamp(min=1e-8)
             dataset = TensorDataset(x, c)
         elif self.labels_path and self.labels_path.exists():
+            self.c_mean = torch.zeros(1)
+            self.c_std = torch.ones(1)
             l = torch.tensor(np.load(self.labels_path), dtype=torch.float32)
             assert len(x) == len(l), "x and l must have the same number of samples"
             dataset = TensorDataset(x, l)
         else:
+            self.c_mean = torch.zeros(1)
+            self.c_std = torch.ones(1)
             dataset = TensorDataset(x)
 
         val_size = int(len(dataset) * self.val_split)
@@ -256,8 +264,10 @@ class TimeSlidesDataloader(pl.LightningDataModule):
             highpass = 30,
         )
 
+        spectral_density = SpectralDensity(self.sample_rate, self.fftlength, average='median')
         self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
         self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
+        self.spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -391,15 +401,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
-        spectral_density = SpectralDensity(
-            self.sample_rate,
-            self.fftlength,
-            average='median'
-        )
-        spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
-
         # calculate psds
-        psds = spectral_density(psd_data.double())
+        psds = self.spectral_density(psd_data.double())
 
         whitened = self.whitener(batch.double(), psds.double())
         return whitened
@@ -502,8 +505,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
             highpass = 30,
         )
 
+        spectral_density = SpectralDensity(self.sample_rate, self.fftlength, average='median')
         self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
         self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
+        self.spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -623,15 +628,8 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
-        spectral_density = SpectralDensity(
-            self.sample_rate,
-            self.fftlength,
-            average='median'
-        )
-        spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
-
         # calculate psds
-        psds = spectral_density(psd_data.double())
+        psds = self.spectral_density(psd_data.double())
 
         whitened = self.whitener(batch.double(), psds.double())
         return whitened
@@ -929,14 +927,15 @@ class SignalDataloader(GwakBaseDataloader):
                 hrss_raw = torch.zeros(self.num_per_class[i])
             elif signal_class == "FakeGlitch":
                 responses, params, ra, dec, phic = self.fakeGlitchMaker.generate_waveforms(self.num_per_class[i],self,self.ifos)
-                for i in range(len(responses)):
-                    B, F, T = responses[i].shape
+                hrss_raw = torch.zeros(self.num_per_class[i])
+                for j in range(len(responses)):
+                    B, F, T = responses[j].shape
                     # for each waveform randomly select one ifo to be nonzero
                     random_features = torch.randint(0, F, (B,))
                     # Create a mask of zeros, then put 1s in selected ifo for each waveform
-                    mask = torch.zeros_like(responses[i])
+                    mask = torch.zeros_like(responses[j])
                     mask[torch.arange(B), random_features, :] = 1.0
-                    responses[i] = responses[i] * mask
+                    responses[j] = responses[j] * mask
             else:
                 responses, params, ra, dec, phic, hrss_raw = generate_waveforms_standard(
                     self.num_per_class[i],
@@ -970,26 +969,12 @@ class SignalDataloader(GwakBaseDataloader):
 
         # psd estimator
         # takes tensor of shape (batch_size, num_ifos, psd_length)
-        spectral_density = SpectralDensity(
-            self.sample_rate,
-            self.fftlength,
-            average='median'
-        )
-        spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
-
         # calculate psds
-        psds = spectral_density(psd_data.double())
+        psds = self.spectral_density(psd_data.double())
         if torch.any(torch.isnan(psds)):
             self._logger.info('psds fucked')
 
-        # This part is preserved for reviewing SNR rescalser PR,
-        # will remove after the PR been accepted.
-        # if self.anneal_snr:
-        if self.snr_prior is None:
-            # if we are annealing the SNR, we need to scale the waveforms
-            snr_factor = self.get_snr_factor(self.trainer.current_epoch)
-            if waveforms is not None:
-                waveforms = snr_factor * waveforms
+        curriculum_factor = self.get_snr_factor(self.trainer.current_epoch) if self.anneal_snr else 1.0
         # Waveform padding
         if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
 
@@ -1017,23 +1002,23 @@ class SignalDataloader(GwakBaseDataloader):
             if torch.any(torch.isnan(waveforms)):
                 self._logger.info('centered waveforms fucked')
 
-            snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
+            target_snrs = curriculum_factor * self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
 
             rescaled_waveforms, snrs_scaling = self.rescaler.forward(
                 responses=waveforms,
                 psds=psds,
-                target_snrs=snr_factor
+                target_snrs=target_snrs
             )
 
             injected = batch + rescaled_waveforms
 
         elif waveform_class == "CCSN":
 
-            snr_factor = self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
+            target_snrs = curriculum_factor * self.snr_prior.rsample((waveforms.shape[0],)).to(waveforms.device)
             rescaled_waveforms, snrs_scaling = self.rescaler.forward(
                 responses=waveforms,
                 psds=psds,
-                target_snrs=snr_factor
+                target_snrs=target_snrs
             )
 
             injected = batch + rescaled_waveforms
@@ -1196,7 +1181,7 @@ class SignalDataloader(GwakBaseDataloader):
             if "Glitch" in self.signal_classes:
                 glitch_mask = (torch.where(indexed_labels == self.signal_classes.index("Glitch")+1))[0]
                 #glitch_chunk = glitch_batch[:glitch_mask.shape[0]]
-                clean_batch[glitch_mask] = glitch_batch # should now only load in exactly enough glitch events
+                clean_batch[glitch_mask] = glitch_batch[:glitch_mask.shape[0]]
             perm = torch.randperm(clean_batch.size(0)).to('cuda') if torch.cuda.is_available() else torch.randperm(clean_batch.size(0))
             perm = perm.to('cuda') if torch.cuda.is_available() else perm
             batch = clean_batch[perm]
@@ -1218,7 +1203,7 @@ class SignalDataloader(GwakBaseDataloader):
                 bk_step = f"Training/Step_{self.trainer.global_step:06d}_BK{cls}"
                 inj_step = f"Training/Step_{self.trainer.global_step:06d}_INJ{cls}"
                 label_step = f"Training/Step_{self.trainer.global_step:06d}_LABEL{cls}"
-                prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
+                prem_mask = torch.where(indexed_labels == self.signal_classes.index(cls) + 1)
 
                 self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
                 self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
@@ -1230,7 +1215,7 @@ class SignalDataloader(GwakBaseDataloader):
                 bk_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_BK{cls}"
                 inj_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_INJ{cls}"
                 label_step = f"Validation/Step_{self.trainer.global_validation_step:06d}_LAB{cls}"
-                prem_mask = torch.where(labels == self.signal_classes.index(cls) + 1)
+                prem_mask = torch.where(indexed_labels == self.signal_classes.index(cls) + 1)
 
                 self.data_group.create_dataset(bk_step, data = batch[prem_mask].cpu())
                 self.data_group.create_dataset(label_step, data = labels[prem_mask].cpu())
@@ -1683,10 +1668,10 @@ class FakeGlitchMaker:
 class GenericDataModule(pl.LightningDataModule):
 
     def __init__(
-        self, 
-        batch_size=512, 
-        num_workers=4, 
-        pin_memory=False, 
+        self,
+        batch_size=512,
+        num_workers=4,
+        pin_memory=False,
         **kwargs
     ):
         super().__init__()
@@ -1694,24 +1679,24 @@ class GenericDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.pin_memory = pin_memory
         self.loader_kwargs = {
-            "batch_size": self.batch_size, 
-            "num_workers": self.num_workers, 
+            "batch_size": self.batch_size,
+            "num_workers": self.num_workers,
             "pin_memory": self.pin_memory
         }
 
 class OfflineLIGOData(GenericDataModule):
     def __init__(
-        self, 
-        signal_classes, 
-        chunk_size=10_000, 
-        data_dir=None, 
-        ifos=None, 
-        glitch_root=None, 
-        sample_rate:int=4096, 
-        kernel_length:float=1.0, 
-        psd_length:float=64, 
-        fduration:float=1, 
-        fftlength:float=2, 
+        self,
+        signal_classes,
+        chunk_size=10_000,
+        data_dir=None,
+        ifos=None,
+        glitch_root=None,
+        sample_rate:int=4096,
+        kernel_length:float=1.0,
+        psd_length:float=64,
+        fduration:float=1,
+        fftlength:float=2,
         data_saving_file:Optional[str]=None,
         **kwargs):
 
@@ -1738,30 +1723,30 @@ class OfflineLIGOData(GenericDataModule):
     def train_dataloader(self):
 
         dataset = HDF5FullLoader(
-            self.train_files, 
-            self.signal_classes, 
-            subset_size=self.chunk_size, 
+            self.train_files,
+            self.signal_classes,
+            subset_size=self.chunk_size,
             seed=1683
         )
         loader = DataLoader(
-            dataset, 
-            persistent_workers=True, 
+            dataset,
+            persistent_workers=True,
             **self.loader_kwargs
         )
 
         return loader
 
     def val_dataloader(self):
-        
+
         dataset = HDF5FullLoader(
-            self.val_files, 
-            self.signal_classes, 
-            subset_size=self.chunk_size, 
+            self.val_files,
+            self.signal_classes,
+            subset_size=self.chunk_size,
             seed=1683
         )
         loader = DataLoader(
-            dataset, 
-            persistent_workers=True, 
+            dataset,
+            persistent_workers=True,
             **self.loader_kwargs
         )
 
@@ -1770,14 +1755,14 @@ class OfflineLIGOData(GenericDataModule):
     def test_dataloader(self):
 
         dataset = HDF5FullLoader(
-            self.test_files, 
-            self.signal_classes, 
-            subset_size=self.chunk_size, 
+            self.test_files,
+            self.signal_classes,
+            subset_size=self.chunk_size,
             seed=1683
         )
         loader = DataLoader(
-            dataset, 
-            persistent_workers=True, 
+            dataset,
+            persistent_workers=True,
             **self.loader_kwargs
         )
 
@@ -1785,11 +1770,11 @@ class OfflineLIGOData(GenericDataModule):
 
 class HDF5FullLoader(IterableDataset):
     def __init__(
-        self, 
-        file_paths, 
-        signal_classes, 
-        subset_size=10000, 
-        seed=23234, 
+        self,
+        file_paths,
+        signal_classes,
+        subset_size=10000,
+        seed=23234,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -1800,10 +1785,10 @@ class HDF5FullLoader(IterableDataset):
         self.rng = np.random.default_rng(seed)
         self.num_per_class_per_file = int(subset_size / (len(self.signal_classes) * len(self.file_paths)))
 
-        
+
         # Map the full dataset structure
         self.total_size = 0
-        
+
         for f in file_paths:
             with h5py.File(f, "r") as fcurr:
                 for isig, sig_class in enumerate(signal_classes):
@@ -1816,10 +1801,10 @@ class HDF5FullLoader(IterableDataset):
         self.current_labels = None
         self.current_index = 0
 
-        
+
         # Load the first batch
         self._load_next_batch()
-    
+
     def _load_next_batch(self):
         """Load a new batch of data"""
         data_list = []
@@ -1835,7 +1820,7 @@ class HDF5FullLoader(IterableDataset):
                     n = min(size, self.num_per_class_per_file)
                     indices = np.sort(self.rng.choice(size, n, replace=False))
                     data_list.append(fcurr[key][indices])
-                    labels_list.append(isig * np.ones(self.num_per_class_per_file, dtype=int))
+                    labels_list.append(isig * np.ones(n, dtype=int))
 
         data = np.concatenate(data_list, axis=0)
         labels = np.concatenate(labels_list, axis=0)
