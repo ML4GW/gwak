@@ -42,23 +42,37 @@ class GwakBaseModelClass(pl.LightningModule):
         return logger
 
 class Standardizer(nn.Module):
-    def __init__(self,mean,std):
+    def __init__(self, mean, std):
         super().__init__()
-        self.mean = mean
-        self.std = std
+        self.register_buffer('mean', mean)
+        self.register_buffer('std', std)
 
-    def forward(self,x):
-        return (x-self.mean.to(x))/self.std.to(x)
+    def forward(self, x):
+        return (x - self.mean.to(x)) / self.std.to(x)
 
 class FlowWrapper(nn.Module):
-    def __init__(self, flow, standardizer=None):
+    def __init__(self, flow, standardizer=None, use_correlation=True,
+                 condition_on_correlation=False, standardizer_x=None, standardizer_c=None):
         super().__init__()
         self.flow = flow
         self.standardizer = standardizer
+        self.use_correlation = use_correlation
+        self.condition_on_correlation = condition_on_correlation
+        self.standardizer_x = standardizer_x
+        self.standardizer_c = standardizer_c
 
     def forward(self, x, context):
-        if self.standardizer: x = self.standardizer(x)
-        return self.flow.log_prob(inputs=x,context=context)
+        if self.condition_on_correlation:
+            x_in = self.standardizer_x(x) if self.standardizer_x is not None else x
+            c_in = self.standardizer_c(context) if self.standardizer_c is not None else context
+            return self.flow.log_prob(inputs=x_in, context=c_in)
+        elif self.use_correlation:
+            x_full = torch.cat([x, context], dim=-1)
+            if self.standardizer is not None: x_full = self.standardizer(x_full)
+            return self.flow.log_prob(inputs=x_full)
+        else:
+            x_in = self.standardizer(x) if self.standardizer is not None else x
+            return self.flow.log_prob(inputs=x_in)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
@@ -74,11 +88,18 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         module.model.eval()
 
         # Wrap flow in a traceable nn.Module
-        wrapper = FlowWrapper(module.model, module.standardizer).to("cuda:0")
+        use_corr = getattr(module, 'use_correlation', True)
+        use_cond = getattr(module, 'condition_on_correlation', False)
+        wrapper = FlowWrapper(
+            module.model,
+            standardizer=module.standardizer if not use_cond else None,
+            use_correlation=use_corr,
+            condition_on_correlation=use_cond,
+            standardizer_x=getattr(module, 'standardizer_x', None) if use_cond else None,
+            standardizer_c=getattr(module, 'standardizer_c', None) if use_cond else None,
+        ).to("cuda:0")
         wrapper.eval()
-        # this is for spline
-        # example_input = torch.randn(1, module.model._transform._transforms[0].autoregressive_net.initial_layer.in_features).to("cuda:0")
-        example_input = torch.randn(1, module.model._transform._transforms[0].features).to("cuda:0")
+        example_input = torch.randn(1, module.embedding_dims).to("cuda:0")
         # if module.conditioning:
         example_context = torch.randn(1, 1).to("cuda:0")
         traced = torch.jit.trace(wrapper, (example_input, example_context))
@@ -376,15 +397,14 @@ class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
             embedding_model: str = None,
-            means: Optional[str] = None,
-            stds: Optional[str] = None,
             new_shape=128,
             n_dims=8,
             n_flow_steps=4,
             hidden_dim=64,
-            num_bins=50,
+            use_correlation: bool = True,
+            condition_on_correlation: bool = False,
+            normalize: bool = True,
             learning_rate=1e-3,
-            conditioning=False
     ):
         super().__init__()
 
@@ -396,36 +416,50 @@ class BackgroundFlowModel(GwakBaseModelClass):
             self.graph.to(device=self.device)
             self.get_logger().info(f"Loaded embedding model from {embedding_model}")
 
+        self.use_correlation = use_correlation
+        self.condition_on_correlation = condition_on_correlation
+        self.normalize = normalize
         self.n_dims = n_dims
-        self.conditioning = conditioning
+        # embedding_dims: pure embedding size (no xcorr)
+        if condition_on_correlation:
+            self.embedding_dims = n_dims          # flow input = embeddings only
+            context_features = 1
+        elif use_correlation:
+            self.embedding_dims = n_dims - 1      # flow input = embedding + xcorr concatenated
+            context_features = None
+        else:
+            self.embedding_dims = n_dims
+            context_features = None
 
-        # Define MAF Flow
+        # Define RQS Flow
         transforms = []
         for _ in range(n_flow_steps):
-            # maf = MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
-            maf = MaskedAffineAutoregressiveTransform(
+            maf = MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
                 features=self.n_dims,
                 hidden_features=hidden_dim,
                 num_blocks=4,
-                # num_bins=num_bins,
-                # tail_bound=8,
-                # tails='linear',
-                context_features=1 if self.conditioning else 0
+                num_bins=8,
+                tail_bound=5,
+                tails='linear',
+                context_features=context_features,
             )
             transforms.append(maf)
             transforms.append(ReversePermutation(features=self.n_dims))
 
         self.flow = Flow(
             transform=CompositeTransform(transforms),
-            distribution=StandardNormal([self.n_dims]) if not self.conditioning else \
-                ConditionalDiagonalNormal([self.n_dims],
-                    context_encoder=nn.Linear(1,2*self.n_dims))
+            distribution=StandardNormal([self.n_dims])
         )
 
-        # Store mean and std for standardization
-        self.embedding_mean = torch.tensor(np.load(means)).to(self.device) if means is not None else None
-        self.embedding_std = torch.tensor(np.load(stds)).to(self.device) if stds is not None else None
-        self.standardizer = Standardizer(self.embedding_mean,self.embedding_std) if means is not None else None
+        if condition_on_correlation:
+            # Separate standardizers for embeddings and context
+            self.standardizer = None
+            self.standardizer_x = Standardizer(torch.zeros(n_dims), torch.ones(n_dims))
+            self.standardizer_c = Standardizer(torch.zeros(1), torch.ones(1))
+        else:
+            self.standardizer = Standardizer(torch.zeros(n_dims), torch.ones(n_dims))
+            self.standardizer_x = None
+            self.standardizer_c = None
         self.model = self.flow
 
         self.new_shape = new_shape
@@ -446,43 +480,71 @@ class BackgroundFlowModel(GwakBaseModelClass):
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
-    def training_step(self, batch, batch_idx):
+    def on_fit_start(self):
+        if not self.normalize:
+            return
+        dm = self.trainer.datamodule
+        if not hasattr(dm, 'x_mean'):
+            return
+        if self.condition_on_correlation:
+            self.standardizer_x.mean.copy_(dm.x_mean)
+            self.standardizer_x.std.copy_(dm.x_std)
+            if hasattr(dm, 'c_mean'):
+                self.standardizer_c.mean.copy_(dm.c_mean)
+                self.standardizer_c.std.copy_(dm.c_std)
+        elif self.use_correlation and hasattr(dm, 'c_mean'):
+            mean = torch.cat([dm.x_mean, dm.c_mean], dim=0)
+            std = torch.cat([dm.x_std, dm.c_std], dim=0)
+            self.standardizer.mean.copy_(mean)
+            self.standardizer.std.copy_(std)
+        else:
+            self.standardizer.mean.copy_(dm.x_mean)
+            self.standardizer.std.copy_(dm.x_std)
+
+    def _get_feats_and_c(self, batch):
+        need_c = self.use_correlation or self.condition_on_correlation
         if self.embedding_model:
             if len(batch) == 2:
                 batch, _ = batch
             feats = self.graph(batch)
-            c = self.frequency_cos_similarity(batch)
+            c = self.frequency_cos_similarity(batch) if need_c else None
         else:
-            feats, c = batch
+            feats = batch[0]
+            c = batch[1] if need_c and len(batch) > 1 else None
+        return feats, c
 
-        if self.standardizer is not None:
-            feats = self.standardizer(feats)
+    def training_step(self, batch, batch_idx):
+        feats, c = self._get_feats_and_c(batch)
 
-        if self.conditioning:
-            log_prob = self.model.log_prob(inputs=feats,context=c)
+        if self.condition_on_correlation:
+            feats_in = self.standardizer_x(feats)
+            c_in = self.standardizer_c(c)
+            log_prob = self.model.log_prob(inputs=feats_in, context=c_in)
+        elif self.use_correlation:
+            feats_in = self.standardizer(torch.cat([feats, c], dim=-1))
+            log_prob = self.model.log_prob(inputs=feats_in)
         else:
-            log_prob = self.model.log_prob(inputs=feats)
+            feats_in = self.standardizer(feats)
+            log_prob = self.model.log_prob(inputs=feats_in)
+
         loss = -log_prob.mean()
         self.log("train/loss", loss, on_epoch=True, sync_dist=True)
         return loss
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        if self.embedding_model:
-            if len(batch) == 2:
-                batch, _ = batch
-            feats = self.graph(batch)
-            c = self.frequency_cos_similarity(batch)
-        else:
-            feats, c = batch
+        feats, c = self._get_feats_and_c(batch)
 
-        if self.standardizer is not None:
-            feats = self.standardizer(feats)
-
-        if self.conditioning:
-            log_prob = self.model.log_prob(inputs=feats,context=c)
+        if self.condition_on_correlation:
+            feats_in = self.standardizer_x(feats)
+            c_in = self.standardizer_c(c)
+            log_prob = self.model.log_prob(inputs=feats_in, context=c_in)
+        elif self.use_correlation:
+            feats_in = self.standardizer(torch.cat([feats, c], dim=-1))
+            log_prob = self.model.log_prob(inputs=feats_in)
         else:
-            log_prob = self.model.log_prob(inputs=feats)
+            feats_in = self.standardizer(feats)
+            log_prob = self.model.log_prob(inputs=feats_in)
 
         loss = -log_prob.mean()
         self.log("val/loss", loss, sync_dist=True)

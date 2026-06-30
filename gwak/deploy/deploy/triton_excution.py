@@ -40,6 +40,11 @@ def run_infer(
     # File and Path management
     gwak_logger(job_dir / "log.log")
     seg_start, seg_end = get_seg_start_end(strain_file)
+    if shifts[1] >= seg_end:
+        logging.warning("Shift is larger then the entire backgorund data.")
+        logging.warning("Skip the process.")
+        import sys
+        sys.exit()
     file_name = f"sequence_{seg_start}-{seg_end}_{int(shifts[1])}.h5"
     result_file = result_dir / file_name
     

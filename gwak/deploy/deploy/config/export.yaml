@@ -6,9 +6,9 @@ clean: True
 background_batch_size: 2
 stride_batch_size: 256 # slurm_overwrite
 ifos: ["H1", "L1"] # slurm_overwrite
-snapshotter_instances: 8
-preproc_instances: 8
-gwak_instances: 8
+snapshotter_instances: 6
+preproc_instances: 2
+gwak_instances: 6
 platform: TORCHSCRIPT # TENSORRT
 highpass: 30
 psd_length: 64 # slurm_overwrite

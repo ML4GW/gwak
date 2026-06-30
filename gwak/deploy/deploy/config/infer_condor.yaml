@@ -17,12 +17,12 @@ fname:
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
-grpc_port: 8101
+grpc_port: 8301
 image: hermes/tritonserver:23.01
 model_repo_dir: null
 result_dir: null
 server_patients: 55
-monitor_patients: null
+monitor_patients: 5
 job_rate_limit: 1
 inference_rate: 4 # export overwrite
 cl_config: null
