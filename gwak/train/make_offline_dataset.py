@@ -10,13 +10,16 @@ from gwak.train.preselection import cwb_stats_2ifo, cwb_cc_rho_max_over_delay_2i
 from ml4gw.distributions import PowerLaw
 
 from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from pathlib import Path
 
 from tqdm import tqdm
 import random
 import h5py
 import os
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"   # only old GPU1 is visible as cuda:0
+
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"   # only old GPU1 is visible as cuda:0
+DATA_DIR = Path(os.getenv("GWAK_DATA_DIR"))
 
 def main(ifos, num_samples_per_class, dataset,
          flo=30.0, fhi=2048.0, sample_rate=4096.0, delay_scan=False, tau_max=0.010, n_tau=81,
@@ -24,7 +27,7 @@ def main(ifos, num_samples_per_class, dataset,
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    data_dir = f"/home/katya.govorkova/gwak2/gwak/output/BBC_AnalysisReady_Cat12/{ifos}/"
+    data_dir = DATA_DIR / f"BBC_AnalysisReady_Cat12/{ifos}/"
     kernel_length = 1.0
     psd_length = 64
     fduration = 2
@@ -33,7 +36,7 @@ def main(ifos, num_samples_per_class, dataset,
     num_workers = 4
     duration = fduration + kernel_length
 
-    OUTFILE = f"/home/katya.govorkova/gwak2/gwak/output/BBC_AnalysisReady_Cat12/{ifos}/offline/dataset_{dataset}_{ifos}_PowerLaw-3_4-50.h5"
+    OUTFILE = DATA_DIR / f"dataset_{dataset}_{ifos}_SR{int(sample_rate)}_kernel{kernel_length}_hrss.h5"
 
     os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
 
@@ -162,7 +165,7 @@ def main(ifos, num_samples_per_class, dataset,
         batches_per_epoch=batches_per_epoch,
         num_workers=num_workers,
         ifos=ifos,
-        glitch_root=f"/home/katya.govorkova/gwak2/gwak/output/O4b_AnalysisReady_Cat12/omicron/",
+        glitch_root=DATA_DIR / f"O4b_AnalysisReady_Cat12/omicron/",
         # remake_cache=True,
         anneal_snr=False,
         snr_prior=snr_prior,

@@ -9,7 +9,7 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
         module = pl_module.__class__.load_from_checkpoint(
             self.best_model_path,
-            **pl_module.hparams['init_args']
+            **pl_module.hparams
         )
 
         module.model.eval()
