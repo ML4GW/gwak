@@ -138,23 +138,23 @@ rule slurm_infer_all:
             run_name=["one_year"]
         )
 
-rule scan_all:
-    input: 
-        expand(
-            rules.scan_outlier.output,
-            cl_config=[
-                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
-            ], 
-            fm_config=[
-                "NF_from_file_conditioning",
-            ], 
-            ifo_mode=["HL"], 
-            run_name=[
-                "one_year", 
-                # "bbc-short-0", 
-                # "bbc-short-1", 
-            ]
-        )
+# rule scan_all:
+#     input: 
+#         expand(
+#             rules.scan_outlier.output,
+#             cl_config=[
+#                 "torch_rbw_zp_resnet_do6_dcs128_epoch25",
+#             ], 
+#             fm_config=[
+#                 "NF_from_file_conditioning",
+#             ], 
+#             ifo_mode=["HL"], 
+#             run_name=[
+#                 "one_year", 
+#                 # "bbc-short-0", 
+#                 # "bbc-short-1", 
+#             ]
+#         )
 
 rule estimate_far:
     input:
