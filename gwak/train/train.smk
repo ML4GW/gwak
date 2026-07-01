@@ -290,10 +290,8 @@ rule run_evaluate_one_month_if:
         expand(OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
             cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', ifos='HL')
 
-rule run_efficiency_plots_if:
-    input:
-        expand(OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-            cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', ifos='HL')
+
+
 
 rule train_isolation_forest:
     input:

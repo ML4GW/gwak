@@ -72,8 +72,3 @@ rule pull_data:
             --segments {input.segments} \
             | tee {output}'
 
-rule pull_all:
-    input:
-        expand(rules.pull_data.output,
-            segment_type=['short-0.o4b-2', 'short-1.o4b-2', 'short-0.o4b-0', 'short-1.o4b-0'],
-            ifos=['hl', 'hv', 'lv', 'hlv'])
