@@ -1,0 +1,46 @@
+[project]
+name = "train"
+version = "0.1.0"
+description = "GWAK training project"
+authors = [
+    { name = "Andy Chen", email = "andy.c.80297@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "lightning>=2.6.5",
+    "jsonargparse[signatures]>=4.27.7",
+    "ml4gw",
+    "gwak",
+    "h5py>=3.16.0",
+    "scikit-learn>=1.7.2",
+    "einops>=0.8.2",
+    "matplotlib>=3.10.9",
+    "wandb>=0.28.0",
+    "lalsuite>=7.26.15",
+]
+
+
+[dependency-groups]
+dev = [
+    "pytest~=7.0",
+    "ipykernel>=7.1.0",
+    "jupyter>=1.0.0,<2",
+    "pytest~=7.3",
+]
+
+[tool.uv]
+extra-index-url = ["https://pypi.nvidia.com/"]
+
+[[tool.uv.index]]
+name = "torch"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+ml4gw = { path = "../../ml4gw", editable = true }
+gwak = { path = "../../../gwak", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
