@@ -29,8 +29,8 @@ runs_TS_converter = {
 # snakemake -c1 $GWAK_OUTPUT_DIR/export/{cl_config}_{fm_config}_{ifo_mode}/combination
 rule export:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/deploy/config/export.yaml"
     # params:
         # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f" {params.gpu} 
     output:
@@ -46,9 +46,9 @@ rule export:
 # python deploy/cli.py export --config deploy/config/export.yaml --project combination
 rule production_export:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         image = IMAGE_DIR / "deploy.sif",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
+        config = GWAK_ROOT / "gwak/deploy/deploy/config/export.yaml"
     params:
         bind_1 = f"{CONTAIN_OUTPUT_DIR}:/production",
         bind_2 = f"{OUTPUT_DIR}:/opt/gwak/gwak/output",
@@ -63,8 +63,8 @@ rule production_export:
 # snakemake -c1 $GWAK_OUTPUT_DIR/infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}
 rule condor_infer:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/infer_condor.yaml",
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/deploy/config/infer_condor.yaml",
         plan_model = rules.export.output
     params:
         # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f", {params.gpu}
@@ -100,8 +100,8 @@ rule slurm_infer:
 
 rule scan_outlier:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/analysis.yaml",
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/deploy/config/analysis.yaml",
         infer_result = rules.condor_infer.output
     output: 
         artefact = directory(LOUVRE_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}/")
