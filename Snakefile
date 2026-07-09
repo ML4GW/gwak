@@ -1,7 +1,12 @@
 import os
+from copy import deepcopy
 from pathlib import Path
 
+import yaml
+
 GWAK_ROOT = Path(workflow.basedir).resolve()
+DEFAULT_CONFIG = GWAK_ROOT / "setups" / "config.yaml"
+LOCAL_SETUP_CONFIG_FILE = GWAK_ROOT / "setups" / "config.local.yaml"
 
 include: GWAK_ROOT / "setups/setup.smk"
 include: GWAK_ROOT / "gwak/data/data.smk"
