@@ -12,13 +12,12 @@ If both files exist, local values override the defaults. Command-line Snakemake 
 ## Files
 
 - `setups/config.yaml`: shared defaults for the repo
-- `setups/config.local.yaml.example`: example local override
-- `setups/config.local.yaml`: your private local override after copying the example
+- `setups/config.local.yaml`: your private local setting to override default
 
 Create the local file with:
 
 ```bash
-cp setups/config.local.yaml.example setups/config.local.yaml
+cp setups/config.yaml setups/config.local.yaml
 ```
 
 ## Path Settings
