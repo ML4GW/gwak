@@ -217,12 +217,12 @@ rule gwak_info:
             print(f"    {key:30} {GWAK_PATHS[key]}")
 
         print("\nOther initialization variables:")
-        print(f"{"    CONDA_ENV_NAME":34} {CONDA_ENV_NAME}")
-        print(f"{"    GWAK_ROOT":34} {GWAK_ROOT}")
-        print(f"{"    STATE_DIR":34} {STATE_DIR}")
-        print(f"{"    BOOTSTRAP_DIR":34} {BOOTSTRAP_DIR}")
-        print(f"{"    PATHS_FILE":34} {PATHS_FILE}")
-        print(f"{"    ENV_FILE":34} {ENV_FILE}")
+        print(f"{'    CONDA_ENV_NAME':34} {CONDA_ENV_NAME}")
+        print(f"{'    GWAK_ROOT':34} {GWAK_ROOT}")
+        print(f"{'    STATE_DIR':34} {STATE_DIR}")
+        print(f"{'    BOOTSTRAP_DIR':34} {BOOTSTRAP_DIR}")
+        print(f"{'    PATHS_FILE':34} {PATHS_FILE}")
+        print(f"{'    ENV_FILE':34} {ENV_FILE}")
         # print(f"{"    RUN_BOOTSTRAP_CONDA_DATA_ENV":34} {RUN_BOOTSTRAP_CONDA_DATA_ENV}")
 
         print("=" * 80)
