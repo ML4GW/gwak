@@ -164,6 +164,8 @@ cython_debug/
 # local
 *.DS_Store
 *.snakemake
+/.gwak/
+/gwak-init
 
 # ignore output folders with artefacts
 */output/**

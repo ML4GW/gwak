@@ -65,7 +65,7 @@ rule make_offline_dataset:
 
 rule train_cl:
     input:
-        config = GWAK_DIR / 'gwak/train/configs/{cl_config}.yaml',
+        config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/'
     output:
         model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt'
@@ -85,7 +85,7 @@ rule compare_embeddings:
     input:
         data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/'
     params:
-        config = GWAK_DIR / 'gwak/train/configsresnet_kl1.0_bs512.yaml',
+        config = GWAK_ROOT / 'gwak/train/configsresnet_kl1.0_bs512.yaml',
         models_to_compare = [OUTPUT_DIR / 'resnet_kl1.0_bs512_HL/model_JIT.pt', OUTPUT_DIR / 's4_kl1.0_bs256_HL/model_JIT.pt'],
         plot_dir = OUTPUT_DIR / 'plots/compare_embeddings/'
     shell:
@@ -103,7 +103,7 @@ rule precompute_embeddings:
             ifos='{ifos}'),
     #params:
         data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/',
-        config = GWAK_DIR / 'gwak/train/configs/{cl_config}.yaml'
+        config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml'
     output:
         means = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
         stds = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
@@ -129,7 +129,7 @@ rule train_fm:
         correlations = OUTPUT_DIR / '{cl_config}_{ifos}/correlations.npy',
     params:
         artefact = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.fm_config}_{wildcards.ifos}/'),
-        config = lambda wildcards: str(GWAK_DIR / f'gwak/train/configs/{wildcards.fm_config}.yaml'),
+        config = lambda wildcards: str(GWAK_ROOT / f'gwak/train/configs/{wildcards.fm_config}.yaml'),
     output:
         model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     shell:
@@ -144,7 +144,7 @@ rule precompute_wnb_embeddings_classifier:
             cl_config='ResNet',
             ifos='HL'),
         data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
-        config = GWAK_DIR / 'gwak/train/configsResNet.yaml'
+        config = GWAK_ROOT / 'gwak/train/configsResNet.yaml'
     output:
         means = OUTPUT_DIR / 'ResNet_wnb_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_wnb_HL/stds.npy',
@@ -171,7 +171,7 @@ rule precompute_sg_embeddings_classifier:
             cl_config='ResNet',
             ifos='HL'),
         data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
-        config = GWAK_DIR / 'gwak/train/configsResNet.yaml'
+        config = GWAK_ROOT / 'gwak/train/configsResNet.yaml'
     output:
         means = OUTPUT_DIR / 'ResNet_sg_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_sg_HL/stds.npy',
@@ -197,7 +197,7 @@ rule train_wnb_classifier:
         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
         data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
-        config = GWAK_DIR / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
+        config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
         labels = OUTPUT_DIR / 'ResNet_signals_HL/labels.npy'
@@ -214,7 +214,7 @@ rule train_sg_classifier:
         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
         data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
-        config = GWAK_DIR / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
+        config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
         labels = OUTPUT_DIR / 'ResNet_signals_HL/labels.npy'
@@ -228,7 +228,7 @@ rule train_sg_classifier:
 
 rule combine_models:
     input:
-        config = GWAK_DIR / 'gwak/train/configs/{cl_config}.yaml',
+        config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         embedding_model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt',
         fm_model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/model_JIT.pt',
     output:
