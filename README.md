@@ -62,8 +62,9 @@ $ git clone git@github.com:ML4GW/gwak.git
 $ cd gwak
 $ snakemake -c1 gwak_init
 ```
-Now you are ready to *gwak*!
-You can run the training by doing
+After the initialization, you can check the path settings via `snakemake -c1 gwak_info`. 
+
+Now you are ready to *gwak*! You can run the training by doing
 ```
 $ snakemake -c1 train_all
 ```
@@ -72,7 +73,7 @@ For testing by
 $ snakemake -c1 scan_all
 ```
 
-### Third: Run GWAK's tasks ###
+### Third: Run GWAK's with containers ###
 
 #### Experimental ####
 

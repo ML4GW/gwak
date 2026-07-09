@@ -200,6 +200,33 @@ rule bootstrap_complete:
         EOF
         """
 
+rule gwak_info:
+    message:
+        "Printing GWAK configuration"
+    run:
+        print("=" * 80)
+        print("GWAK configuration")
+        print("=" * 80)
+
+        # for name, value in sorted(globals().items()):
+        #     # if name.startswith("GWAK"):
+        #     print(f"{name:30} {value}")
+
+        print("\nGWAK Paths:")
+        for key in sorted(GWAK_PATHS):
+            print(f"    {key:30} {GWAK_PATHS[key]}")
+
+        print("\nOther initialization variables:")
+        print(f"{"    CONDA_ENV_NAME":34} {CONDA_ENV_NAME}")
+        print(f"{"    GWAK_ROOT":34} {GWAK_ROOT}")
+        print(f"{"    STATE_DIR":34} {STATE_DIR}")
+        print(f"{"    BOOTSTRAP_DIR":34} {BOOTSTRAP_DIR}")
+        print(f"{"    PATHS_FILE":34} {PATHS_FILE}")
+        print(f"{"    ENV_FILE":34} {ENV_FILE}")
+        # print(f"{"    RUN_BOOTSTRAP_CONDA_DATA_ENV":34} {RUN_BOOTSTRAP_CONDA_DATA_ENV}")
+
+        print("=" * 80)
+
 rule build_deploy_containers:
     input:
         deploy_container = GWAK_ROOT / "gwak/deploy/deploy.def"

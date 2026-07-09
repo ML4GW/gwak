@@ -2,7 +2,6 @@ import os
 from copy import deepcopy
 from pathlib import Path
 
-import yaml
 
 GWAK_ROOT = Path(workflow.basedir).resolve()
 DEFAULT_CONFIG = GWAK_ROOT / "setups" / "config.yaml"
