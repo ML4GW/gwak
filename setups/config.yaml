@@ -1,0 +1,15 @@
+conda_env_name: gwak-data
+run_bootstrap_conda_data_env: true
+
+paths:
+  gwak_root: .
+  gwak_output_dir: gwak/output
+  gwak_data_dir: gwak/output/data
+  gwak_louvre_dir: gwak/output/plots
+  gwak_log_dir: gwak/output
+  gwak_bbc_short_0_data_dir: gwak/output/data/O4_MDC_short-0
+  gwak_bbc_short_1_data_dir: gwak/output/data/O4_MDC_short-1
+  image_dir: ~/Container/GWAK
+  contain_output_dir: ~/Container/GWAK
+
+shell_path_prepend: []
