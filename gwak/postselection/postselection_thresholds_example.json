@@ -1,0 +1,7 @@
+{
+  "_comment": "OPTIONAL extra per-feature cuts, same {feature: {min, max}} shape as the reference cwb_veto_simple.py thresholds file. null = no bound on that side. The headline correlation cut (C_full/C_coh at 90%/99% background rejection) is applied automatically from combined_model.json and does NOT need to be listed here. These native examples are illustrative, not tuned — leave the file out entirely to veto on the combined metric alone.",
+  "cc_tile": {"min": null, "max": null},
+  "snr_coin_max_tile": {"min": null, "max": null},
+  "n_matched": {"min": null, "max": null},
+  "dt_consistency_tile": {"min": null, "max": null}
+}
