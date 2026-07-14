@@ -11,6 +11,7 @@ include: GWAK_ROOT / "setups/setup.smk"
 include: GWAK_ROOT / "gwak/data/data.smk"
 include: GWAK_ROOT / "gwak/train/train.smk"
 include: GWAK_ROOT / "gwak/deploy/deploy.smk"
+include: GWAK_ROOT / "gwak/postselection/postselection.smk"
 
 rule gwak_init:
     input: rules.bootstrap_complete.output
