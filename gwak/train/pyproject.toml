@@ -11,7 +11,6 @@ dependencies = [
     "lightning>=2.6.5",
     "jsonargparse[signatures]>=4.27.7",
     "ml4gw",
-    # "gwak",
     "data",
     "h5py>=3.16.0",
     "scikit-learn>=1.7.2",
@@ -44,7 +43,6 @@ explicit = true
 
 [tool.uv.sources]
 ml4gw = { path = "../../ml4gw", editable = true }
-# gwak = { path = "../", editable = true }
 data = { path = "../data", editable = true }
 
 [tool.hatch.build.targets.wheel]
