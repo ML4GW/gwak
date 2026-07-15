@@ -736,9 +736,11 @@ class SignalDataloader(GwakBaseDataloader):
 
         # CCSN second-derivitive waveform data if using
         file_path = Path(__file__).resolve()
+        # To Do: Change this to absolute path, and perhaps 
+        # make a wapper function to contorl the input yaml and data source
         self.ccsn_dict = load_h5_as_dict(
-            chosen_signals=file_path.parents[1] / "data/configs/ccsn.yaml",
-            source_file=Path(file_path.parents[2] / "gwak-dlc/Resampled/")
+            chosen_signals=file_path.parents[2] / "data/configs/ccsn.yaml",
+            source_file=Path(file_path.parents[3] / "gwak-dlc/Resampled/")
         )
         self.generate_waveforms_ccsn = CCSN_Injector(
             ifos=self.ifos,

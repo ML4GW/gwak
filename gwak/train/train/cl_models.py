@@ -709,7 +709,7 @@ class Contour(SimCLRBase):
         self.save_hyperparameters()
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
-        from gwak.train.callback import ModelCheckpoint
+        from train.callback import ModelCheckpoint
         return [ModelCheckpoint(
             monitor='val/loss',
             save_last=True,

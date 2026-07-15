@@ -66,7 +66,7 @@ After the initialization, you can check the path settings via `snakemake -c1 gwa
 
 Now you are ready to *gwak*! You can run the training by doing
 ```
-$ snakemake -c1 train_all
+$ snakemake -c1 run_efficiency_plots_if
 ```
 For testing by  
 ```

@@ -35,7 +35,7 @@ rule run_efficiency_plots_if:
     input:
         expand(
             OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-            cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', 
+            cl_config='ResNet_6d', 
             ifos='HL'
         )
 
@@ -44,7 +44,7 @@ rule scan_all:
         expand(
             rules.scan_outlier.output,
             cl_config=[
-                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
+                "ResNet_6d",
             ], 
             fm_config=[
                 "NF_from_file_conditioning",
