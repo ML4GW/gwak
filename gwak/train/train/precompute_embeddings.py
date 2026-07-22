@@ -9,8 +9,8 @@ import torch
 from ml4gw.distributions import PowerLaw
 from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
-from gwak.train.dataloader import SignalDataloader
-from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from train.dataloader import SignalDataloader
+from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 
 device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import os
-from gwak.train.fm_models import BackgroundFlowModel  # adjust this import
+from train.fm_models import BackgroundFlowModel  # adjust this import
 
 class FlowWrapper(nn.Module):
     def __init__(self, flow, standardizer=None):

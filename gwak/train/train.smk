@@ -74,7 +74,7 @@ rule train_cl:
         # The omicron triggers can only generate on LDG cluster.
         omicron = OUTPUT_DIR / "O4b_AnalysisReady_Cat12/omicron/"
     shell:
-        'cd gwak/train; uv run python cli.py fit --config {input.config} \
+        'cd gwak/train; uv run python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.init_args.data_dir {input.data_dir} \
             --data.ifos {wildcards.ifos} \
@@ -90,7 +90,7 @@ rule compare_embeddings:
         plot_dir = OUTPUT_DIR / 'plots/compare_embeddings/'
     shell:
         'mkdir -p {params.plot_dir}; '
-        'cd gwak/train; uv run python compare_embeddings.py {params.models_to_compare} \
+        'cd gwak/train; uv run python train/compare_embeddings.py {params.models_to_compare} \
             --config {params.config} \
             --data-dir {input.data_dir} \
             --output {params.plot_dir} \
@@ -111,7 +111,7 @@ rule precompute_embeddings:
         labels = OUTPUT_DIR / '{cl_config}_{ifos}/labels.npy',
         correlations = OUTPUT_DIR / '{cl_config}_{ifos}/correlations.npy'
     shell:
-        'cd gwak/train; uv run python precompute_embeddings.py \
+        'cd gwak/train; uv run python train/precompute_embeddings.py \
             --embedding-model {input.embedding_model} \
             --data-dir {input.data_dir} \
             --config {input.config} \
@@ -121,7 +121,7 @@ rule precompute_embeddings:
             --correlations {output.correlations} \
             --means {output.means} \
             --stds {output.stds} \
-            --nevents 100000 '
+            --nevents 10000 '
 
 rule train_fm:
     input:
@@ -133,7 +133,7 @@ rule train_fm:
     output:
         model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/model_JIT.pt'
     shell:
-        'cd gwak/train; uv run python cli_fm.py fit --config {params.config} \
+        'cd gwak/train; uv run python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
             --data.embedding_path {input.embeddings} \
             --data.c_path {input.correlations} '
@@ -152,7 +152,7 @@ rule precompute_wnb_embeddings_classifier:
         correlations = OUTPUT_DIR / 'ResNet_wnb_HL/correlations.npy',
         labels = OUTPUT_DIR / 'ResNet_wnb_HL/labels.npy'
     shell:
-        'cd gwak/train; uv run python precompute_embeddings.py \
+        'cd gwak/train; uv run python train/precompute_embeddings.py \
             --embedding-model {params.embedding_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
@@ -179,7 +179,7 @@ rule precompute_sg_embeddings_classifier:
         correlations = OUTPUT_DIR / 'ResNet_sg_HL/correlations.npy',
         labels = OUTPUT_DIR / 'ResNet_sg_HL/labels.npy'
     shell:
-        'cd gwak/train; uv run python precompute_embeddings.py \
+        'cd gwak/train; uv run python train/precompute_embeddings.py \
             --embedding-model {params.embedding_model} \
             --data-dir {params.data_dir} \
             --config {params.config} \
@@ -202,7 +202,7 @@ rule train_wnb_classifier:
         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
         labels = OUTPUT_DIR / 'ResNet_signals_HL/labels.npy'
     shell:
-        'cd gwak/train; uv run python cli_fm.py fit --config {params.config} \
+        'cd gwak/train; uv run python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
             --model.means {params.means} \
             --model.stds {params.stds} \
@@ -219,7 +219,7 @@ rule train_sg_classifier:
         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
         labels = OUTPUT_DIR / 'ResNet_signals_HL/labels.npy'
     shell:
-        'cd gwak/train; uv run python cli_fm.py fit --config {params.config} \
+        'cd gwak/train; uv run python train/cli_fm.py fit --config {params.config} \
             --trainer.logger.save_dir {params.artefact} \
             --model.means {params.means} \
             --model.stds {params.stds} \
@@ -234,7 +234,7 @@ rule combine_models:
     output:
         OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt'
     shell:
-        'cd gwak/train; uv run python combine_models.py \
+        'cd gwak/train; uv run python train/combine_models.py \
             {input.embedding_model} \
             {input.fm_model} \
             --config {input.config} \
@@ -257,7 +257,7 @@ rule make_plots_i:
         directory('output/plots/{cl_config}_{fm_config}_{ifos}/'),
     shell:
         'mkdir -p {output}; '
-        'cd gwak/train; uv run python plots.py \
+        'cd gwak/train; uv run python train/plots.py \
             --embedding-model {input.embedding_model} \
             --fm-model {input.fm_model} \
             --data-dir {params.data_dir} \
@@ -288,7 +288,7 @@ rule run_efficiency_plots:
 rule run_evaluate_one_month_if:
     input:
         expand(OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
-            cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', ifos='HL')
+            cl_config='ResNet_6d', ifos='HL')
 
 
 
@@ -303,7 +303,7 @@ rule train_isolation_forest:
     output:
         OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib'
     shell:
-        'cd gwak/train; uv run python train_if.py \
+        'cd gwak/train; uv run python train/train_if.py \
             --embeddings {input.embeddings} \
             --labels {input.labels} \
             --correlations {input.correlations} \

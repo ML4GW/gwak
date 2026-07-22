@@ -13,11 +13,11 @@ from sklearn.metrics import roc_curve, auc
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
-from gwak.train.dataloader import SignalDataloader
-from gwak.data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
-from gwak.train.cl_models import Crayon
+from train.dataloader import SignalDataloader
+from data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from train.cl_models import Crayon
 
-from gwak.train.plotting import make_corner
+from train.plotting import make_corner
 
 device = torch.device('cuda:0') if torch.cuda.is_available() else 'cpu'
 

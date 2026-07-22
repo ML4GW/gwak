@@ -6,10 +6,10 @@ from dataloader import SignalDataloader
 import torch
 
 from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
-from gwak.train.preselection import cwb_stats_2ifo, cwb_cc_rho_max_over_delay_2ifo
+from train.preselection import cwb_stats_2ifo, cwb_cc_rho_max_over_delay_2ifo
 from ml4gw.distributions import PowerLaw
 
-from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from pathlib import Path
 
 from tqdm import tqdm

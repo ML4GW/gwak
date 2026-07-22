@@ -12,9 +12,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_curve, auc
 
 from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
-from gwak.train.dataloader import SignalDataloader
-from gwak.data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
-from gwak.train.plotting import make_corner
+from train.dataloader import SignalDataloader
+from data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from train.plotting import make_corner
 
 
 class SimpleCNN1D(nn.Module):

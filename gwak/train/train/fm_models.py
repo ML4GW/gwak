@@ -28,9 +28,9 @@ from nflows.transforms.base import CompositeTransform
 from nflows.transforms.permutations import ReversePermutation
 from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform, MaskedPiecewiseRationalQuadraticAutoregressiveTransform
 
-from gwak.train.losses import SupervisedSimCLRLoss
-from gwak.train.schedulers import WarmupCosineAnnealingLR
-from gwak.train.cl_models import Crayon
+from train.losses import SupervisedSimCLRLoss
+from train.schedulers import WarmupCosineAnnealingLR
+from train.cl_models import Crayon
 
 
 class GwakBaseModelClass(pl.LightningModule):

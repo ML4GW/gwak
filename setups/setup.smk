@@ -67,7 +67,7 @@ PATH_DEFAULTS = {
     "GWAK_BBC_SHORT_1_DATA_DIR": lambda paths: paths["GWAK_DATA_DIR"] / "O4_MDC_short-1",
     "GWAK_BENCHMAKR_DIR": lambda paths: Path.home() / "Outputs" / "GWAK" / "gwak-internal-benchmark", # The future output dir
     "IMAGE_DIR": lambda paths: Path.home() / "Container" / "GWAK",
-    "CONTAIN_OUTPUT_DIR": lambda paths: Path.home() / "Container" / "GWAK",
+    "CONTAINER_OUTPUT_DIR": lambda paths: Path.home() / "Container" / "GWAK",
 }
 
 
@@ -122,7 +122,7 @@ BBC_SHORT_0_DATA_DIR      = Path(GWAK_PATHS["GWAK_BBC_SHORT_0_DATA_DIR"])
 BBC_SHORT_1_DATA_DIR      = Path(GWAK_PATHS["GWAK_BBC_SHORT_1_DATA_DIR"])
 BENCHMAKR_DIR             = Path(GWAK_PATHS["GWAK_BENCHMAKR_DIR"])
 IMAGE_DIR                 = Path(GWAK_PATHS["IMAGE_DIR"])
-CONTAIN_OUTPUT_DIR        = Path(GWAK_PATHS["CONTAIN_OUTPUT_DIR"])
+CONTAINER_OUTPUT_DIR      = Path(GWAK_PATHS["CONTAINER_OUTPUT_DIR"])
 CONDA_ENV_NAME = config.get("conda_env_name", "gwak-data")
 
 # Make file
@@ -174,6 +174,8 @@ rule bootstrap_conda_data_env:
     params:
         env_name=CONDA_ENV_NAME,
         repo_root=shlex.quote(str(GWAK_ROOT)),
+        data_project_dir=GWAK_ROOT / "gwak/data",
+        root=GWAK_ROOT
     shell:
         """
         set -euo pipefail
@@ -182,7 +184,10 @@ rule bootstrap_conda_data_env:
         else
             conda env create --name {params.env_name} --file {input.env_file}
         fi
-        conda run --no-capture-output -n {params.env_name} python -m pip install -e {params.repo_root}
+        source activate gwak-data
+        cd {params.data_project_dir}
+        UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX" uv sync --inexact
+        cd {params.root}
         touch {output.done}
         """
 

@@ -20,9 +20,9 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 from einops import rearrange, repeat
-from gwak.train.losses import SupervisedSimCLRLoss
-from gwak.train.schedulers import WarmupCosineAnnealingLR
-from gwak.train.plotting import make_corner
+from train.losses import SupervisedSimCLRLoss
+from train.schedulers import WarmupCosineAnnealingLR
+from train.plotting import make_corner
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,11 +32,11 @@ from PIL import Image
 from io import BytesIO
 import shutil
 
-from gwak.train.transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention, InvertedEncoderTransformer
-from gwak.train.ssm import DropoutNd, S4DKernel, S4D, S4Model
-from gwak.train.nets import MLP, Encoder, Decoder
-from gwak.train.callback import ModelCheckpoint
-from gwak.train.resnet_1d import ResNet1D
+from train.transformers import EncoderTransformer, ClassAttentionBlock, ClassAttention, InvertedEncoderTransformer
+from train.ssm import DropoutNd, S4DKernel, S4D, S4Model
+from train.nets import MLP, Encoder, Decoder
+from train.callback import ModelCheckpoint
+from train.resnet_1d import ResNet1D
 
 
 class GwakBaseModelClass(pl.LightningModule):
@@ -709,7 +709,7 @@ class Contour(SimCLRBase):
         self.save_hyperparameters()
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:
-        from gwak.train.callback import ModelCheckpoint
+        from train.callback import ModelCheckpoint
         return [ModelCheckpoint(
             monitor='val/loss',
             save_last=True,

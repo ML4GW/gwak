@@ -20,9 +20,9 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 from einops import rearrange, repeat
-from gwak.train.losses import SupervisedSimCLRLoss
-from gwak.train.schedulers import WarmupCosineAnnealingLR
-from gwak.train.plotting import make_corner
+from train.losses import SupervisedSimCLRLoss
+from train.schedulers import WarmupCosineAnnealingLR
+from train.plotting import make_corner
 
 import numpy as np
 import matplotlib.pyplot as plt
