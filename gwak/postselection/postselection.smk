@@ -38,6 +38,6 @@ rule cuts_all:
     input: 
         expand(
             rules.cuts.output,
-            model=models,
+            benchmark_model=benchmark_models,
             bbc_dataset=bbc_datasets
         )

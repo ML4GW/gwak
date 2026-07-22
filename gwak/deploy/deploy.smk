@@ -12,15 +12,15 @@ runs = [
     'test_run'
 ]
 
-# benchmark_models = [
-#     "EM_NF_HL",
-#     "EM_IF_HL",
-# ]
+benchmark_models = [
+    "EM_NF_HL",
+    "EM_IF_HL",
+]
 
 wildcard_constraints:
     ifo_mode = '|'.join(x for x in ifo_modes),
     run_name = '|'.join(x for x in runs),
-    # benchmark_model = '|'.join(x for x in benchmark_models)
+    benchmark_model = '|'.join(x for x in benchmark_models)
 
 
 runs_TS_converter = {
