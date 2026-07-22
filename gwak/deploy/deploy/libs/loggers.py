@@ -32,6 +32,10 @@ def gwak_logger(
     formatter = logging.Formatter(log_format, datefmt=date_format)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+
+    # Addtional logging rules
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
     # Prevent duplicate handlers
     if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
         logger.addHandler(console_handler)

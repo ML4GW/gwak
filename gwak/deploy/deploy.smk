@@ -12,10 +12,15 @@ runs = [
     'test_run'
 ]
 
+# benchmark_models = [
+#     "EM_NF_HL",
+#     "EM_IF_HL",
+# ]
 
 wildcard_constraints:
     ifo_mode = '|'.join(x for x in ifo_modes),
-    run_name = '|'.join(x for x in runs)
+    run_name = '|'.join(x for x in runs),
+    # benchmark_model = '|'.join(x for x in benchmark_models)
 
 
 runs_TS_converter = {
@@ -25,6 +30,10 @@ runs_TS_converter = {
     'test_run': 1
 }
 
+bm_model_threshold_converter = {
+    "EM_NF_HL": -10,
+    "EM_IF_HL": -0.7
+}
 
 # snakemake -c1 $GWAK_OUTPUT_DIR/export/{cl_config}_{fm_config}_{ifo_mode}/combination
 rule export:
@@ -112,6 +121,22 @@ rule scan_outlier:
         --cl_config {wildcards.cl_config} \
         --fm_config {wildcards.fm_config}"
 
+rule benchmark:
+    input:
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/deploy/config/benchmark.yaml",
+    params:
+        threshold = lambda wildcards: bm_model_threshold_converter[wildcards.benchmark_model],
+        benchmark_dir = BENCHMAKR_DIR
+    output:
+        artefact = directory("/home/hongyin.chen/Outputs/GWAK/gwak-internal-benchmark/{benchmark_model}/gwak_glitch")
+    shell:
+        "set -x; cd gwak/deploy; uv run python \
+        {input.arg} resolve_O4_bbc --config {input.config} \
+        --benchmark_dir {params.benchmark_dir} \
+        --model {wildcards.benchmark_model} \
+        --threshold {params.threshold}"
+
 rule export_all:
     input:
         expand(
@@ -123,7 +148,7 @@ rule export_all:
 
 # snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F 
 rule slurm_infer_all:
-    input: 
+    input:
         expand(
             rules.slurm_infer.output,
             cl_config=[
@@ -138,23 +163,12 @@ rule slurm_infer_all:
             run_name=["one_year"]
         )
 
-# rule scan_all:
-#     input: 
-#         expand(
-#             rules.scan_outlier.output,
-#             cl_config=[
-#                 "torch_rbw_zp_resnet_do6_dcs128_epoch25",
-#             ], 
-#             fm_config=[
-#                 "NF_from_file_conditioning",
-#             ], 
-#             ifo_mode=["HL"], 
-#             run_name=[
-#                 "one_year", 
-#                 # "bbc-short-0", 
-#                 # "bbc-short-1", 
-#             ]
-#         )
+rule benchmark_all:
+    input: 
+        expand(
+            rules.benchmark.output,
+            benchmark_model=benchmark_models,
+        )
 
 rule estimate_far:
     input:

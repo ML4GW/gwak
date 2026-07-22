@@ -59,12 +59,13 @@ RUN_BOOTSTRAP_CONDA_DATA_ENV = as_bool(
 
 PATH_DEFAULTS = {
     "GWAK_ROOT": lambda paths: GWAK_ROOT,
-    "GWAK_OUTPUT_DIR": lambda paths: GWAK_ROOT / "gwak" / "output",
+    "GWAK_OUTPUT_DIR": lambda paths: GWAK_ROOT / "gwak" / "output", # The future archive dir
     "GWAK_DATA_DIR": lambda paths: paths["GWAK_OUTPUT_DIR"] / "data",
     "GWAK_LOUVRE_DIR": lambda paths: paths["GWAK_OUTPUT_DIR"] / "plots",
     "GWAK_LOG_DIR": lambda paths: paths["GWAK_OUTPUT_DIR"],
     "GWAK_BBC_SHORT_0_DATA_DIR": lambda paths: paths["GWAK_DATA_DIR"] / "O4_MDC_short-0",
     "GWAK_BBC_SHORT_1_DATA_DIR": lambda paths: paths["GWAK_DATA_DIR"] / "O4_MDC_short-1",
+    "GWAK_BENCHMAKR_DIR": lambda paths: Path.home() / "Outputs" / "GWAK" / "gwak-internal-benchmark", # The future output dir
     "IMAGE_DIR": lambda paths: Path.home() / "Container" / "GWAK",
     "CONTAIN_OUTPUT_DIR": lambda paths: Path.home() / "Container" / "GWAK",
 }
@@ -119,9 +120,14 @@ LOUVRE_DIR                = Path(GWAK_PATHS["GWAK_LOUVRE_DIR"])
 LOG_DIR                   = Path(GWAK_PATHS["GWAK_LOG_DIR"])
 BBC_SHORT_0_DATA_DIR      = Path(GWAK_PATHS["GWAK_BBC_SHORT_0_DATA_DIR"])
 BBC_SHORT_1_DATA_DIR      = Path(GWAK_PATHS["GWAK_BBC_SHORT_1_DATA_DIR"])
+BENCHMAKR_DIR             = Path(GWAK_PATHS["GWAK_BENCHMAKR_DIR"])
 IMAGE_DIR                 = Path(GWAK_PATHS["IMAGE_DIR"])
 CONTAIN_OUTPUT_DIR        = Path(GWAK_PATHS["CONTAIN_OUTPUT_DIR"])
 CONDA_ENV_NAME = config.get("conda_env_name", "gwak-data")
+
+# Make file
+BENCHMAKR_DIR.mkdir(parents=True, exist_ok=True)
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 localrules:
     bootstrap_submodules,

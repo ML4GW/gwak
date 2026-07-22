@@ -1,0 +1,8 @@
+unblind_files:
+  - "/home/burst.benchmark/unblinded_o4b-2_injections/injections/burst_benchmark_short-0.h5"
+  - "/home/burst.benchmark/unblinded_o4b-2_injections/injections/burst_benchmark_short-1.h5"
+benchmark_dir: null
+apply_cuts: false
+model: EM_IF_HL
+threshold: -0.7
+buffer_dur: 1

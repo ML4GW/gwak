@@ -9,7 +9,7 @@ subcommands_keys = [
     "infer_condor", 
     "deploy", 
     "post_analyze",
-    "resolve_O4_bbc"
+    "resolve_O4_bbc",
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
@@ -21,7 +21,10 @@ skip_keys = [
     "run_name",
     "cl_config",
     "fm_config",
-    "Tb"
+    "model", 
+    "Tb", # int
+    "threshold", # float
+    "benchmark_dir", # Path
 ]
 
 def build_parser(
@@ -80,7 +83,7 @@ def main(args=None):
         from deploy.analyzer import scan as main_cli
 
     if subcommand == "resolve_O4_bbc":
-        from deploy.analyzer import resolve_bbc as main_cli
+        from deploy.benchmark import bbc_benchmark as main_cli
 
     # Create subparser
     subparser = build_parser(action=ActionConfigFile)
