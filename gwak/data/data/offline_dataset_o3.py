@@ -187,10 +187,10 @@
 import argparse
 import numpy as np
 import sys
-from gwak.train.dataloader import SignalDataloader
+from train.dataloader import SignalDataloader
 import torch
 
-from gwak.data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
 from tqdm import tqdm

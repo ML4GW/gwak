@@ -54,7 +54,7 @@ You might need to remove the base snakemake if you have one already.
 ```
 $ curl -LsSf https://astral.sh/uv/install.sh | sh
 $ uv python install 3.11
-$ uv tool install "snakemake>=8"
+$ uv tool install snakemake==9.23.1
 ```
 ### Second: Bootstrap GWAK's setups
 ```

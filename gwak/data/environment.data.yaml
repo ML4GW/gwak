@@ -2,5 +2,8 @@ name: gwak-data
 channels:
   - conda-forge
 dependencies:
-  - python>=3.11,<3.12
-  - pip
+  - python=3.11
+  # # gwpy
+  # - python-ldas-tools-framecpp<3.0.0
+  # # omicron dependencies
+  # - omicron>=4.0.0

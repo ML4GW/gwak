@@ -59,7 +59,7 @@ rule production_export:
         image = IMAGE_DIR / "deploy.sif",
         config = GWAK_ROOT / "gwak/deploy/deploy/config/export.yaml"
     params:
-        bind_1 = f"{CONTAIN_OUTPUT_DIR}:/production",
+        bind_1 = f"{CONTAINER_OUTPUT_DIR}:/production",
         bind_2 = f"{OUTPUT_DIR}:/opt/gwak/gwak/output",
     shell: 
         "set -x; apptainer exec --nv \
