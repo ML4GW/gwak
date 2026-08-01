@@ -35,6 +35,10 @@ def gwak_logger(
 
     # Addtional logging rules
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("onnxscript").setLevel(logging.WARNING)
+    logging.getLogger("onnx_ir").setLevel(logging.WARNING)
+    # logging.getLogger("torch.onnx").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     # Prevent duplicate handlers
     if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
@@ -93,7 +97,7 @@ class gwak_dir(Pathfinder):
         suffix: Optional[str]=None,
     ):
         super().__init__(
-            dir_var="GWAK_DIR",
+            dir_var="GWAK_ROOT",
             path_function_name="gwak directory",
             suffix=suffix
         )

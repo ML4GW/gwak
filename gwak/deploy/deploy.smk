@@ -45,7 +45,7 @@ rule export:
     output:
         artefact = directory(OUTPUT_DIR / "export/{cl_config}_{fm_config}_{ifo_mode}")
     shell:
-        "set -x; cd deploy; uv run python \
+        "set -x; cd gwak/deploy; uv run python \
         {input.arg} export \
         --config {input.config} \
         --cl_config {wildcards.cl_config} \
@@ -82,7 +82,7 @@ rule condor_infer:
         artefact = directory(OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}")
     shell:
         'mkdir -p tmp; '
-        'set -x; cd deploy; uv run python \
+        'set -x; cd gwak/deploy; uv run python \
         {input.arg} infer_condor \
         --config {input.config} \
         --run_name {wildcards.run_name} \
@@ -99,7 +99,7 @@ rule slurm_infer:
     output:
         artefact = directory(OUTPUT_DIR / "Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}")
     shell:
-        "set -x; cd deploy; uv run python \
+        "set -x; cd gwak/deploy; uv run python \
         deploy/cli.py deploy \
         --config ../{input.config} \
         --run_name {wildcards.run_name} \
@@ -115,7 +115,7 @@ rule scan_outlier:
     output: 
         artefact = directory(LOUVRE_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}/")
     shell:
-        "set -x; cd deploy; uv run python \
+        "set -x; cd gwak/deploy; uv run python \
         {input.arg} post_analyze --config {input.config} \
         --run_name {wildcards.run_name} \
         --cl_config {wildcards.cl_config} \
@@ -141,7 +141,7 @@ rule export_all:
     input:
         expand(
             rules.export.output,
-            cl_config=["torch_rbw_zp_resnet_do6_dcs128_epoch25"],
+            cl_config=["ResNet_6d"],
             fm_config=["NF_from_file_conditioning"],
             ifo_mode=["HL"],
         )

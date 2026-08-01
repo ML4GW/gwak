@@ -24,6 +24,10 @@ def write_bash_file(
 ):
 
     bash_file = bash_root / "condor_cmd.sh"
+    gwak_root = Path(os.getenv('GWAK_ROOT'))
+    gwak_env = gwak_root / ".gwak/env.sh"
+    deploy_env = gwak_root / "gwak/deploy/.venv/bin/activate"
+
     with bash_file.open("w") as sh_file:
 
         sh_file.write("#!/bin/bash\n\n")
@@ -37,6 +41,8 @@ def write_bash_file(
         sh_file.write("echo Files under $_CONDOR_SCRATCH_DIR\n")
         sh_file.write("ls $_CONDOR_SCRATCH_DIR\n")
         sh_file.write("echo ' '\n")
+        sh_file.write(f"source {gwak_env}\n")
+        sh_file.write(f"source {deploy_env}\n")
         sh_file.write(f"{command}\n")
     bash_file.chmod(0o755)
     return bash_file
@@ -78,15 +84,17 @@ def write_condor_config(
     
     condor_config = {}
     submit_file = job_dir / "condor.sub"
-
+    job_out = job_dir / "job.out"
+    job_out.touch()
+    
     condor_config["universe"] = "vanilla" #"local"
     condor_config["executable"] = executable
 
-    condor_config["log"] = "job.log"
-    condor_config["output"] = "job.out"
-    condor_config["error"] = "job.err"
+    condor_config["log"] = job_dir / "job.log"
+    condor_config["output"] = job_out
+    condor_config["error"] = job_dir / "job.err"
 
-    condor_config["getenv"] = True
+    # condor_config["getenv"] = True
     for key in condor_kwargs.keys():
 
         condor_config[key] = condor_kwargs[key]
