@@ -83,7 +83,7 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         # Load best model
         module = pl_module.__class__.load_from_checkpoint(
             self.best_model_path,
-            **pl_module.hparams['init_args']
+            **pl_module.hparams
         )
         module.model.eval()
 
@@ -474,7 +474,8 @@ class BackgroundFlowModel(GwakBaseModelClass):
         norm_H = torch.linalg.norm(H, dim=-1)
         norm_L = torch.linalg.norm(L, dim=-1)
         rho_complex = numerator / (norm_H * norm_L + 1e-8)
-        rho_real = torch.real(rho_complex).unsqueeze(-1)
+        # rho_real = torch.real(rho_complex).unsqueeze(-1)
+        rho_real = torch.abs(rho_complex).unsqueeze(-1)
         return rho_real
 
     def configure_optimizers(self):

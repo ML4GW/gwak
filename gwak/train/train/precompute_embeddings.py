@@ -21,7 +21,7 @@ def frequency_cos_similarity(batch):
     norm_H = torch.linalg.norm(H, dim=-1)
     norm_L = torch.linalg.norm(L, dim=-1)
     rho_complex = numerator / (norm_H * norm_L + 1e-8)
-    rho_real = torch.real(rho_complex).unsqueeze(-1)
+    rho_real = torch.abs(rho_complex).unsqueeze(-1)
     return rho_real
 
 # ---------- helpers to load saved datasets ----------
@@ -244,7 +244,7 @@ if __name__=='__main__':
             data_saving_file=data_saving_file,
             ifos=args.ifos,
             snr_prior=torch.distributions.Uniform(3, 30),
-            glitch_root=f"/home/katya.govorkova/gwak2/gwak/output/O4b_AnalysisReady_Cat12/omicron/"
+            glitch_root=f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL"
         )
 
         n_iter = args.nevents // batch_size

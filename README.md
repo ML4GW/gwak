@@ -61,7 +61,9 @@ $ uv tool install snakemake==9.23.1
 $ git clone git@github.com:ML4GW/gwak.git
 $ cd gwak
 $ snakemake -c1 gwak_init
+$ source .gwak/env.sh
 ```
+The $ENVIRONMENT_VARIABLE can be stored in .bashrc, so you don't have to run source .gwak/env.sh. 
 After the initialization, you can check the path settings via `snakemake -c1 gwak_info`. 
 
 Now you are ready to *gwak*! You can run the training by doing

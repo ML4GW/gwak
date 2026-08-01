@@ -959,6 +959,20 @@ wheels = [
 name = "data"
 version = "0.1.0"
 source = { editable = "../data" }
+dependencies = [
+    { name = "dqsegdb2" },
+    { name = "lalsuite" },
+    { name = "ml4gw" },
+    { name = "python-ligo-lw" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dqsegdb2", specifier = "==1.1.3" },
+    { name = "lalsuite", specifier = ">=7.26.15" },
+    { name = "ml4gw", editable = "../../ml4gw" },
+    { name = "python-ligo-lw", specifier = "==1.8.3" },
+]
 
 [[package]]
 name = "debugpy"
@@ -1018,16 +1032,15 @@ wheels = [
 
 [[package]]
 name = "dqsegdb2"
-version = "1.3.0"
+version = "1.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "click" },
     { name = "igwn-auth-utils" },
-    { name = "igwn-segments" },
+    { name = "ligo-segments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/37/7874b39abede48fe05c3b5a25092e419e521145e9705c97b711965e5f05d/dqsegdb2-1.3.0.tar.gz", hash = "sha256:4e291899cd395daf5913c48a835d213ef20833d78354871cb848988cc2cc8ae4", size = 33661, upload-time = "2025-01-08T16:36:58.072Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/df/de/e8d0bb2dd5b81ac01125dfe16bdf4ad18548ac665b106a43c1e981ed8865/dqsegdb2-1.1.3.tar.gz", hash = "sha256:1c731a7f7db78d578edf7256e5b12804f70523f0fc1fdd683ccbeee4acce7fc3", size = 29006, upload-time = "2022-09-26T16:41:40.859Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/67/c977e7307d432911fe28acf55dba01f84f3a0a4a2a968350195c0f52d23e/dqsegdb2-1.3.0-py3-none-any.whl", hash = "sha256:c93087da332b7d91519a370abed3cfc91b64a6bf393ec64d79c2747c837aeb66", size = 27957, upload-time = "2025-01-08T16:36:56.881Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/a3/ddc5decc0b658c89af1b37047b7a82ab8b8e182d637b4730fd5137aad539/dqsegdb2-1.1.3-py3-none-any.whl", hash = "sha256:0bc012e8830082222f3c8ea41bd535599c526af34e97c07fb4236d08d36a38c9", size = 20858, upload-time = "2022-09-26T16:41:37.664Z" },
 ]
 
 [[package]]
@@ -1362,57 +1375,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/44/27/7ccf2ef00f27a8e47a79d641c8ceaf7d3028c7a03d9a97b4c8a9a783c086/grpcio-1.82.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:7d7ede11d747b4e1bd05e3bc0260e155b65a88735a895a10f6521f19b889511e", size = 7912572, upload-time = "2026-07-08T12:36:08.393Z" },
     { url = "https://files.pythonhosted.org/packages/0d/be/33742482d2753f2d3a1b7641664b6622262d44f2f3b609f13425dd86d36f/grpcio-1.82.1-cp314-cp314-win32.whl", hash = "sha256:3d21f19838dc255ecbb79321b15ae9b98fbddff4c3d4aedb0a81bdd7f4ab572a", size = 4321856, upload-time = "2026-07-08T12:36:10.899Z" },
     { url = "https://files.pythonhosted.org/packages/cc/67/03329c847172c78ddeb1eb9be6b444fdbc12775a84c958b27e427e7b926d/grpcio-1.82.1-cp314-cp314-win_amd64.whl", hash = "sha256:e20f1edbb15f99e3128ec86433f9785fd5a451d8f115e74fe0056134f092a9d5", size = 5141114, upload-time = "2026-07-08T12:36:13.595Z" },
-]
-
-[[package]]
-name = "gwdatafind"
-version = "2.1.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "igwn-auth-utils" },
-    { name = "igwn-segments" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/69/dd/4f517a2a36f71d5bb74b8b0796e3fec87703587503d4583f4a5b962ae60b/gwdatafind-2.1.1.tar.gz", hash = "sha256:e4710256daa7b47e901da2f2846620c551e9caaaaf22b7773c81a8ae052da43e", size = 41311, upload-time = "2025-10-31T09:46:57.9Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b9/00/07a1a9473ea5bbbc0be3cea79778dfd31e7e199404777907930badc9f399/gwdatafind-2.1.1-py3-none-any.whl", hash = "sha256:6e6d430fa243e6241ca0c214f1916f7973cf1937716bbca52d99a9b88650faeb", size = 45178, upload-time = "2025-10-31T09:46:56.468Z" },
-]
-
-[[package]]
-name = "gwosc"
-version = "0.8.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "requests" },
-    { name = "tenacity" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5d/0e/527cd0573f46edf749462eaae96b2b70680eff0344640253b74a76efadb4/gwosc-0.8.3.tar.gz", hash = "sha256:e0687316b7c62b996ead78a59b9d1a78fbe5790bc72094cf75ed0858482d9b58", size = 35747, upload-time = "2026-06-25T18:45:52.798Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/0f/e28c501107455a2d791b613dbc45eaa25eac694d1d75e78c829cd11928c7/gwosc-0.8.3-py3-none-any.whl", hash = "sha256:96874d12ee3d071675896414cbce3e05994d10e738020406900fc0655081913e", size = 36130, upload-time = "2026-06-25T18:45:51.565Z" },
-]
-
-[[package]]
-name = "gwpy"
-version = "2.1.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "astropy", version = "6.1.7", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "astropy", version = "7.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "dqsegdb2" },
-    { name = "gwdatafind" },
-    { name = "gwosc" },
-    { name = "h5py" },
-    { name = "ligo-segments" },
-    { name = "ligotimegps", version = "2.0.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "ligotimegps", version = "2.1.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "python-dateutil" },
-    { name = "scipy" },
-    { name = "tqdm" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f2/7b/3b634db3ab2d31310432cb60378ce7f9aae99c602e9c278cf2712a3b1924/gwpy-2.1.3.tar.gz", hash = "sha256:d2ffbf43cbc9c25160193285af646c6ac53a809eb7a1613859502bcd0dff9ef9", size = 1524388, upload-time = "2021-12-17T12:37:09.852Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b9/d1/24903ea9eb06270c6cb22303d72408bc4d7b5d31b27f4e7f8708640e0291/gwpy-2.1.3-py2.py3-none-any.whl", hash = "sha256:90403179a5632f7529dcccabfe3535e165909e3dceee3d82f97ed70eb5e539ea", size = 1373662, upload-time = "2021-12-17T12:37:06.824Z" },
 ]
 
 [[package]]
@@ -2312,34 +2274,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/8d/a5/665dc05c2669aa95e2dfcb2b06748315287d3696abf1374dd6e7f6c3a175/ligo_segments-1.4.0-cp310-cp310-win_amd64.whl", hash = "sha256:f8a0fb3ec6bef7effb80fb2f4f4ffaac02afa77db41a0c42fce5e969201e621b", size = 50007, upload-time = "2022-11-02T16:54:26.988Z" },
     { url = "https://files.pythonhosted.org/packages/3a/db/b2de07a032a766d34480e93e6d4ecda5a4d651bb6a5e3286c2624d6c181d/ligo_segments-1.4.0-cp311-cp311-win_amd64.whl", hash = "sha256:da82ae2b839bad0027e0a492b3673344e62360747d41194a265563e6c2903c7d", size = 50007, upload-time = "2022-11-02T16:54:29.221Z" },
     { url = "https://files.pythonhosted.org/packages/b5/37/c962f26408ce45271a5a3aaa918f7beae74a8e8a6f00bbe5fdf77fd778ca/ligo_segments-1.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:601be6d92e52bdebbb5a82b608ed1ceb781a0ea86b3e5333d61af77575b32664", size = 50555, upload-time = "2023-10-09T11:39:10.788Z" },
-]
-
-[[package]]
-name = "ligotimegps"
-version = "2.0.1"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version < '3.11'",
-]
-sdist = { url = "https://files.pythonhosted.org/packages/39/2e/cef2ee4c4f3f1f04566e3e7e9343811a74f6e9a0bc6ef4711248f132e3bb/ligotimegps-2.0.1.tar.gz", hash = "sha256:88626c02ad9a464d1242a1147b40074792f424bafa2ab013eee629c7d1b6469c", size = 35191, upload-time = "2019-04-25T16:00:25.481Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/b6/6d6d0585fa2ae936a9f5d411b1f0fbe9fcb0aca0c51a775aa4f8f95fdf5e/ligotimegps-2.0.1-py2.py3-none-any.whl", hash = "sha256:da8c1289ba1310337ef5177e7936e25ce47d4e8e6a269cbdd5e9abfc5b5db490", size = 19930, upload-time = "2019-04-25T16:00:23.354Z" },
-]
-
-[[package]]
-name = "ligotimegps"
-version = "2.1.0"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'win32'",
-    "python_full_version >= '3.14' and sys_platform == 'emscripten'",
-    "python_full_version >= '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version >= '3.12' and python_full_version < '3.14'",
-    "python_full_version == '3.11.*'",
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7e/9b/521be61daa7603603826d40fa6327a22e04df4f20e69d9ed42182370a7f8/ligotimegps-2.1.0.tar.gz", hash = "sha256:d948ffc4d58472b303478a983ec56d2e6a7f35e54cbb351ca6f1292e68398cb2", size = 28069, upload-time = "2025-10-07T10:55:28.124Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/92/38674acb59c663bcdb69522e11afd3b4e6371f74b5764aeec2e99308cd79/ligotimegps-2.1.0-py3-none-any.whl", hash = "sha256:14dbbb07b175b94b4e1a519d7baa4548f0ea07bc71ef7d7f096ad8397d359043", size = 23370, upload-time = "2025-10-07T10:55:28.855Z" },
 ]
 
 [[package]]
@@ -3665,6 +3599,21 @@ wheels = [
 ]
 
 [[package]]
+name = "python-ligo-lw"
+version = "1.8.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ligo-segments" },
+    { name = "lscsoft-glue" },
+    { name = "numpy" },
+    { name = "python-dateutil" },
+    { name = "pyyaml" },
+    { name = "six" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9f/86/4053f82fb9bbc048321fa6f210d301411257c3170b96ab6b51f773263eec/python-ligo-lw-1.8.3.tar.gz", hash = "sha256:424912428a99fa121c071ddb90087b183514878229d4a651c144c649f3780aef", size = 2323534, upload-time = "2022-08-02T14:45:00.586Z" }
+
+[[package]]
 name = "pytorch-lightning"
 version = "2.6.5"
 source = { registry = "https://pypi.org/simple" }
@@ -4405,15 +4354,6 @@ wheels = [
 ]
 
 [[package]]
-name = "tenacity"
-version = "9.1.4"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697ee8a44d3d69222b344920433d3b6666ccd9b374630c/tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a", size = 49413, upload-time = "2026-02-07T10:45:33.841Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926, upload-time = "2026-02-07T10:45:32.24Z" },
-]
-
-[[package]]
 name = "tensorboard"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -4667,7 +4607,6 @@ source = { editable = "." }
 dependencies = [
     { name = "data" },
     { name = "einops" },
-    { name = "gwpy" },
     { name = "h5py" },
     { name = "jsonargparse", extra = ["signatures"] },
     { name = "lalsuite" },
@@ -4693,7 +4632,6 @@ dev = [
 requires-dist = [
     { name = "data", editable = "../data" },
     { name = "einops", specifier = ">=0.8.2" },
-    { name = "gwpy", specifier = "==2.1.3" },
     { name = "h5py", specifier = ">=3.16.0" },
     { name = "jsonargparse", extras = ["signatures"], specifier = ">=4.27.7" },
     { name = "lalsuite", specifier = ">=7.26.15" },

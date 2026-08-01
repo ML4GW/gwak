@@ -10,9 +10,7 @@ BOOTSTRAP_DIR = STATE_DIR / "bootstrap"
 PATHS_FILE = STATE_DIR / "paths.json"
 ENV_FILE = STATE_DIR / "env.sh"
 ENVIRONMENT_FILE = GWAK_ROOT / "gwak/data/environment.data.yaml"
-PATH_CONFIG = config.get("paths", {})
 SHELL_PATH_PREPEND = config.get("shell_path_prepend", [])
-
 
 def load_yaml_config(path):
     if not path.exists():
@@ -41,6 +39,7 @@ merged_config = deep_merge(
 )
 config.clear()
 config.update(deep_merge(merged_config, cli_config))
+PATH_CONFIG = config.get("paths", {})
 
 def as_bool(value, default=True):
     if value is None:
