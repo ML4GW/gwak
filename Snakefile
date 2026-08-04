@@ -35,7 +35,25 @@ rule run_efficiency_plots_if:
     input:
         expand(
             OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-            cl_config='ResNet_6d', 
+            cl_config='ResNet_6d',
+            ifos='HL'
+        )
+
+rule run_efficiency_plots:
+    input:
+        expand(
+            OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
+            cl_config='ResNet_6d',
+            fm_config='NF_from_file_conditioning',
+            ifos='HL'
+        )
+
+rule produce_combine_model:
+    input:
+        expand(
+            rules.combine_models.output,
+            cl_config='ResNet_6d',
+            fm_config='NF_from_file_conditioning',
             ifos='HL'
         )
 
@@ -51,7 +69,7 @@ rule scan_all:
             ], 
             ifo_mode=["HL"], 
             run_name=[
-                "one_year", 
+                "test_run", 
                 # "bbc-short-0", 
                 # "bbc-short-1", 
             ]

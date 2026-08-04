@@ -32,6 +32,7 @@ cl_configs = [
     'ResNet_cat12',
     'ResNet_separate-glitch',
     'ResNet_mid',
+    'torch_rbw_zp_resnet_do6_dcs064_epoch25',
     'torch_rbw_zp_resnet_do6_dcs128_epoch25',
     ]
 fm_configs = [
@@ -66,13 +67,13 @@ rule make_offline_dataset:
 rule train_cl:
     input:
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
-        data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/'
+        data_dir = DATA_DIR / 'O4_MDC_background/{ifos}/'
     output:
         model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt'
     params:
         artefact = directory(OUTPUT_DIR / '{cl_config}_{ifos}/'),
         # The omicron triggers can only generate on LDG cluster.
-        omicron = OUTPUT_DIR / "O4b_AnalysisReady_Cat12/omicron/"
+        omicron = DATA_DIR / "O4_MDC_background/omicron/"
     shell:
         'cd gwak/train; uv run python train/cli.py fit --config {input.config} \
             --trainer.logger.save_dir {params.artefact} \
@@ -83,7 +84,7 @@ rule train_cl:
 
 rule compare_embeddings:
     input:
-        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/'
+        data_dir = DATA_DIR / "O4_MDC_background/HL/"
     params:
         config = GWAK_ROOT / 'gwak/train/configsresnet_kl1.0_bs512.yaml',
         models_to_compare = [OUTPUT_DIR / 'resnet_kl1.0_bs512_HL/model_JIT.pt', OUTPUT_DIR / 's4_kl1.0_bs256_HL/model_JIT.pt'],
@@ -102,7 +103,7 @@ rule precompute_embeddings:
             cl_config='{cl_config}',
             ifos='{ifos}'),
     #params:
-        data_dir = OUTPUT_DIR / 'BBC_AnalysisReady_Cat12/{ifos}/',
+        data_dir = DATA_DIR / 'O4_MDC_background/{ifos}/',
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml'
     output:
         means = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
@@ -121,7 +122,7 @@ rule precompute_embeddings:
             --correlations {output.correlations} \
             --means {output.means} \
             --stds {output.stds} \
-            --nevents 10000 '
+            --nevents 1000 '
 
 rule train_fm:
     input:
@@ -143,7 +144,7 @@ rule precompute_wnb_embeddings_classifier:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='ResNet',
             ifos='HL'),
-        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        data_dir = DATA_DIR / 'O4_MDC_background/HL/',
         config = GWAK_ROOT / 'gwak/train/configsResNet.yaml'
     output:
         means = OUTPUT_DIR / 'ResNet_wnb_HL/means.npy',
@@ -170,8 +171,8 @@ rule precompute_sg_embeddings_classifier:
         embedding_model = expand(rules.train_cl.output.model,
             cl_config='ResNet',
             ifos='HL'),
-        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
-        config = GWAK_ROOT / 'gwak/train/configsResNet.yaml'
+        data_dir = DATA_DIR / 'O4_MDC_background/HL/',
+        config = GWAK_ROOT / 'gwak/train/configs/ResNet.yaml'
     output:
         means = OUTPUT_DIR / 'ResNet_sg_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_sg_HL/stds.npy',
@@ -196,7 +197,7 @@ rule train_wnb_classifier:
     params:
         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
-        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        data_dir = DATA_DIR / 'O4_MDC_background/HL/',
         config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
@@ -213,7 +214,7 @@ rule train_sg_classifier:
     params:
         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
-        data_dir = OUTPUT_DIR / 'O4_MDC_background/HL/',
+        data_dir = DATA_DIR / 'O4_MDC_background/HL/',
         config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
@@ -280,10 +281,6 @@ rule run_evaluate_one_month:
         expand(OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
             cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', fm_config='NF_from_file_6d', ifos='HL')
 
-rule run_efficiency_plots:
-    input:
-        expand(OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
-            cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', fm_config='NF_from_file_6d', ifos='HL')
 
 rule run_evaluate_one_month_if:
     input:
