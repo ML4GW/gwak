@@ -44,6 +44,7 @@ def condor_infer_wrapper(
     inj_type: Optional[str]=None,
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
     fm_config: str='NF_onlyBkg',
+    dim_split: list=[6, 1, 1],
     **kwargs,
 ):
     """ Timeslide and Hermes(Triton) handeler to generate test result for GWAK model. 
@@ -194,6 +195,7 @@ def condor_infer_wrapper(
                     kernel_size=kernel_size,
                     sample_rate=sample_rate,
                     inference_sampling_rate=int(inference_rate),
+                    dim_split=dim_split,
                     job_rate_limit=job_rate_limit,
                 )
 

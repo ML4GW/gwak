@@ -205,6 +205,7 @@ def write_infer_config(
     stride_batch_size:int,
     ifos:list,
     kernel_size:int,
+    dim_split:list,
     sample_rate=2048,
     inference_sampling_rate=1,
 ): 

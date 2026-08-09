@@ -5,17 +5,22 @@ import argparse
 import yaml
 
 class CombinedModel(nn.Module):
-    def __init__(self, embedder_model, metric_model):
+    def __init__(self, embedder_model, metric_model, full_return=True):
         super().__init__()
         self.embedder_model = embedder_model
         self.metric_model = metric_model
+        self.full_return = full_return
 
     def forward(self, x):
         # Get the embedding from the embedder model.
         embedding = self.embedder_model(x)
-        c = self.frequency_cos_similarity(x)
+        f_coh = self.frequency_cos_similarity(x)
         # Pass the embedding to the metric model to get final classification.
-        out = self.metric_model(embedding, c)
+        out = self.metric_model(embedding, f_coh)
+
+        if self.full_return:
+            out = torch.cat([embedding, f_coh, out.reshape(-1, 1)], dim=1)
+
         return out
 
     def frequency_cos_similarity(self, batch):
@@ -28,13 +33,16 @@ class CombinedModel(nn.Module):
         rho_abs = torch.abs(rho_complex).unsqueeze(-1)
         return rho_abs
 
-def main(embedder_model_file,
-         metric_model_file,
-         batch_size=256,
-         kernel_length=0.5,
-         sample_rate=4096,
-         num_ifos=2,
-         output_path="model_JIT.pt"):
+def main(
+    embedder_model_file,
+    metric_model_file,
+    embedding_size:int,
+    batch_size:int=256,
+    kernel_length:float=0.5,
+    sample_rate:int=4096,
+    num_ifos:int=2,
+    output_path="model_JIT.pt"
+):
 
     # Load the embedder model (TorchScript traced module)
     embedder_model = torch.jit.load(embedder_model_file, map_location="cpu")
@@ -63,8 +71,11 @@ def main(embedder_model_file,
     # Test inference
     output = combined_model(dummy_input)
     print("Test inference complete.")
+
+    assert output.shape[-1] == (embedding_size + 1 + 1), "Unentended output shape"
     print(f"Output shape: {output.shape}")
-    print(f"Output: {output}")
+    print(f"Format: {[embedding_size, 1, 1]}")
+    print(f"Output: {output[:,-1]}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -84,11 +95,13 @@ if __name__ == "__main__":
     # Extract values
     sample_rate = config['data']['init_args']['sample_rate']
     kernel_length = config['data']['init_args']['kernel_length']
+    embedding_size = config["model"]["init_args"]["d_output"]
     batch_size = 64  # You can make this configurable if needed
 
     main(
         embedder_model_file=args.folder_embedder,
         metric_model_file=args.folder_metric,
+        embedding_size=embedding_size,
         batch_size=batch_size,
         kernel_length=kernel_length,
         sample_rate=sample_rate,

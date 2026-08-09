@@ -39,7 +39,7 @@ bm_model_threshold_converter = {
 rule export:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/deploy/config/export.yaml"
+        config = GWAK_ROOT / "gwak/deploy/configs/export.yaml"
     # params:
         # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f" {params.gpu} 
     output:
@@ -57,7 +57,7 @@ rule production_export:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         image = IMAGE_DIR / "deploy.sif",
-        config = GWAK_ROOT / "gwak/deploy/deploy/config/export.yaml"
+        config = GWAK_ROOT / "gwak/deploy/configs/export.yaml"
     params:
         bind_1 = f"{CONTAINER_OUTPUT_DIR}:/production",
         bind_2 = f"{OUTPUT_DIR}:/opt/gwak/gwak/output",
@@ -73,7 +73,7 @@ rule production_export:
 rule condor_infer:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/deploy/config/infer_condor.yaml",
+        config = GWAK_ROOT / "gwak/deploy/configs/infer_condor.yaml",
         plan_model = rules.export.output
     params:
         # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f", {params.gpu}
@@ -93,7 +93,7 @@ rule condor_infer:
 
 rule slurm_infer:
     input:
-        config = 'deploy/deploy/config/infer_slurm.yaml',
+        config = 'deploy/configs/infer_slurm.yaml',
     params:
         timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
     output:
@@ -110,7 +110,7 @@ rule slurm_infer:
 rule scan_outlier:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/deploy/config/analysis.yaml",
+        config = GWAK_ROOT / "gwak/deploy/configs/analysis.yaml",
         infer_result = rules.condor_infer.output
     output: 
         artefact = directory(LOUVRE_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}/")
@@ -124,7 +124,7 @@ rule scan_outlier:
 rule benchmark:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/deploy/config/benchmark.yaml",
+        config = GWAK_ROOT / "gwak/deploy/configs/benchmark.yaml",
     params:
         threshold = lambda wildcards: bm_model_threshold_converter[wildcards.benchmark_model],
         benchmark_dir = BENCHMAKR_DIR

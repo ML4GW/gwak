@@ -122,7 +122,7 @@ rule precompute_embeddings:
             --correlations {output.correlations} \
             --means {output.means} \
             --stds {output.stds} \
-            --nevents 1000 '
+            --nevents 100000 '
 
 rule train_fm:
     input:

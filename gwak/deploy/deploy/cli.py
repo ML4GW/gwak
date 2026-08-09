@@ -46,7 +46,7 @@ def export_args_hook():
     import yaml
     from deploy.libs import gwak_dir
 
-    export_cfg = gwak_dir()(append_path="gwak/deploy/deploy/config/export.yaml")
+    export_cfg = gwak_dir()(append_path="gwak/deploy/configs/export.yaml")
 
     with open(export_cfg) as f:
         export_args = yaml.safe_load(f)

@@ -17,7 +17,7 @@ fname:
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
-grpc_port: 8301
+grpc_port: 8001
 image: hermes/tritonserver:23.01
 model_repo_dir: null
 result_dir: null
@@ -27,3 +27,4 @@ job_rate_limit: 1
 inference_rate: 4 # export overwrite
 cl_config: null
 fm_config: null
+dim_split: [6, 1, 1]

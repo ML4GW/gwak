@@ -62,7 +62,11 @@ class Pathfinder:
 
         except KeyError:
             logging.error("")
-            logging.error(cow(f"Can not find {dir_var} in env \n please export {dir_var}!"))
+            logging.error(cow(
+                f"Can not find {dir_var} in env \n"
+                f"please export {dir_var} or run \n"
+                f"source .gwak/env.sh under GWAK_ROOT!"
+            ))
             sys.exit()
 
         except Exception as e:

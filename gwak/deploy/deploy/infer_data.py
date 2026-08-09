@@ -48,7 +48,8 @@ class Sequence:
         sample_rate: int,
         inference_sampling_rate: float,
         inj_type=None,
-        precision: str="float32"
+        precision: str="float32",
+        dim_sum: int = 8,
         # state_shape: tuple,
     ):
 
@@ -79,7 +80,7 @@ class Sequence:
                 try:
                     self.gps_start = h["GPS_start"][()]
                 except KeyError:
-                    logging.info("No GPS_start to read.")
+                    logging.info("No GPS_start attributes to read.")
                 except Exception as e:
                     logging.info(f"{type(e).__name__}")
 
@@ -87,7 +88,7 @@ class Sequence:
 
         self._started = {"state": False}
         self._done = {"state": False}
-        result_size = len(self) * self.stride_batch_size
+        result_size = (len(self) * self.stride_batch_size, dim_sum)
         self._sequences = {"result": np.zeros(result_size)}
         # self.limiter = Limiter(Rate(50, Duration.SECOND))
 
@@ -168,7 +169,7 @@ class Sequence:
         # spot in the corresponding output array
         start = request_id * self.stride_batch_size
         stop = (request_id + 1) * self.stride_batch_size
-        self._sequences["result"][start:stop] = y
+        self._sequences["result"][start:stop, :] = y
 
         # indicate that the first response for
         # this sequence has returned, and possibly
