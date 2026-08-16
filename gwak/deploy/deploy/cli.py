@@ -8,23 +8,27 @@ subcommands_keys = [
     "infer", 
     "infer_condor", 
     "deploy", 
-    "post_analyze",
+    "threshold_lock",
+    "scan_outlier",
+    "plot",
     "resolve_O4_bbc",
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
 # The skipped keys should only by string types variables. 
 # Avoid passing non string type variables to skip list. 
-# Otherwise, you would have to add an additinaol type check to 
+# Otherwise, you would have to add an additinaol type check to it
 skip_keys = [
     "project",
     "run_name",
     "cl_config",
     "fm_config",
-    "model", 
+    "model",
+    "threshold_setting",
+    "foreground",
     "Tb", # int
     "threshold", # float
-    "benchmark_dir", # Path
+    # "benchmark_dir", # Path
 ]
 
 def build_parser(
@@ -79,11 +83,17 @@ def main(args=None):
     if subcommand == "infer_slurm":
         from deploy.slurm_handeler import slurm_infer_wrapper as main_cli
 
-    if subcommand == "post_analyze":
-        from deploy.analyzer import scan as main_cli
+    if subcommand == "threshold_lock":
+        from deploy.analyzer import threshold_lock as main_cli
+
+    if subcommand == "scan_outlier":
+        from deploy.analyzer import scan_outlier as main_cli
+
+    if subcommand == "plot":
+        from deploy.monet import find_outlier_segs as main_cli
 
     if subcommand == "resolve_O4_bbc":
-        from deploy.benchmark import bbc_benchmark as main_cli
+        from deploy.monet import bbc_benchmark as main_cli
 
     # Create subparser
     subparser = build_parser(action=ActionConfigFile)

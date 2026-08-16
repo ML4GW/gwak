@@ -68,9 +68,10 @@ rule scan_all:
                 "NF_from_file_conditioning",
             ], 
             ifo_mode=["HL"], 
+            noise_run = ["one_month"],
             run_name=[
-                "test_run", 
-                # "bbc-short-0", 
-                # "bbc-short-1", 
+                "one_month", 
+                "bbc-short-0", 
+                "bbc-short-1", 
             ]
         )

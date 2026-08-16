@@ -47,6 +47,10 @@ ifo_configs = [
     'LV',
     'HLV'
 ]
+data_version = [
+    "cat_1",
+    "cat_12"
+]
 wildcard_constraints:
     cl_config = '|'.join([x for x in cl_configs]),
     fm_config = '|'.join([x for x in fm_configs]),

@@ -1,0 +1,12 @@
+cl_config: ResNet_6d
+fm_config: NF_from_file_conditioning
+ifo_mode: HL
+threshold_setting: one_year
+infer_sample_rate: 4
+psd_length: 64
+
+threshold_value: null
+
+run_name: bbc-short-0
+accumlation_length: 10
+pad: 0.5

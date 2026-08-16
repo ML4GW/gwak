@@ -695,6 +695,7 @@ class SignalDataloader(GwakBaseDataloader):
         self.cache_dir = cache_dir
         self.rebalance_classes = rebalance_classes
         self.do_whiten = whiten
+        self.num_workers = kwargs["num_workers"]
 
         self.all_signal_labels = {
             "SineGaussian":1,
@@ -863,7 +864,11 @@ class SignalDataloader(GwakBaseDataloader):
             train_glitch_dataset
         )
 
-        return torch.utils.data.DataLoader(train_paired_dataset, batch_size=None, num_workers=4)
+        return torch.utils.data.DataLoader(
+            train_paired_dataset, 
+            batch_size=None, 
+            num_workers=self.num_workers,
+        )
 
     def val_dataloader(self):
         val_clean_dataset = self.make_dataset(

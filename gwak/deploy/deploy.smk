@@ -5,12 +5,18 @@ ifo_modes = [
     'HLVK'
 ]
 
-runs = [
-    'background', 'bbc-short-0', 'bbc-short-1', 
+noise_runs = [
+    'background', 'test_run',
     'one_day', 'one_month', 'one_year', 
     'one_decade','one_centure',
-    'test_run'
 ]
+
+foreground_runs = [
+    'bbc-short-0', 'bbc-short-1', 
+    'injections'
+]
+
+runs = noise_runs + foreground_runs
 
 benchmark_models = [
     "EM_NF_HL",
@@ -19,16 +25,29 @@ benchmark_models = [
 
 wildcard_constraints:
     ifo_mode = '|'.join(x for x in ifo_modes),
+    noise_run = '|'.join(x for x in noise_runs),
+    foreground_run = '|'.join(x for x in foreground_runs),
     run_name = '|'.join(x for x in runs),
     benchmark_model = '|'.join(x for x in benchmark_models)
 
 
 runs_TS_converter = {
-    'background': 0, 'bbc-short-0': 0, 'bbc-short-1': 0, 
-    'one_day': 86400, 'one_month': 2678400., 'one_year': 31557600, 
+    'background': 0, 'test_run': 1, 'one_day': 86400, 
+    'one_month': 2678400, 'one_year': 31557600, 
     'one_decade': 315576000, 'one_centure': 3155760000,
-    'test_run': 1
+    'bbc-short-0': 0, 'bbc-short-1': 0, 
+    'injections': 0
 }
+
+ts_pair_for_run = {
+    f"{run}_{ts_run}": ts_run
+    for run in foreground_runs
+    for ts_run in noise_runs
+}
+
+ts_pair_for_run.update(
+    {f"{run}_{run}": run for run in noise_runs}
+)
 
 bm_model_threshold_converter = {
     "EM_NF_HL": -10,
@@ -40,8 +59,6 @@ rule export:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/export.yaml"
-    # params:
-        # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f" {params.gpu} 
     output:
         artefact = directory(OUTPUT_DIR / "export/{cl_config}_{fm_config}_{ifo_mode}")
     shell:
@@ -79,7 +96,7 @@ rule condor_infer:
         # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f", {params.gpu}
         timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
     output:
-        artefact = directory(OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}")
+        artefact = directory(OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/inference_result")
     shell:
         'mkdir -p tmp; '
         'set -x; cd gwak/deploy; uv run python \
@@ -107,35 +124,40 @@ rule slurm_infer:
         --fm_config {wildcards.fm_config} \
         --Tb {params.timeslide}"
 
-rule scan_outlier:
-    input:
+
+rule threshold_lock:
+    input: 
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/configs/analysis.yaml",
+        config = GWAK_ROOT / "gwak/deploy/configs/threshold.yaml",
+        # infer_result = OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/inference_result",
         infer_result = rules.condor_infer.output
     output: 
-        artefact = directory(LOUVRE_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}/")
+        artefact = LOG_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/threshold_lock.log",
+        # threshold_file = OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/threshold.h5"
     shell:
         "set -x; cd gwak/deploy; uv run python \
-        {input.arg} post_analyze --config {input.config} \
+        {input.arg} threshold_lock --config {input.config} \
         --run_name {wildcards.run_name} \
         --cl_config {wildcards.cl_config} \
         --fm_config {wildcards.fm_config}"
 
-rule benchmark:
+rule scan_outlier:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/configs/benchmark.yaml",
-    params:
-        threshold = lambda wildcards: bm_model_threshold_converter[wildcards.benchmark_model],
-        benchmark_dir = BENCHMAKR_DIR
-    output:
-        artefact = directory("/home/hongyin.chen/Outputs/GWAK/gwak-internal-benchmark/{benchmark_model}/gwak_glitch")
+        config = GWAK_ROOT / "gwak/deploy/configs/scan_outlier.yaml",
+        infer_result = rules.condor_infer.output,
+        log = LOG_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{noise_run}/threshold_lock.log"
+    output: 
+        artefact = LOG_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}_{noise_run}/scan_outlier.log",
+        # outlier_config = OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/outlier_config.h5"
     shell:
         "set -x; cd gwak/deploy; uv run python \
-        {input.arg} resolve_O4_bbc --config {input.config} \
-        --benchmark_dir {params.benchmark_dir} \
-        --model {wildcards.benchmark_model} \
-        --threshold {params.threshold}"
+        {input.arg} scan_outlier --config {input.config} \
+        --threshold_setting {wildcards.noise_run} \
+        --run_name {wildcards.run_name} \
+        --cl_config {wildcards.cl_config} \
+        --fm_config {wildcards.fm_config}"
+
 
 rule export_all:
     input:
@@ -163,12 +185,12 @@ rule slurm_infer_all:
             run_name=["one_year"]
         )
 
-rule benchmark_all:
-    input: 
-        expand(
-            rules.benchmark.output,
-            benchmark_model=benchmark_models,
-        )
+# rule benchmark_all:
+#     input: 
+#         expand(
+#             rules.raw_benchmark.output,
+#             benchmark_model=benchmark_models,
+#         )
 
 rule estimate_far:
     input:

@@ -1,0 +1,8 @@
+cl_config: ResNet_6d
+fm_config: NF_from_file_conditioning
+ifo_mode: HL
+run_name: one_year
+infer_sample_rate: 4
+psd_length: 64
+
+threshold_level: 0.01

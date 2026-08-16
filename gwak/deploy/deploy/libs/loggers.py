@@ -94,6 +94,13 @@ class Pathfinder:
             logging.info(f"    {self.project_path}")
         return self.project_path
 
+def ordinal(n):
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{int(n)}{suffix}"
+
 class gwak_dir(Pathfinder):
 
     def __init__(
@@ -154,6 +161,18 @@ class gwak_output_dir(Pathfinder):
             suffix=suffix
         )
 
+class gwak_logging_dir(Pathfinder):
+
+    def __init__(
+        self,
+        suffix: Optional[str]=None,
+    ):
+        super().__init__(
+            dir_var="GWAK_LOG_DIR",
+            path_function_name="logging directory",
+            suffix=suffix
+        )
+
 class gwak_timeslide_dir(Pathfinder):
 
     def __init__(
@@ -165,7 +184,6 @@ class gwak_timeslide_dir(Pathfinder):
             path_function_name="timeslide directory",
             suffix=suffix
         )
-
 
 class gwak_image_dir(Pathfinder):
 
