@@ -5,6 +5,7 @@ from typing import Optional
 import os
 from pathlib import Path
 
+
 def gwak_logger(
     log_file,
     log_level=logging.DEBUG,
@@ -43,8 +44,16 @@ def gwak_logger(
     # Prevent duplicate handlers
     if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
         logger.addHandler(console_handler)
-        
-        
+
+
+def ordinal(n):
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{int(n)}{suffix}"
+
+
 class Pathfinder:
 
     def __init__(
@@ -94,12 +103,6 @@ class Pathfinder:
             logging.info(f"    {self.project_path}")
         return self.project_path
 
-def ordinal(n):
-    if 10 <= n % 100 <= 20:
-        suffix = "th"
-    else:
-        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-    return f"{int(n)}{suffix}"
 
 class gwak_dir(Pathfinder):
 

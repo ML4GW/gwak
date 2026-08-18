@@ -73,6 +73,7 @@ $ snakemake -c1 produce_combine_model
 For testing by  
 ```
 $ snakemake -c1 scan_all
+$ snakemake -c1 benchmark
 ```
 
 ### Third: Run GWAK's with containers ###

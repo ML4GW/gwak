@@ -58,9 +58,9 @@ rule produce_combine_model:
         )
 
 rule scan_all:
-    input: 
+    input:
         expand(
-            rules.scan_outlier.output,
+            rules.scan_outlier.output + rules.bbc_benchmark.output,
             cl_config=[
                 "ResNet_6d",
             ], 
@@ -73,5 +73,27 @@ rule scan_all:
                 "one_month", 
                 "bbc-short-0", 
                 "bbc-short-1", 
+            ],
+            foreground_run = [
+                "bbc-short-0",
+                "bbc-short-1"
             ]
+        )
+
+rule benchmark:
+    input:
+        expand(
+            rules.find_outlier_segs.output + rules.plot_benchmark.output,
+            cl_config=[
+                "ResNet_6d",
+            ],
+            fm_config=[
+                "NF_from_file_conditioning",
+            ],
+            ifo_mode=[
+                "HL",
+            ],
+            noise_run = [
+                "one_month",
+            ],
         )

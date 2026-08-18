@@ -10,8 +10,10 @@ subcommands_keys = [
     "deploy", 
     "threshold_lock",
     "scan_outlier",
-    "plot",
     "resolve_O4_bbc",
+    "plot_segs",
+    "plot_bbc",
+
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
@@ -23,6 +25,7 @@ skip_keys = [
     "run_name",
     "cl_config",
     "fm_config",
+    "ifo_mode",
     "model",
     "threshold_setting",
     "foreground",
@@ -89,11 +92,14 @@ def main(args=None):
     if subcommand == "scan_outlier":
         from deploy.analyzer import scan_outlier as main_cli
 
-    if subcommand == "plot":
+    if subcommand == "resolve_O4_bbc":
+        from deploy.analyzer import bbc_benchmark as main_cli
+
+    if subcommand == "plot_segs":
         from deploy.monet import find_outlier_segs as main_cli
 
-    if subcommand == "resolve_O4_bbc":
-        from deploy.monet import bbc_benchmark as main_cli
+    if subcommand == "plot_bbc":
+        from deploy.monet import plot_bbc_benchmark as main_cli
 
     # Create subparser
     subparser = build_parser(action=ActionConfigFile)

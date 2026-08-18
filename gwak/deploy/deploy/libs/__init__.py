@@ -8,6 +8,7 @@ from .loggers import (
     gwak_output_dir,
     gwak_louvre_dir, 
     gwak_logging_dir,
-    gwak_timeslide_dir
+    gwak_timeslide_dir,
+    ordinal
 )
 from .infer_utils import get_seg_start_end, accumlator, get_ip_address

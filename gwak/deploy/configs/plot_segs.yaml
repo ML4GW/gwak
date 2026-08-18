@@ -2,3 +2,4 @@ cl_config: ResNet_6d
 fm_config: NF_from_file_conditioning
 ifo_mode: HL
 threshold_setting: one_year
+seg_count: 10
