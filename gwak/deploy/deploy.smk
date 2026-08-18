@@ -58,7 +58,8 @@ bm_model_threshold_converter = {
 rule export:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
-        config = GWAK_ROOT / "gwak/deploy/configs/export.yaml"
+        config = GWAK_ROOT / "gwak/deploy/configs/export.yaml",
+        # infer_result = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifo_mode}/combination/model_JIT.pt'
     output:
         artefact = directory(OUTPUT_DIR / "export/{cl_config}_{fm_config}_{ifo_mode}")
     shell:
@@ -127,11 +128,41 @@ rule slurm_infer:
         --Tb {params.timeslide}"
 
 
+##--- Summary ---##
+rule export_all:
+    input:
+        expand(
+            rules.export.output,
+            cl_config=["ResNet_6d"],
+            fm_config=["NF_from_file_conditioning"],
+            ifo_mode=["HL"],
+        )
+
+# snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F 
+rule slurm_infer_all:
+    input:
+        expand(
+            rules.slurm_infer.output,
+            cl_config=[
+                "ResNet_cat12",
+                "ResNet_separate-glitch",
+                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
+            ], 
+            fm_config=[
+                "NF_from_file_conditioning",
+            ], 
+            ifo_mode=["HL"], 
+            run_name=["one_year"]
+        )
+
+#####################
+### Post-analysis ###
+#####################
 rule threshold_lock:
     input: 
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/threshold.yaml",
-        infer_result = rules.condor_infer.output
+        # infer_result = rules.condor_infer.output
     output: 
         artefact = LOG_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/threshold_lock.log",
     shell:
@@ -146,7 +177,6 @@ rule scan_outlier:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/scan_outlier.yaml",
-        infer_result = rules.condor_infer.output,
         log = LOG_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{noise_run}/threshold_lock.log"
     output: 
         artefact = LOG_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}_{noise_run}/scan_outlier.log",
@@ -176,13 +206,11 @@ rule bbc_benchmark:
         --foreground {wildcards.foreground_run} \
         --threshold_setting {wildcards.noise_run}"
 
-#####################
-### Post-analysis ###
-#####################
 rule find_outlier_segs:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/plot_segs.yaml",
+        task = LOG_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{noise_run}_{noise_run}/scan_outlier.log",
     output:
         artefact = LOG_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{noise_run}/find_outlier_segs.log"
     shell:
@@ -193,10 +221,12 @@ rule find_outlier_segs:
         --ifo_mode {wildcards.ifo_mode} \
         --threshold_setting {wildcards.noise_run}"
 
-rule plot_benchmark:
+rule plot_bbc_benchmark:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/plot_bbc.yaml",
+        task_1 = LOG_DIR / "{cl_config}_{fm_config}_{ifo_mode}/bbc-short-0_{noise_run}/benchmark.log",
+        task_2 = LOG_DIR / "{cl_config}_{fm_config}_{ifo_mode}/bbc-short-1_{noise_run}/benchmark.log"
     output:
         artefact = LOUVRE_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{noise_run}/trigger-rate.png"
     shell:
@@ -207,32 +237,6 @@ rule plot_benchmark:
         --ifo_mode {wildcards.ifo_mode} \
         --threshold_setting {wildcards.noise_run}"
 
-
-rule export_all:
-    input:
-        expand(
-            rules.export.output,
-            cl_config=["ResNet_6d"],
-            fm_config=["NF_from_file_conditioning"],
-            ifo_mode=["HL"],
-        )
-
-# snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F 
-rule slurm_infer_all:
-    input:
-        expand(
-            rules.slurm_infer.output,
-            cl_config=[
-                "ResNet_cat12",
-                "ResNet_separate-glitch",
-                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
-            ], 
-            fm_config=[
-                "NF_from_file_conditioning",
-            ], 
-            ifo_mode=["HL"], 
-            run_name=["one_year"]
-        )
 
 rule estimate_far:
     input:

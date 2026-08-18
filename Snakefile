@@ -13,6 +13,14 @@ include: GWAK_ROOT / "gwak/train/train.smk"
 include: GWAK_ROOT / "gwak/deploy/deploy.smk"
 include: GWAK_ROOT / "gwak/postselection/postselection.smk"
 
+# Working config
+cl_config_list=["ResNet_6d"]
+fm_config_list=["NF_from_file_conditioning"]
+ifos_list=["HL"]
+noise_run_list = ["one_month"]
+foreground_run_list = ["bbc-short-0", "bbc-short-1"]
+run_name_list = noise_run_list + foreground_run_list
+
 rule gwak_init:
     input: rules.bootstrap_complete.output
 
@@ -35,65 +43,45 @@ rule run_efficiency_plots_if:
     input:
         expand(
             OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-            cl_config='ResNet_6d',
-            ifos='HL'
+            cl_config=cl_config_list,
+            ifos=ifos_list
         )
 
 rule run_efficiency_plots:
     input:
         expand(
             OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
-            cl_config='ResNet_6d',
-            fm_config='NF_from_file_conditioning',
-            ifos='HL'
+            cl_config=cl_config_list,
+            fm_config=fm_config_list,
+            ifos=ifos_list
         )
 
 rule produce_combine_model:
     input:
         expand(
             rules.combine_models.output,
-            cl_config='ResNet_6d',
-            fm_config='NF_from_file_conditioning',
-            ifos='HL'
+            cl_config=cl_config_list,
+            fm_config=fm_config_list,
+            ifos=ifos_list
         )
 
 rule scan_all:
     input:
         expand(
-            rules.scan_outlier.output + rules.bbc_benchmark.output,
-            cl_config=[
-                "ResNet_6d",
-            ], 
-            fm_config=[
-                "NF_from_file_conditioning",
-            ], 
-            ifo_mode=["HL"], 
-            noise_run = ["one_month"],
-            run_name=[
-                "one_month", 
-                "bbc-short-0", 
-                "bbc-short-1", 
-            ],
-            foreground_run = [
-                "bbc-short-0",
-                "bbc-short-1"
-            ]
+            rules.condor_infer.output,
+            cl_config=cl_config_list,
+            fm_config=fm_config_list, 
+            ifo_mode=ifos_list, 
+            run_name=run_name_list
         )
 
 rule benchmark:
     input:
         expand(
-            rules.find_outlier_segs.output + rules.plot_benchmark.output,
-            cl_config=[
-                "ResNet_6d",
-            ],
-            fm_config=[
-                "NF_from_file_conditioning",
-            ],
-            ifo_mode=[
-                "HL",
-            ],
-            noise_run = [
-                "one_month",
-            ],
+            rules.scan_outlier.output + rules.find_outlier_segs.output + rules.plot_bbc_benchmark.output,
+            cl_config=cl_config_list,
+            fm_config=fm_config_list,
+            ifo_mode=ifos_list,
+            noise_run=noise_run_list,
+            run_name=run_name_list,
         )
