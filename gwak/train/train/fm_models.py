@@ -13,7 +13,7 @@ from matplotlib.patches import Patch
 from typing import Sequence, Optional
 from collections import OrderedDict
 from sklearn.model_selection import train_test_split
-
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -31,7 +31,7 @@ from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform
 from train.losses import SupervisedSimCLRLoss
 from train.schedulers import WarmupCosineAnnealingLR
 from train.cl_models import Crayon
-
+from transforms import frequency_cos_similarity
 
 class GwakBaseModelClass(pl.LightningModule):
 
@@ -101,7 +101,10 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         wrapper.eval()
         example_input = torch.randn(1, module.embedding_dims).to("cuda:0")
         # if module.conditioning:
-        example_context = torch.randn(1, 1).to("cuda:0")
+        example_context = torch.randn(1, module.context_features).to("cuda:0")
+        
+        print("Sanity check for the Flow_wapper model")
+        print("    ", wrapper(example_input, example_context))
         traced = torch.jit.trace(wrapper, (example_input, example_context))
         # traced = torch.jit.script(wrapper)
 
@@ -401,6 +404,7 @@ class BackgroundFlowModel(GwakBaseModelClass):
             n_dims=8,
             n_flow_steps=4,
             hidden_dim=64,
+            coh_mode="real",
             use_correlation: bool = True,
             condition_on_correlation: bool = False,
             normalize: bool = True,
@@ -430,7 +434,11 @@ class BackgroundFlowModel(GwakBaseModelClass):
         else:
             self.embedding_dims = n_dims
             context_features = None
-
+        if coh_mode == "real_imag":
+            context_features = 2
+        self.context_features = context_features            
+        self.coh_mode = coh_mode
+        # self.my_log_dir = Path(f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/ResNet_6d_{coh_mode}_NF_from_file_conditioning_HL")
         # Define RQS Flow
         transforms = []
         for _ in range(n_flow_steps):
@@ -455,7 +463,10 @@ class BackgroundFlowModel(GwakBaseModelClass):
             # Separate standardizers for embeddings and context
             self.standardizer = None
             self.standardizer_x = Standardizer(torch.zeros(n_dims), torch.ones(n_dims))
-            self.standardizer_c = Standardizer(torch.zeros(1), torch.ones(1))
+            self.standardizer_c = Standardizer(
+                torch.zeros(self.context_features), 
+                torch.ones(self.context_features)
+            )
         else:
             self.standardizer = Standardizer(torch.zeros(n_dims), torch.ones(n_dims))
             self.standardizer_x = None
@@ -467,16 +478,9 @@ class BackgroundFlowModel(GwakBaseModelClass):
 
         self.save_hyperparameters()
 
-    def frequency_cos_similarity(self, batch):
-        H = torch.fft.rfft(batch[:, 0, :], dim=-1)
-        L = torch.fft.rfft(batch[:, 1, :], dim=-1)
-        numerator = torch.sum(H * torch.conj(L), dim=-1)
-        norm_H = torch.linalg.norm(H, dim=-1)
-        norm_L = torch.linalg.norm(L, dim=-1)
-        rho_complex = numerator / (norm_H * norm_L + 1e-8)
-        # rho_real = torch.real(rho_complex).unsqueeze(-1)
-        rho_real = torch.abs(rho_complex).unsqueeze(-1)
-        return rho_real
+    def freq_cos_sim(self, batch):
+        sim_score = frequency_cos_similarity(batch, self.coh_mode)
+        return sim_score
 
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -508,21 +512,21 @@ class BackgroundFlowModel(GwakBaseModelClass):
             if len(batch) == 2:
                 batch, _ = batch
             feats = self.graph(batch)
-            c = self.frequency_cos_similarity(batch) if need_c else None
+            c_score = self.freq_cos_sim(batch) if need_c else None
         else:
             feats = batch[0]
-            c = batch[1] if need_c and len(batch) > 1 else None
-        return feats, c
+            c_score = batch[1] if need_c and len(batch) > 1 else None
+        return feats, c_score
 
     def training_step(self, batch, batch_idx):
-        feats, c = self._get_feats_and_c(batch)
+        feats, c_score = self._get_feats_and_c(batch)
 
         if self.condition_on_correlation:
             feats_in = self.standardizer_x(feats)
-            c_in = self.standardizer_c(c)
+            c_in = self.standardizer_c(c_score)
             log_prob = self.model.log_prob(inputs=feats_in, context=c_in)
         elif self.use_correlation:
-            feats_in = self.standardizer(torch.cat([feats, c], dim=-1))
+            feats_in = self.standardizer(torch.cat([feats, c_score], dim=-1))
             log_prob = self.model.log_prob(inputs=feats_in)
         else:
             feats_in = self.standardizer(feats)
@@ -534,14 +538,14 @@ class BackgroundFlowModel(GwakBaseModelClass):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        feats, c = self._get_feats_and_c(batch)
+        feats, c_score = self._get_feats_and_c(batch)
 
         if self.condition_on_correlation:
             feats_in = self.standardizer_x(feats)
-            c_in = self.standardizer_c(c)
+            c_in = self.standardizer_c(c_score)
             log_prob = self.model.log_prob(inputs=feats_in, context=c_in)
         elif self.use_correlation:
-            feats_in = self.standardizer(torch.cat([feats, c], dim=-1))
+            feats_in = self.standardizer(torch.cat([feats, c_score], dim=-1))
             log_prob = self.model.log_prob(inputs=feats_in)
         else:
             feats_in = self.standardizer(feats)

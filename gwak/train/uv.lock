@@ -4618,6 +4618,8 @@ dependencies = [
     { name = "scikit-learn", version = "1.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scikit-learn", version = "1.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scipy" },
+    { name = "trainer" },
+    { name = "transforms" },
     { name = "wandb" },
 ]
 
@@ -4642,6 +4644,8 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "scipy", specifier = "<1.12" },
+    { name = "trainer", editable = "../../libs/trainer" },
+    { name = "transforms", editable = "../../libs/transforms" },
     { name = "wandb", specifier = ">=0.28.0" },
 ]
 
@@ -4654,6 +4658,11 @@ dev = [
 ]
 
 [[package]]
+name = "trainer"
+version = "0.1.0"
+source = { editable = "../../libs/trainer" }
+
+[[package]]
 name = "traitlets"
 version = "5.15.1"
 source = { registry = "https://pypi.org/simple" }
@@ -4661,6 +4670,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/57/a9/a2584b8313b89f948
 wheels = [
     { url = "https://files.pythonhosted.org/packages/96/8d/1080ee4c231f361b6ce4470d556c8c435b67c7e0753aaa641497ee92f88b/traitlets-5.15.1-py3-none-any.whl", hash = "sha256:770a53705f84b81ac107e83a1b3328ff2dae16094d8fc3cfc004e4b22dfd8e92", size = 85858, upload-time = "2026-06-03T12:26:04.395Z" },
 ]
+
+[[package]]
+name = "transforms"
+version = "0.1.0"
+source = { editable = "../../libs/transforms" }
 
 [[package]]
 name = "triton"

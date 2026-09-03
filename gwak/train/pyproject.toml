@@ -10,6 +10,8 @@ requires-python = ">=3.10"
 dependencies = [
     "lightning>=2.6.5",
     "jsonargparse[signatures]>=4.27.7",
+    "trainer",
+    "transforms",
     "ml4gw",
     "data",
     "h5py>=3.16.0",
@@ -44,6 +46,8 @@ explicit = true
 [tool.uv.sources]
 ml4gw = { path = "../../ml4gw", editable = true }
 data = { path = "../data", editable = true }
+trainer = {path = "../../libs/trainer", editable = true }
+transforms = {path = "../../libs/transforms", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["train"]

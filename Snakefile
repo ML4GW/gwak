@@ -14,9 +14,19 @@ include: GWAK_ROOT / "gwak/deploy/deploy.smk"
 include: GWAK_ROOT / "gwak/postselection/postselection.smk"
 
 # Working config
-cl_config_list=["ResNet_6d"]
-fm_config_list=["NF_from_file_conditioning"]
-ifos_list=["HL"]
+data_ver_list = ["O4b_cat1-chunked", "O4b_cat12-katya"]
+ifos_list = ["HL"]
+cl_config_list = ["ResNet_6d"]
+coh_mode_list = [
+    "real",
+    # "real_imag",
+    # "abs"
+]
+fm_config_list = [
+    "NF_from_file_conditioning_bs64",
+    "NF_from_file_conditioning",
+    "NF_from_file_conditioning_bs1024"
+]
 noise_run_list = ["one_month"]
 foreground_run_list = ["bbc-short-0", "bbc-short-1"]
 run_name_list = noise_run_list + foreground_run_list
@@ -39,49 +49,53 @@ rule pull_all:
             ifos=['hl', 'hv', 'lv', 'hlv']
         )
 
-rule run_efficiency_plots_if:
-    input:
-        expand(
-            OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-            cl_config=cl_config_list,
-            ifos=ifos_list
-        )
+# rule run_efficiency_plots_if:
+#     input:
+#         expand(
+#             OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
+#             cl_config=cl_config_list,
+#             ifos=ifos_list
+#         )
 
-rule run_efficiency_plots:
-    input:
-        expand(
-            OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
-            cl_config=cl_config_list,
-            fm_config=fm_config_list,
-            ifos=ifos_list
-        )
+# rule run_efficiency_plots:
+#     input:
+#         expand(
+#             OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
+#             cl_config=cl_config_list,
+#             fm_config=fm_config_list,
+#             ifos=ifos_list
+#         )
 
-rule produce_combine_model:
+rule train_all:
     input:
         expand(
             rules.combine_models.output,
+            data_ver=data_ver_list,
+            ifos=ifos_list,
             cl_config=cl_config_list,
+            coh_mode=coh_mode_list,
             fm_config=fm_config_list,
-            ifos=ifos_list
         )
 
-rule scan_all:
-    input:
-        expand(
-            rules.condor_infer.output,
-            cl_config=cl_config_list,
-            fm_config=fm_config_list, 
-            ifo_mode=ifos_list, 
-            run_name=run_name_list
-        )
+# rule scan_all:
+#     input:
+#         expand(
+#             rules.condor_infer.output,
+#             cl_config=cl_config_list,
+#             coh_mode=coh_mode_list,
+#             fm_config=fm_config_list, 
+#             ifo_mode=ifos_list, 
+#             run_name=run_name_list
+#         )
 
-rule benchmark:
-    input:
-        expand(
-            rules.scan_outlier.output + rules.find_outlier_segs.output + rules.plot_bbc_benchmark.output,
-            cl_config=cl_config_list,
-            fm_config=fm_config_list,
-            ifo_mode=ifos_list,
-            noise_run=noise_run_list,
-            run_name=run_name_list,
-        )
+# rule benchmark:
+#     input:
+#         expand(
+#             rules.scan_outlier.output + rules.find_outlier_segs.output + rules.plot_bbc_benchmark.output,
+#             cl_config=cl_config_list,
+#             coh_mode=coh_mode_list,
+#             fm_config=fm_config_list,
+#             ifo_mode=ifos_list,
+#             noise_run=noise_run_list,
+#             run_name=run_name_list,
+#         )

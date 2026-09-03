@@ -3,18 +3,26 @@ import torch
 import torch.nn as nn
 import argparse
 import yaml
+from transforms import frequency_cos_similarity
 
 class CombinedModel(nn.Module):
-    def __init__(self, embedder_model, metric_model, full_return=True):
+    def __init__(
+        self,
+        embedder_model,
+        metric_model,
+        coh_mode,
+        full_return=True
+    ):
         super().__init__()
         self.embedder_model = embedder_model
         self.metric_model = metric_model
         self.full_return = full_return
+        self.coh_mode = coh_mode
 
     def forward(self, x):
         # Get the embedding from the embedder model.
         embedding = self.embedder_model(x)
-        f_coh = self.frequency_cos_similarity(x)
+        f_coh = self.freq_cos_sim(x)
         # Pass the embedding to the metric model to get final classification.
         out = self.metric_model(embedding, f_coh)
 
@@ -23,20 +31,15 @@ class CombinedModel(nn.Module):
 
         return out
 
-    def frequency_cos_similarity(self, batch):
-        H = torch.fft.rfft(batch[:, 0, :], dim=-1)
-        L = torch.fft.rfft(batch[:, 1, :], dim=-1)
-        numerator = torch.sum(H * torch.conj(L), dim=-1)
-        norm_H = torch.linalg.norm(H, dim=-1)
-        norm_L = torch.linalg.norm(L, dim=-1)
-        rho_complex = numerator / (norm_H * norm_L + 1e-8)
-        rho_abs = torch.abs(rho_complex).unsqueeze(-1)
-        return rho_abs
+    def freq_cos_sim(self, batch):
+        sim_score = frequency_cos_similarity(batch, mode=self.coh_mode)
+        return sim_score
 
 def main(
     embedder_model_file,
     metric_model_file,
     embedding_size:int,
+    coh_mode, 
     batch_size:int=256,
     kernel_length:float=0.5,
     sample_rate:int=4096,
@@ -55,11 +58,16 @@ def main(
     metric_model.eval()
 
     # Create the combined model
-    combined_model = CombinedModel(embedder_model, metric_model).to("cuda:0")
+    combined_model = CombinedModel(
+        embedder_model, metric_model, coh_mode
+    ).to("cuda:0")
     combined_model.eval()
 
     # Prepare a dummy input for tracing
-    dummy_input = torch.randn(batch_size, num_ifos, int(kernel_length * sample_rate), device='cuda:0')
+    dummy_input = torch.randn(
+        batch_size, num_ifos, 
+        int(kernel_length * sample_rate), device='cuda:0'
+    )
 
     # Trace the model (instead of scripting)
     traced_model = torch.jit.trace(combined_model, dummy_input)
@@ -72,9 +80,12 @@ def main(
     output = combined_model(dummy_input)
     print("Test inference complete.")
 
-    assert output.shape[-1] == (embedding_size + 1 + 1), "Unentended output shape"
+    coh_size=1
+    if coh_mode == "real_imag": 
+        coh_size=2
+    assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
     print(f"Output shape: {output.shape}")
-    print(f"Format: {[embedding_size, 1, 1]}")
+    print(f"Format: {[embedding_size, coh_size, 1]}")
     print(f"Output: {output[:,-1]}")
 
 if __name__ == "__main__":
@@ -83,6 +94,7 @@ if __name__ == "__main__":
     )
     parser.add_argument('folder_embedder', type=str, help='Path to the folder containing JIT embedder model.')
     parser.add_argument('folder_metric', type=str, help='Path to the folder containing JIT metric model.')
+    parser.add_argument('--coh_mode', type=str)
     parser.add_argument('--config', type=str)
     parser.add_argument('--outfile', type=str, default='model_JIT.pt', help='Output file name for the JIT combined model (default: model_JIT.pt).')
 
@@ -102,6 +114,7 @@ if __name__ == "__main__":
         embedder_model_file=args.folder_embedder,
         metric_model_file=args.folder_metric,
         embedding_size=embedding_size,
+        coh_mode=args.coh_mode,
         batch_size=batch_size,
         kernel_length=kernel_length,
         sample_rate=sample_rate,

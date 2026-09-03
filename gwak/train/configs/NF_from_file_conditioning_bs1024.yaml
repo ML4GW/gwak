@@ -31,4 +31,4 @@ model:
 data:
   class_path: dataloader.EmbeddingLoader
   init_args:
-    batch_size: 256
+    batch_size: 1024

@@ -11,18 +11,10 @@ from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString
 
 from train.dataloader import SignalDataloader
 from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from transforms import frequency_cos_similarity
 
 device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 
-def frequency_cos_similarity(batch):
-    H = torch.fft.rfft(batch[:, 0, :], dim=-1)
-    L = torch.fft.rfft(batch[:, 1, :], dim=-1)
-    numerator = torch.sum(H * torch.conj(L), dim=-1)
-    norm_H = torch.linalg.norm(H, dim=-1)
-    norm_L = torch.linalg.norm(L, dim=-1)
-    rho_complex = numerator / (norm_H * norm_L + 1e-8)
-    rho_real = torch.abs(rho_complex).unsqueeze(-1)
-    return rho_real
 
 # ---------- helpers to load saved datasets ----------
 def _pick_data_and_labels_from_npz(npz):
@@ -98,6 +90,7 @@ if __name__=='__main__':
     parser.add_argument('--embeddings', type=str)
     parser.add_argument('--labels', type=str)
     parser.add_argument('--correlations', type=str)
+    parser.add_argument('--coh_mode', type=str)
     parser.add_argument('--means', type=str, default=None)
     parser.add_argument('--stds', type=str, default=None)
     parser.add_argument('--nevents', type=int, default=10000)
@@ -212,7 +205,10 @@ if __name__=='__main__':
 
             embeddings = embed_model(processed).detach().cpu().numpy()
             if args.correlations:
-                correlations = frequency_cos_similarity(processed).cpu().detach().numpy()
+                correlations = frequency_cos_similarity(
+                    processed,
+                    mode=args.coh_mode
+                ).cpu().detach().numpy()
 
             if labels_chunk is None:
                 labels_chunk = -1 * np.ones((embeddings.shape[0],), dtype=np.int32)
@@ -268,7 +264,10 @@ if __name__=='__main__':
 
             embeddings = embed_model(processed).cpu().detach().numpy()
             if args.correlations:
-                correlations = frequency_cos_similarity(processed).cpu().detach().numpy()
+                correlations = frequency_cos_similarity(
+                    processed,
+                    mode=args.coh_mode
+                ).cpu().detach().numpy()
 
             all_labels.append(labels.cpu().detach().numpy())
             all_embeddings.append(embeddings)
@@ -283,7 +282,7 @@ if __name__=='__main__':
     all_embeddings = np.concatenate(all_embeddings, axis=0) if len(all_embeddings) else np.empty((0, 0), dtype=np.float32)
     if args.correlations:
         all_correlations = np.concatenate(all_correlations, axis=0) if len(all_correlations) else np.empty((0, 1), dtype=np.float32)
-
+    Path(args.labels).parent.mkdir(parents=True, exist_ok=True)
     np.save(f'{args.labels}', all_labels)
     print('Labels shape', all_labels.shape)
 
