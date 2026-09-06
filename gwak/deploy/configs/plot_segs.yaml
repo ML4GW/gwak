@@ -1,5 +1,8 @@
-cl_config: ResNet_6d
-fm_config: NF_from_file_conditioning
 ifo_mode: HL
+ana_ver: O4b_gwak_cat1
+data_ver: O4b_cat1
+cl_config: ResNet_6d
+coh_mode: real
+fm_config: NF_from_file_conditioning
 threshold_setting: one_year
 seg_count: 10

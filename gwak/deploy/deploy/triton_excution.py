@@ -99,15 +99,17 @@ def run_infer(
         # Make a function for this to connect between combine model and here.
         # Are there __names__ for this type of setup regardding to the output format
 
-        embedding = result[0][:, 0:roll_idx[0]]
-        f_coh = result[0][:, roll_idx[0]:roll_idx[1]]
-        gwak_value = result[0][:, roll_idx[1]:roll_idx[2]]
+        gwak_value = result[0]
+        print(f"{gwak_value.shape = }")
+        # embedding = result[0][:, 0:roll_idx[0]]
+        # f_coh = result[0][:, roll_idx[0]:roll_idx[1]]
+        # gwak_value = result[0][:, roll_idx[1]:roll_idx[2]]
 
     logging.info(f"Collecting result to {result_file.resolve()}")
 
     with h5py.File(result_file, "w") as f:
-        f.create_dataset(f"embedding", data=embedding)
-        f.create_dataset(f"f_coh", data=f_coh)
+        # f.create_dataset(f"embedding", data=embedding)
+        # f.create_dataset(f"f_coh", data=f_coh)
         f.create_dataset(f"gwak_value", data=gwak_value)
 
         try:

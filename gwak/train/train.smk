@@ -1,3 +1,9 @@
+ifo_configs = [
+    "HL",
+    "HV",
+    "LV",
+    "HLV"
+]
 data_ver_path_converter = {
     "O4b_cat1": "O4_MDC_background", # Have omicron file
     "O4b_cat1-chunked": "O4_MDC_background-chunked",
@@ -22,40 +28,37 @@ cl_configs = [
     'iTransformer',
     'ResNet',
     'ResNet_6d',
+    'ResNet_6d.test',
     'ResNet_cat12',
     'ResNet_separate-glitch',
     'ResNet_mid',
     'torch_rbw_zp_resnet_do6_dcs064_epoch25',
     'torch_rbw_zp_resnet_do6_dcs128_epoch25',
-    ]
+    "torch_rbw_zp_resnet_do6_dcs128_epoch25.test",
+]
 coh_modes = [
     "real", "real_imag", "abs",
 ]
 fm_configs = [
     'NF_onlyBkg',
+    'NF_from_file_conditioning.test',
     'NF_from_file_conditioning_bs64',
     "NF_from_file_conditioning",
     "NF_from_file_conditioning_bs1024",
     'NF_from_file_6d',
     'FM_multiSignalAndBkg',
-    ]
-ifo_configs = [
-    'HL',
-    'HV',
-    'LV',
-    'HLV'
 ]
 
 wildcard_constraints:
+    ifos = '|'.join([x for x in ifo_configs]),
     data_ver = '|'.join([x for x in data_ver_path_converter.keys()]),
     cl_config = '|'.join([x for x in cl_configs]),
     coh_mode = '|'.join([x for x in coh_modes]),
     fm_config = '|'.join([x for x in fm_configs]),
-    ifos = '|'.join([x for x in ifo_configs])
 
 rule train_cl:
     input:
-        arg = GWAK_ROOT / "gwak/train/train/cli_fm.py",
+        arg = GWAK_ROOT / "gwak/train/train/cli.py",
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         data_dir = lambda wildcards: directory(
             DATA_DIR
@@ -65,19 +68,19 @@ rule train_cl:
     output:
         model = Path(
             OUTPUT_DIR 
-            / "models/{data_ver}/{ifos}/{cl_config}/model_JIT.pt"
+            / "models/{ifos}/{data_ver}/{cl_config}/model_JIT.pt"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         logger_dir = directory(
-            OUTPUT_DIR / "models/{data_ver}/{ifos}/{cl_config}"
+            OUTPUT_DIR / "models/{ifos}/{data_ver}/{cl_config}"
         ),
         # The omicron triggers can only generate on LDG cluster.
         omicron = DATA_DIR / "O4_MDC_background/omicron/",
     shell:
         'source {params.gwak_env}; uv run \
-            --project {params.pyproject} python {input.arg} \
+            --project {params.pyproject} python {input.arg} fit \
             --config {input.config} \
             --trainer.logger.save_dir {params.logger_dir} \
             --data.init_args.data_dir {input.data_dir} \
@@ -91,18 +94,18 @@ rule precompute_embeddings:
         config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
         embedding_model = expand(
             rules.train_cl.output.model,
-            data_ver="{data_ver}",
             ifos="{ifos}",
+            data_ver="{data_ver}",
             cl_config="{cl_config}",
         ),
         data_dir = lambda wildcards: directory(
-            DATA_DIR
+            DATA_DIR 
             / data_ver_path_converter[wildcards.data_ver]
             / wildcards.ifos
         )
     output:
         precom_data_dir = directory(
-            OUTPUT_DIR / "data/{data_ver}/{ifos}/{cl_config}_{coh_mode}"
+            OUTPUT_DIR / "data/{ifos}/{data_ver}/{cl_config}_{coh_mode}"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
@@ -130,7 +133,7 @@ rule train_fm:
     output:
         model = Path(
             OUTPUT_DIR / "models" 
-            / "{data_ver}/{ifos}/{cl_config}_{coh_mode}_{fm_config}"
+            / "{ifos}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
             / "model_JIT.pt"
         ),
     params:
@@ -138,7 +141,7 @@ rule train_fm:
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         logger_dir = directory(
             OUTPUT_DIR / "models" 
-            / "{data_ver}/{ifos}/{cl_config}_{coh_mode}_{fm_config}"
+            / "{ifos}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
         ),
     shell:
         'source {params.gwak_env}; uv run \
@@ -158,7 +161,7 @@ rule combine_models:
     output:
         model = Path(
             OUTPUT_DIR / "models" 
-            / "{data_ver}/{ifos}/{cl_config}_{coh_mode}_{fm_config}"
+            / "{ifos}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
             / "combination/model_JIT.pt"
         ),
     params:

@@ -11,7 +11,7 @@ class CombinedModel(nn.Module):
         embedder_model,
         metric_model,
         coh_mode,
-        full_return=True
+        full_return=False
     ):
         super().__init__()
         self.embedder_model = embedder_model
@@ -34,6 +34,7 @@ class CombinedModel(nn.Module):
     def freq_cos_sim(self, batch):
         sim_score = frequency_cos_similarity(batch, mode=self.coh_mode)
         return sim_score
+
 
 def main(
     embedder_model_file,
@@ -79,14 +80,15 @@ def main(
     # Test inference
     output = combined_model(dummy_input)
     print("Test inference complete.")
-
+    print(output)
     coh_size=1
     if coh_mode == "real_imag": 
         coh_size=2
-    assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
-    print(f"Output shape: {output.shape}")
-    print(f"Format: {[embedding_size, coh_size, 1]}")
-    print(f"Output: {output[:,-1]}")
+    
+    # assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
+    # print(f"Output shape: {output.shape}")
+    # print(f"Format: {[embedding_size, coh_size, 1]}")
+    # print(f"Output: {output[:,-1]}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

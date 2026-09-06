@@ -12,8 +12,7 @@ stride_batch_size: 256 # export overwrite
 sample_rate: 4096 # export overwrite
 fname:
   class_path: gwak_data_dir
-  init_args:
-    suffix: BBC_AnalysisReady_Cat12
+ana_data: BBC_AnalysisReady_Cat12
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
@@ -25,6 +24,9 @@ server_patients: 55
 monitor_patients: 5
 job_rate_limit: 1
 inference_rate: 4 # export overwrite
+ana_ver: O4b_cat1
+data_ver: O4b_cat1
 cl_config: null
+coh_mode: null
 fm_config: null
-dim_split: [6, 1, 1]
+dim_split: [0, 0, 1]

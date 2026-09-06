@@ -21,12 +21,17 @@ subcommands_keys = [
 # Avoid passing non string type variables to skip list. 
 # Otherwise, you would have to add an additinaol type check to it
 skip_keys = [
+    # Versioning
     "project",
-    "run_name",
-    "cl_config",
-    "fm_config",
     "ifo_mode",
-    "model",
+    "ana_ver",
+    "data_ver",
+    "cl_config",
+    "coh_mode",
+    "fm_config",
+    "run_name",
+    # "model",
+    "ana_data",
     "threshold_setting",
     "foreground",
     "Tb", # int
@@ -53,7 +58,9 @@ def export_args_hook():
     import yaml
     from deploy.libs import gwak_dir
 
-    export_cfg = gwak_dir()(append_path="gwak/deploy/configs/export.yaml")
+    export_cfg = gwak_dir()(
+        append_path="gwak/deploy/configs/export.yaml"
+    )
 
     with open(export_cfg) as f:
         export_args = yaml.safe_load(f)

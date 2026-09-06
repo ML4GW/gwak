@@ -243,7 +243,9 @@ rule build_deploy_containers:
     output:
         deploy_image =  IMAGE_DIR / "deploy.sif"
     params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
         processors = "--mksquashfs-args '-processors 32'"
     shell:
-        "set -x; apptainer build {params.processors} \
+        "source {params.gwak_env}; set -x; \
+        apptainer build {params.processors} \
         {output.deploy_image} {input.deploy_container}"

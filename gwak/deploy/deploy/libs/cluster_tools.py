@@ -272,6 +272,7 @@ def condor_submit_with_rate_limit(
             except IndexError:
                 pass
 
+        check_held = subprocess.run(["condor_release", "-all"], capture_output=True, text=True)
         time.sleep(10)
         # Check if any job is done
         for idx, (sub_file, job_id) in enumerate(job_status["Running"]):
