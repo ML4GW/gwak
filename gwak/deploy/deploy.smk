@@ -5,11 +5,6 @@ ifo_modes = [
     'HLVK'
 ]
 
-ana_ver_path_converter = {
-    "O4b_gwak_cat1": "O4_MDC_background", # Have omicron file
-    "O4b_gwak_cat12": "BBC_AnalysisReady_Cat12",
-}
-
 noise_runs = [
     'background', 'test_run',
     'one_day', 'one_month', 'one_year', 
@@ -30,21 +25,13 @@ benchmark_models = [
 
 wildcard_constraints:
     ifo_mode = '|'.join(x for x in ifo_modes),
-    ana_ver = '|'.join([x for x in ana_ver_path_converter.keys()]),
-    data_ver = '|'.join([x for x in data_ver_path_converter.keys()]),
+    ana_ver = '|'.join([x for x in ana_ver_to_path.keys()]),
+    data_ver = '|'.join([x for x in data_ver_to_path.keys()]),
     noise_run = '|'.join(x for x in noise_runs),
     foreground_run = '|'.join(x for x in foreground_runs),
     run_name = '|'.join(x for x in runs),
     benchmark_model = '|'.join(x for x in benchmark_models)
 
-
-runs_TS_converter = {
-    'background': 0, 'test_run': 1, 'one_day': 86400, 
-    'one_month': 2678400, 'one_year': 31557600, 
-    'one_decade': 315576000, 'one_centure': 3155760000,
-    'bbc-short-0': 0, 'bbc-short-1': 0, 
-    'injections': 0
-}
 
 ts_pair_for_run = {
     f"{run}_{ts_run}": ts_run
@@ -55,11 +42,6 @@ ts_pair_for_run = {
 ts_pair_for_run.update(
     {f"{run}_{run}": run for run in noise_runs}
 )
-
-bm_model_threshold_converter = {
-    "EM_NF_HL": -10,
-    "EM_IF_HL": -0.7
-}
 
 # snakemake -c1 $GWAK_OUTPUT_DIR/export/{cl_config}_{fm_config}_{ifo_mode}/combination
 rule export:
@@ -124,8 +106,8 @@ rule condor_infer:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
-        ana_data = lambda wildcards: ana_ver_path_converter[wildcards.ana_ver],
-        timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name],
+        ana_data = lambda wildcards: ana_ver_to_path[wildcards.ana_ver],
+        timeslide = lambda wildcards: runs_to_TS[wildcards.run_name],
     shell:
         "source {params.gwak_env}; set -x; uv run \
             --project {params.pyproject} python {input.arg} infer_condor \
@@ -139,14 +121,13 @@ rule condor_infer:
             --fm_config {wildcards.fm_config} \
             --run_name {wildcards.run_name} \
             --Tb {params.timeslide}"
-            # --fname.init_args.suffix test \
 
 
 rule slurm_infer:
     input:
         config = 'deploy/configs/infer_slurm.yaml',
     params:
-        timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
+        timeslide = lambda wildcards: runs_to_TS[wildcards.run_name]
     output:
         artefact = directory(
             OUTPUT_DIR / "Slurm_Jobs"

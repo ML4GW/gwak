@@ -81,6 +81,7 @@ def main(
     output = combined_model(dummy_input)
     print("Test inference complete.")
     print(output)
+    print(output.sum())
     coh_size=1
     if coh_mode == "real_imag": 
         coh_size=2

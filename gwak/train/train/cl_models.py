@@ -20,7 +20,7 @@ from typing import Optional, Union
 import torch
 import torch.nn as nn
 from einops import rearrange, repeat
-from train.losses import SupervisedSimCLRLoss
+
 from train.schedulers import WarmupCosineAnnealingLR
 from train.plotting import make_corner
 
@@ -37,6 +37,7 @@ from train.ssm import DropoutNd, S4DKernel, S4D, S4Model
 from train.nets import MLP, Encoder, Decoder
 from train.callback import ModelCheckpoint
 from train.resnet_1d import ResNet1D
+from trainer import SupervisedSimCLRLoss
 
 
 class GwakBaseModelClass(pl.LightningModule):
@@ -264,9 +265,11 @@ class SimCLRBase(GwakBaseModelClass):
         self.log("train/temperature", temp)
         if self.use_classifier:
             self.log("train/lambda_class", lambda_class)
-        self.loss_function = SupervisedSimCLRLoss(temperature=temp,
-                                                  contrast_mode='all', 
-                                                  base_temperature=temp)
+        self.loss_function = SupervisedSimCLRLoss(
+            temperature=temp,
+            contrast_mode='all',
+            base_temperature=temp
+        )
         self.lambda_classifier = lambda_class
 
     def training_step(self, batch, batch_idx):
@@ -458,20 +461,40 @@ class Crayon(SimCLRBase):
         self.anneal_classifier = anneal_classifier
         self.classifier_hidden_dims = classifier_hidden_dims
 
-        self.model = S4Model(d_input=self.num_ifos,
-                    length=self.num_timesteps,
-                    d_output = self.d_output,
-                    **s4_kwargs)
-
-        self.projection_head = MLP(d_input = self.d_output, hidden_dims=[self.d_output], d_output = self.d_contrastive_space)
+        self.model = S4Model(
+            d_input=self.num_ifos,
+            length=self.num_timesteps,
+            d_output = self.d_output,
+            **s4_kwargs
+        )
+        self.projection_head = MLP(
+            d_input = self.d_output,
+            hidden_dims=[self.d_output],
+            d_output = self.d_contrastive_space
+        )
+        hidden_dims = (
+            self.classifier_hidden_dims
+            if self.classifier_hidden_dims is not None
+            else [4 * self.d_output] * 2
+        )
+        temperature = (
+            self.temperature_init
+            if self.temperature_init is not None
+            else self.temperature
+        )
         if self.use_classifier:
-            hidden_dims = self.classifier_hidden_dims if self.classifier_hidden_dims is not None else [4*self.d_output for _ in range(2)]
-            self.classifier = MLP(d_input = self.d_output, hidden_dims=hidden_dims,
-                                d_output = self.num_classes)
+            
+            self.classifier = MLP(
+                d_input = self.d_output,
+                hidden_dims=hidden_dims,
+                d_output = self.num_classes
+            )
 
-        self.loss_function = SupervisedSimCLRLoss(temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
-                                                  contrast_mode='all',
-                                                  base_temperature=self.temperature)
+        self.loss_function = SupervisedSimCLRLoss(
+            temperature=temperature,
+            contrast_mode='all',
+            base_temperature=self.temperature
+        )
 
         self.val_outputs = []
 
@@ -683,29 +706,39 @@ class Contour(SimCLRBase):
             kernel_size=self.resnet_kernel_size
         )
 
-        self.projector_hidden_dims = projector_hidden_dims if projector_hidden_dims is not None else [4*self.d_output, 4*self.d_output]
+        self.projector_hidden_dims = (
+            projector_hidden_dims 
+            if projector_hidden_dims is not None 
+            else [4*self.d_output, 4*self.d_output]
+        )
         self.projection_head = MLP(
-            d_input = self.d_output, 
-            hidden_dims=self.projector_hidden_dims, 
+            d_input = self.d_output,
+            hidden_dims=self.projector_hidden_dims,
             d_output = self.d_contrastive_space
         )
-
+        hidden_dims = (
+            self.classifier_hidden_dims 
+            if self.classifier_hidden_dims is not None else 
+            [4*self.d_output for _ in range(2)]
+        )
+        temperature = (
+            self.temperature_init 
+            if self.temperature_init is not None 
+            else self.temperature
+        )
         if self.use_classifier:
-            hidden_dims = self.classifier_hidden_dims if self.classifier_hidden_dims is not None else [4*self.d_output for _ in range(2)]
             self.classifier = MLP(
-                d_input = self.d_output, 
-                hidden_dims=hidden_dims, 
+                d_input = self.d_output,
+                hidden_dims=hidden_dims,
                 d_output = self.num_classes
             )
-        
         self.loss_function = SupervisedSimCLRLoss(
-            temperature=self.temperature_init if self.temperature_init is not None else self.temperature,
-            contrast_mode='all', 
+            temperature=temperature,
+            contrast_mode='all',
             base_temperature=self.temperature
         )
 
         self.val_outputs = []
-
         self.save_hyperparameters()
 
     def configure_callbacks(self) -> Sequence[pl.Callback]:

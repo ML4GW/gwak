@@ -4,57 +4,30 @@ ifo_configs = [
     "LV",
     "HLV"
 ]
-data_ver_path_converter = {
-    "O4b_cat1": "O4_MDC_background", # Have omicron file
-    "O4b_cat1-chunked": "O4_MDC_background-chunked",
-    "O4b_cat12": "BBC_AnalysisReady_Cat12",
-    "O4b_cat12-katya": "BBC_AnalysisReady_Cat12-katya"
-}
 
 cl_configs = [
-    'Transformer_SimCLR_multiSignal_all',
-    'Transformer_SimCLR_multiSignalAndBkg_noSG',
-    'S4_SimCLR_multiSignalAndBkg',
-    'Transformer_patch_SimCLR_multiSignalAndBkg',
-    'Transformer_patch_noClass_SimCLR_multiSignalAndBkg',
-    's4_kl1.0_bs512',
-    'transformer_patch64_kl0.5_bs512',
-    'resnet_kl1.0_bs512_noAnnealClassifier_noMultiSG',
-    'resnet_kl1.0_bs512_noClassifier_noMultiSG',
-    'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus',
-    'resnet_kl1.0_bs512_noClassifier_noMultiSG_fixedWNBGaus_noFakeGlitch_lowDim',
-    'resnet_kl1.0_bs512',
     'Astroconformer',
     'iTransformer',
     'ResNet',
-    'ResNet_6d',
-    'ResNet_6d.test',
-    'ResNet_cat12',
-    'ResNet_separate-glitch',
-    'ResNet_mid',
-    'torch_rbw_zp_resnet_do6_dcs064_epoch25',
-    'torch_rbw_zp_resnet_do6_dcs128_epoch25',
-    "torch_rbw_zp_resnet_do6_dcs128_epoch25.test",
+    "ResNet_6d",
+    "ResNet_6d.test",
 ]
 coh_modes = [
     "real", "real_imag", "abs",
 ]
 fm_configs = [
     'NF_onlyBkg',
-    'NF_from_file_conditioning.test',
-    'NF_from_file_conditioning_bs64',
-    "NF_from_file_conditioning",
-    "NF_from_file_conditioning_bs1024",
-    'NF_from_file_6d',
+    "NF_from_file",
+    "NF_from_file.test",
     'FM_multiSignalAndBkg',
 ]
 
 wildcard_constraints:
-    ifos = '|'.join([x for x in ifo_configs]),
-    data_ver = '|'.join([x for x in data_ver_path_converter.keys()]),
-    cl_config = '|'.join([x for x in cl_configs]),
-    coh_mode = '|'.join([x for x in coh_modes]),
-    fm_config = '|'.join([x for x in fm_configs]),
+    ifos       = '|'.join([x for x in ifo_configs]),
+    data_ver   = '|'.join([x for x in data_ver_to_path.keys()]),
+    cl_config  = '|'.join([x for x in cl_configs]),
+    coh_mode   = '|'.join([x for x in coh_modes]),
+    fm_config  = '|'.join([x for x in fm_configs]),
 
 rule train_cl:
     input:
@@ -62,11 +35,11 @@ rule train_cl:
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         data_dir = lambda wildcards: directory(
             DATA_DIR
-            / data_ver_path_converter[wildcards.data_ver]
+            / data_ver_to_path[wildcards.data_ver]
             / wildcards.ifos
         )
     output:
-        model = Path(
+        model        = Path(
             OUTPUT_DIR 
             / "models/{ifos}/{data_ver}/{cl_config}/model_JIT.pt"
         )
@@ -100,7 +73,7 @@ rule precompute_embeddings:
         ),
         data_dir = lambda wildcards: directory(
             DATA_DIR 
-            / data_ver_path_converter[wildcards.data_ver]
+            / data_ver_to_path[wildcards.data_ver]
             / wildcards.ifos
         )
     output:
@@ -128,6 +101,7 @@ rule precompute_embeddings:
 rule train_fm:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli_fm.py",
+        main = GWAK_ROOT / "gwak/train/train/fm_models.py",
         config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
         precom_data_dir = rules.precompute_embeddings.output.precom_data_dir
     output:
@@ -293,147 +267,164 @@ rule make_offline_dataset:
 #             --data.labels_path {params.labels} '
 
 
-# # rule make_plots_i:
-# #     input:
-# #         embedding_model = expand(rules.train_cl.output.model,
-# #             cl_config='{cl_config}',
-# #             ifos='{ifos}'),
-# #         fm_model = expand(rules.train_fm.output.model,
-# #             fm_config='{fm_config}',
-# #             cl_config='{cl_config}',
-# #             ifos='{ifos}'),
-# #     params:
-# #         data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
-# #         config = 'train/configs/{cl_config}.yaml',
-# #         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
-# #     output:
-# #         directory('output/plots/{cl_config}_{fm_config}_{ifos}/'),
-# #     shell:
-# #         'mkdir -p {output}; '
-# #         'cd gwak/train; uv run python train/plots.py \
-# #             --embedding-model {input.embedding_model} \
-# #             --fm-model {input.fm_model} \
-# #             --data-dir {params.data_dir} \
-# #             --ifos {wildcards.ifos} \
-# #             --config {params.config} \
-# #             --output {output} \
-# #             --conditioning {params.conditioning} \
-# #             --nevents 15000 \
-# #             --threshold-1yr 48 '
+# rule make_plots_i:
+#     input:
+#         embedding_model = expand(rules.train_cl.output.model,
+#             cl_config='{cl_config}',
+#             ifos='{ifos}'),
+#         fm_model = expand(rules.train_fm.output.model,
+#             fm_config='{fm_config}',
+#             cl_config='{cl_config}',
+#             ifos='{ifos}'),
+#     params:
+#         data_dir = 'output/BBC_AnalysisReady_Cat12/{ifos}/',
+#         config = 'train/configs/{cl_config}.yaml',
+#         conditioning = lambda wildcards: "True" if "conditioning" in wildcards.fm_config else "False"
+#     output:
+#         directory('output/plots/{cl_config}_{fm_config}_{ifos}/'),
+#     shell:
+#         'mkdir -p {output}; '
+#         'cd gwak/train; uv run python train/plots.py \
+#             --embedding-model {input.embedding_model} \
+#             --fm-model {input.fm_model} \
+#             --data-dir {params.data_dir} \
+#             --ifos {wildcards.ifos} \
+#             --config {params.config} \
+#             --output {output} \
+#             --conditioning {params.conditioning} \
+#             --nevents 15000 \
+#             --threshold-1yr 48 '
 
-# # rule make_plots:
-# #     input:
-# #         expand(rules.make_plots_i.output,
-# #             cl_config='ResNet',
-# #             fm_config='NF_from_file_conditioning',
-# #             ifos=['HL'])
+# rule make_plots:
+#     input:
+#         expand(rules.make_plots_i.output,
+#             cl_config='ResNet',
+#             fm_config='NF_from_file_conditioning',
+#             ifos=['HL'])
 
-# # rule run_evaluate_one_month:
-# #     input:
-# #         expand(OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
-# #             cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', fm_config='NF_from_file_6d', ifos='HL')
-
-
-# # rule run_evaluate_one_month_if:
-# #     input:
-# #         expand(OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
-# #             cl_config='ResNet_6d', ifos='HL')
+# rule run_evaluate_one_month:
+#     input:
+#         expand(OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
+#             cl_config='torch_rbw_zp_resnet_do6_dcs128_epoch25', fm_config='NF_from_file_6d', ifos='HL')
 
 
+# rule run_evaluate_one_month_if:
+#     input:
+#         expand(OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
+#             cl_config='ResNet_6d', ifos='HL')
 
 
-# # rule train_isolation_forest:
-# #     input:
-# #         embeddings   = OUTPUT_DIR / '{cl_config}_{ifos}/embeddings.npy',
-# #         labels       = OUTPUT_DIR / '{cl_config}_{ifos}/labels.npy',
-# #         correlations = OUTPUT_DIR / '{cl_config}_{ifos}/correlations.npy',
-# #         means        = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
-# #         stds         = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
-# #     output:
-# #         OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib'
-# #     shell:
-# #         'cd gwak/train; uv run python train/train_if.py \
-# #             --embeddings {input.embeddings} \
-# #             --labels {input.labels} \
-# #             --correlations {input.correlations} \
-# #             --means {input.means} \
-# #             --stds {input.stds} \
-# #             --output {output}'
 
-# # rule evaluate_one_month_if:
-# #     input:
-# #         embedding_model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt',
-# #         if_model        = OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib',
-# #         means           = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
-# #         stds            = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
-# #     params:
-# #         inference_dir = "/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/torch_rbw_zp_resnet_do6_dcs128_epoch25_NF_from_file_conditioning_HL/one_month/inference_result",
-# #         output_dir    = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.ifos}_IF/evaluation/'),
-# #     output:
-# #         scores = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
-# #     shell:
-# #         'cd gwak/train; uv run python ../evaluate_one_month.py \
-# #             --model-path {input.embedding_model} \
-# #             --if-model {input.if_model} \
-# #             --means {input.means} \
-# #             --stds {input.stds} \
-# #             --inference-dir {params.inference_dir} \
-# #             --output-dir {params.output_dir} \
-# #             --smooth-window 1 \
-# #             --veto-duration 10'
 
-# # rule evaluate_one_month:
-# #     input:
-# #         model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt',
-# #     params:
-# #         inference_dir = "/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/torch_rbw_zp_resnet_do6_dcs128_epoch25_NF_from_file_conditioning_HL/one_month/inference_result",
-# #         output_dir = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.fm_config}_{wildcards.ifos}/evaluation/'),
-# #     output:
-# #         scores = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
-# #     shell:
-# #         'cd gwak/train; uv run python ../evaluate_one_month.py \
-# #             --model-path {input.model} \
-# #             --inference-dir {params.inference_dir} \
-# #             --output-dir {params.output_dir} \
-# #             --smooth-window 4 \
-# #             --veto-duration 10'
+# rule train_isolation_forest:
+#     input:
+#         embeddings   = OUTPUT_DIR / '{cl_config}_{ifos}/embeddings.npy',
+#         labels       = OUTPUT_DIR / '{cl_config}_{ifos}/labels.npy',
+#         correlations = OUTPUT_DIR / '{cl_config}_{ifos}/correlations.npy',
+#         means        = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
+#         stds         = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
+#     output:
+#         OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib'
+#     shell:
+#         'cd gwak/train; uv run python train/train_if.py \
+#             --embeddings {input.embeddings} \
+#             --labels {input.labels} \
+#             --correlations {input.correlations} \
+#             --means {input.means} \
+#             --stds {input.stds} \
+#             --output {output}'
 
-# # rule efficiency_plots:
-# #     input:
-# #         model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt',
-# #         scores = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
-# #     params:
-# #         signal_dataset = OUTPUT_DIR / 'dataset_train_HL_SR4096_kernel1.0_hrss.h5',
-# #         output_dir = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.fm_config}_{wildcards.ifos}/evaluation/'),
-# #     output:
-# #         snr_plot  = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
-# #         hrss_plot = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_hrss.png',
-# #     shell:
-# #         'cd gwak/train; uv run python ../efficiency_plots.py \
-# #             --model-path {input.model} \
-# #             --background-scores {input.scores} \
-# #             --signal-dataset {params.signal_dataset} \
-# #             --output-dir {params.output_dir}'
+# rule evaluate_one_month_if:
+#     input:
+#         embedding_model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt',
+#         if_model        = OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib',
+#         means           = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
+#         stds            = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
+#     params:
+#         inference_dir = "/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/torch_rbw_zp_resnet_do6_dcs128_epoch25_NF_from_file_conditioning_HL/one_month/inference_result",
+#         output_dir    = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.ifos}_IF/evaluation/'),
+#     output:
+#         scores = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
+#     shell:
+#         'cd gwak/train; uv run python ../evaluate_one_month.py \
+#             --model-path {input.embedding_model} \
+#             --if-model {input.if_model} \
+#             --means {input.means} \
+#             --stds {input.stds} \
+#             --inference-dir {params.inference_dir} \
+#             --output-dir {params.output_dir} \
+#             --smooth-window 1 \
+#             --veto-duration 10'
 
-# # rule efficiency_plots_if:
-# #     input:
-# #         embedding_model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt',
-# #         if_model        = OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib',
-# #         means           = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
-# #         stds            = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
-# #         scores          = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
-# #     params:
-# #         signal_dataset = OUTPUT_DIR / 'dataset_train_HL_SR4096_kernel1.0_hrss.h5',
-# #         output_dir     = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.ifos}_IF/evaluation/'),
-# #     output:
-# #         snr_plot  = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-# #         hrss_plot = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_hrss.png',
-# #     shell:
-# #         'cd gwak/train; uv run python ../efficiency_plots.py \
-# #             --model-path {input.embedding_model} \
-# #             --if-model {input.if_model} \
-# #             --means {input.means} \
-# #             --stds {input.stds} \
-# #             --background-scores {input.scores} \
-# #             --signal-dataset {params.signal_dataset} \
-# #             --output-dir {params.output_dir}'
+# rule evaluate_one_month:
+#     input:
+#         model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt',
+#     params:
+#         inference_dir = "/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/torch_rbw_zp_resnet_do6_dcs128_epoch25_NF_from_file_conditioning_HL/one_month/inference_result",
+#         output_dir = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.fm_config}_{wildcards.ifos}/evaluation/'),
+#     output:
+#         scores = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
+#     shell:
+#         'cd gwak/train; uv run python ../evaluate_one_month.py \
+#             --model-path {input.model} \
+#             --inference-dir {params.inference_dir} \
+#             --output-dir {params.output_dir} \
+#             --smooth-window 4 \
+#             --veto-duration 10'
+
+# rule efficiency_plots:
+#     input:
+#         model = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/combination/model_JIT.pt',
+#         scores = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/scores.npy',
+#     params:
+#         signal_dataset = OUTPUT_DIR / 'dataset_train_HL_SR4096_kernel1.0_hrss.h5',
+#         output_dir = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.fm_config}_{wildcards.ifos}/evaluation/'),
+#     output:
+#         snr_plot  = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
+#         hrss_plot = OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_hrss.png',
+#     shell:
+#         'cd gwak/train; uv run python ../efficiency_plots.py \
+#             --model-path {input.model} \
+#             --background-scores {input.scores} \
+#             --signal-dataset {params.signal_dataset} \
+#             --output-dir {params.output_dir}'
+
+# rule efficiency_plots_if:
+#     input:
+#         embedding_model = OUTPUT_DIR / '{cl_config}_{ifos}/model_JIT.pt',
+#         if_model        = OUTPUT_DIR / '{cl_config}_{ifos}/isolation_forest.joblib',
+#         means           = OUTPUT_DIR / '{cl_config}_{ifos}/means.npy',
+#         stds            = OUTPUT_DIR / '{cl_config}_{ifos}/stds.npy',
+#         scores          = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/scores.npy',
+#     params:
+#         signal_dataset = OUTPUT_DIR / 'dataset_train_HL_SR4096_kernel1.0_hrss.h5',
+#         output_dir     = lambda wildcards: str(OUTPUT_DIR / f'{wildcards.cl_config}_{wildcards.ifos}_IF/evaluation/'),
+#     output:
+#         snr_plot  = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
+#         hrss_plot = OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_hrss.png',
+#     shell:
+#         'cd gwak/train; uv run python ../efficiency_plots.py \
+#             --model-path {input.embedding_model} \
+#             --if-model {input.if_model} \
+#             --means {input.means} \
+#             --stds {input.stds} \
+#             --background-scores {input.scores} \
+#             --signal-dataset {params.signal_dataset} \
+#             --output-dir {params.output_dir}'
+
+# rule run_efficiency_plots_if:
+#     input:
+#         expand(
+#             OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
+#             cl_config=cl_config_list,
+#             ifos=ifos_list
+#         )
+
+# rule run_efficiency_plots:
+#     input:
+#         expand(
+#             OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
+#             cl_config=cl_config_list,
+#             fm_config=fm_config_list,
+#             ifos=ifos_list
+#         )

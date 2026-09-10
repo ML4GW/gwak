@@ -7,4 +7,4 @@ fm_config: NF_from_file_conditioning
 run_name: one_year
 infer_sample_rate: 4
 psd_length: 64
-threshold_level: 100
+threshold_level: 1

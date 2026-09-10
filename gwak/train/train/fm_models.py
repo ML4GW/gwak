@@ -26,7 +26,10 @@ from nflows.flows.base import Flow
 from nflows.distributions.normal import StandardNormal, ConditionalDiagonalNormal
 from nflows.transforms.base import CompositeTransform
 from nflows.transforms.permutations import ReversePermutation
-from nflows.transforms.autoregressive import MaskedAffineAutoregressiveTransform, MaskedPiecewiseRationalQuadraticAutoregressiveTransform
+from nflows.transforms.autoregressive import (
+    MaskedAffineAutoregressiveTransform, 
+    MaskedPiecewiseRationalQuadraticAutoregressiveTransform
+)
 
 from train.losses import SupervisedSimCLRLoss
 from train.schedulers import WarmupCosineAnnealingLR
@@ -51,28 +54,22 @@ class Standardizer(nn.Module):
         return (x - self.mean.to(x)) / self.std.to(x)
 
 class FlowWrapper(nn.Module):
-    def __init__(self, flow, standardizer=None, use_correlation=True,
-                 condition_on_correlation=False, standardizer_x=None, standardizer_c=None):
+    def __init__(
+        self, 
+        flow, 
+        standardizer=None,
+        # use_correlation=True,
+        # condition_on_correlation=False, 
+        # standardizer_x=None, 
+        # standardizer_c=None
+    ):
         super().__init__()
         self.flow = flow
         self.standardizer = standardizer
-        self.use_correlation = use_correlation
-        self.condition_on_correlation = condition_on_correlation
-        self.standardizer_x = standardizer_x
-        self.standardizer_c = standardizer_c
 
     def forward(self, x, context):
-        if self.condition_on_correlation:
-            x_in = self.standardizer_x(x) if self.standardizer_x is not None else x
-            c_in = self.standardizer_c(context) if self.standardizer_c is not None else context
-            return self.flow.log_prob(inputs=x_in, context=c_in)
-        elif self.use_correlation:
-            x_full = torch.cat([x, context], dim=-1)
-            if self.standardizer is not None: x_full = self.standardizer(x_full)
-            return self.flow.log_prob(inputs=x_full)
-        else:
-            x_in = self.standardizer(x) if self.standardizer is not None else x
-            return self.flow.log_prob(inputs=x_in)
+        if self.standardizer: x = self.standardizer(x)
+        return self.flow.log_prob(inputs=x,context=context)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
@@ -91,30 +88,24 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         use_corr = getattr(module, 'use_correlation', True)
         use_cond = getattr(module, 'condition_on_correlation', False)
         wrapper = FlowWrapper(
-            module.model,
-            standardizer=module.standardizer if not use_cond else None,
-            use_correlation=use_corr,
-            condition_on_correlation=use_cond,
-            standardizer_x=getattr(module, 'standardizer_x', None) if use_cond else None,
-            standardizer_c=getattr(module, 'standardizer_c', None) if use_cond else None,
+            module.model, 
+            module.standardizer
         ).to("cuda:0")
         wrapper.eval()
-        example_input = torch.randn(1, module.embedding_dims).to("cuda:0")
-        # if module.conditioning:
-        example_context = torch.randn(1, module.context_features).to("cuda:0")
-        
-        print("Sanity check for the Flow_wapper model")
-        print("    ", wrapper(example_input, example_context))
-        traced = torch.jit.trace(wrapper, (example_input, example_context))
-        # traced = torch.jit.script(wrapper)
 
-        # else:
-        #     traced = torch.jit.trace(wrapper, (example_input))
+        # this is for spline
+        example_input = torch.randn(1, module.embedding_dims).to("cuda:0")
+        if module.condition_on_correlation:
+            example_context = torch.randn(1, module.context_features).to("cuda:0")
+            traced = torch.jit.trace(wrapper, (example_input, example_context))
+        else:
+            traced = torch.jit.trace(wrapper, (example_input))
 
         # Save the traced model
         save_dir = trainer.logger.log_dir or trainer.logger.save_dir
-        os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, "model_JIT.pt")
+        save_dir = Path(save_dir)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_path = save_dir / "model_JIT.pt"
         traced.save(save_path)
 
 class LinearModelCheckpoint(pl.callbacks.ModelCheckpoint):
@@ -181,7 +172,9 @@ class Linear(GwakBaseModelClass):
 
     def training_step(self, batch, batch_idx):
         i = batch_idx  # Each batch corresponds to a background chunk
-        small_bkgs = self.backgrounds[i * self.new_shape:(i + 1) * self.new_shape].to(self.device)
+        small_bkgs = self.backgrounds[
+            i * self.new_shape:(i + 1) * self.new_shape
+        ].to(self.device)
 
         # Load first model (frozen for inference)
         batch = self.graph.model(batch[0])
@@ -282,7 +275,7 @@ class NonLinearClassifier(GwakBaseModelClass):
             new_shape=128,
             n_dims=16,
             c_path=None,
-            conditioning=None,
+            condition_on_correlation=None,
             learning_rate=1e-3,
             hidden_dim=32):
         super().__init__()
@@ -395,20 +388,22 @@ class NonLinearClassifier(GwakBaseModelClass):
             auto_insert_metric_name=False
         )]
 
-
 class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
             embedding_model: str = None,
+            means: Optional[str] = None,
+            stds: Optional[str] = None,
             new_shape=128,
             n_dims=8,
             n_flow_steps=4,
             hidden_dim=64,
-            coh_mode="real",
+            coh_mode:str="real",
+            # num_bins=50,
+            learning_rate=1e-3,
             use_correlation: bool = True,
             condition_on_correlation: bool = False,
             normalize: bool = True,
-            learning_rate=1e-3,
     ):
         super().__init__()
 
@@ -424,53 +419,67 @@ class BackgroundFlowModel(GwakBaseModelClass):
         self.condition_on_correlation = condition_on_correlation
         self.normalize = normalize
         self.n_dims = n_dims
-        # embedding_dims: pure embedding size (no xcorr)
-        if condition_on_correlation:
-            self.embedding_dims = n_dims          # flow input = embeddings only
-            context_features = 1
-        elif use_correlation:
-            self.embedding_dims = n_dims - 1      # flow input = embedding + xcorr concatenated
-            context_features = None
-        else:
-            self.embedding_dims = n_dims
-            context_features = None
+
+        context_features = 1
         if coh_mode == "real_imag":
             context_features = 2
-        self.context_features = context_features            
-        self.coh_mode = coh_mode
-        # self.my_log_dir = Path(f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/ResNet_6d_{coh_mode}_NF_from_file_conditioning_HL")
-        # Define RQS Flow
+
+        if condition_on_correlation:
+            # flow input = embeddings only
+            self.embedding_dims = n_dims
+        elif use_correlation:
+            # flow input = embedding + xcorr concatenated 
+            # (was embedding - xcorr concatenated)
+            self.embedding_dims = n_dims + context_features
+            context_features = 0
+        else:
+            self.embedding_dims = n_dims
+            context_features = 0
+        self.context_features = context_features
+        # Define MAF Flow
         transforms = []
         for _ in range(n_flow_steps):
-            maf = MaskedPiecewiseRationalQuadraticAutoregressiveTransform(
+            maf = MaskedAffineAutoregressiveTransform(
                 features=self.n_dims,
                 hidden_features=hidden_dim,
                 num_blocks=4,
-                num_bins=8,
-                tail_bound=5,
-                tails='linear',
-                context_features=context_features,
+                context_features=self.context_features
             )
             transforms.append(maf)
             transforms.append(ReversePermutation(features=self.n_dims))
 
+        if not self.condition_on_correlation: 
+            distribution = StandardNormal([self.n_dims])
+        else:
+            context_encoder=nn.Linear(self.context_features, 2*self.n_dims)
+            distribution = ConditionalDiagonalNormal(
+                [self.n_dims],
+                context_encoder=context_encoder
+            )
+
         self.flow = Flow(
             transform=CompositeTransform(transforms),
-            distribution=StandardNormal([self.n_dims])
+            distribution=distribution
         )
 
-        if condition_on_correlation:
-            # Separate standardizers for embeddings and context
-            self.standardizer = None
-            self.standardizer_x = Standardizer(torch.zeros(n_dims), torch.ones(n_dims))
-            self.standardizer_c = Standardizer(
-                torch.zeros(self.context_features), 
-                torch.ones(self.context_features)
+        # Store mean and std for standardization
+        self.embedding_mean = None
+        self.embedding_std = None
+        self.standardizer = None
+        if means is not None and stds is not None:
+            self.register_buffer(
+                "embedding_mean",
+                torch.from_numpy(np.load(means))
             )
-        else:
-            self.standardizer = Standardizer(torch.zeros(n_dims), torch.ones(n_dims))
-            self.standardizer_x = None
-            self.standardizer_c = None
+            self.register_buffer(
+                "embedding_std",
+                torch.from_numpy(np.load(stds))
+            )
+            self.standardizer = Standardizer(
+                self.embedding_mean,
+                self.embedding_std
+            )
+
         self.model = self.flow
 
         self.new_shape = new_shape
@@ -485,71 +494,44 @@ class BackgroundFlowModel(GwakBaseModelClass):
     def configure_optimizers(self):
         return optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
-    def on_fit_start(self):
-        if not self.normalize:
-            return
-        dm = self.trainer.datamodule
-        if not hasattr(dm, 'x_mean'):
-            return
-        if self.condition_on_correlation:
-            self.standardizer_x.mean.copy_(dm.x_mean)
-            self.standardizer_x.std.copy_(dm.x_std)
-            if hasattr(dm, 'c_mean'):
-                self.standardizer_c.mean.copy_(dm.c_mean)
-                self.standardizer_c.std.copy_(dm.c_std)
-        elif self.use_correlation and hasattr(dm, 'c_mean'):
-            mean = torch.cat([dm.x_mean, dm.c_mean], dim=0)
-            std = torch.cat([dm.x_std, dm.c_std], dim=0)
-            self.standardizer.mean.copy_(mean)
-            self.standardizer.std.copy_(std)
-        else:
-            self.standardizer.mean.copy_(dm.x_mean)
-            self.standardizer.std.copy_(dm.x_std)
-
-    def _get_feats_and_c(self, batch):
-        need_c = self.use_correlation or self.condition_on_correlation
+    def training_step(self, batch, batch_idx):
         if self.embedding_model:
             if len(batch) == 2:
                 batch, _ = batch
             feats = self.graph(batch)
-            c_score = self.freq_cos_sim(batch) if need_c else None
+            c = self.freq_cos_sim(batch)
         else:
-            feats = batch[0]
-            c_score = batch[1] if need_c and len(batch) > 1 else None
-        return feats, c_score
+            feats, c = batch
 
-    def training_step(self, batch, batch_idx):
-        feats, c_score = self._get_feats_and_c(batch)
+        if self.standardizer is not None:
+            feats = self.standardizer(feats)
 
         if self.condition_on_correlation:
-            feats_in = self.standardizer_x(feats)
-            c_in = self.standardizer_c(c_score)
-            log_prob = self.model.log_prob(inputs=feats_in, context=c_in)
-        elif self.use_correlation:
-            feats_in = self.standardizer(torch.cat([feats, c_score], dim=-1))
-            log_prob = self.model.log_prob(inputs=feats_in)
+            log_prob = self.model.log_prob(inputs=feats,context=c)
         else:
-            feats_in = self.standardizer(feats)
-            log_prob = self.model.log_prob(inputs=feats_in)
-
+            log_prob = self.model.log_prob(inputs=feats)
         loss = -log_prob.mean()
         self.log("train/loss", loss, on_epoch=True, sync_dist=True)
         return loss
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        feats, c_score = self._get_feats_and_c(batch)
+        if self.embedding_model:
+            if len(batch) == 2:
+                batch, _ = batch
+            feats = self.graph(batch)
+            c_score = self.freq_cos_sim(batch)
+        else:
+            feats, c_score = batch
+
+        if self.standardizer is not None:
+            feats = self.standardizer(feats)
 
         if self.condition_on_correlation:
-            feats_in = self.standardizer_x(feats)
-            c_in = self.standardizer_c(c_score)
-            log_prob = self.model.log_prob(inputs=feats_in, context=c_in)
-        elif self.use_correlation:
-            feats_in = self.standardizer(torch.cat([feats, c_score], dim=-1))
-            log_prob = self.model.log_prob(inputs=feats_in)
+
+            log_prob = self.model.log_prob(inputs=feats,context=c_score)
         else:
-            feats_in = self.standardizer(feats)
-            log_prob = self.model.log_prob(inputs=feats_in)
+            log_prob = self.model.log_prob(inputs=feats)
 
         loss = -log_prob.mean()
         self.log("val/loss", loss, sync_dist=True)

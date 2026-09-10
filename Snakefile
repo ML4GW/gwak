@@ -7,7 +7,7 @@ GWAK_ROOT = Path(workflow.basedir).resolve()
 DEFAULT_CONFIG = GWAK_ROOT / "setups" / "config.yaml"
 LOCAL_SETUP_CONFIG_FILE = GWAK_ROOT / "setups" / "config.local.yaml"
 
-include: GWAK_ROOT / "setups/convert.smk"
+include: GWAK_ROOT / "setups/converter.smk"
 include: GWAK_ROOT / "setups/setup.smk"
 include: GWAK_ROOT / "gwak/data/data.smk"
 include: GWAK_ROOT / "gwak/train/train.smk"
@@ -19,21 +19,20 @@ ana_ver_list = [
     "O4b_gwak_cat12"
 ]
 data_ver_list = [
-    # "O4b_cat1-chunked",
-    "O4b_cat12-katya"
+    "O4b_cat1-chunked",
+    # "O4b_cat12-katya"
 ]
 ifos_list = ["HL"]
 cl_config_list = [
-    "torch_rbw_zp_resnet_do6_dcs128_epoch25.test",
-    # "ResNet_6d",
+    "ResNet_6d.test",
 ]
 coh_mode_list = [
     "real",
-    # "real_imag",
-    # "abs"
+    "real_imag",
+    "abs"
 ]
 fm_config_list = [
-    "NF_from_file_conditioning",
+    "NF_from_file.test",
 ]
 noise_run_list = ["one_month"]
 foreground_run_list = [
@@ -59,23 +58,6 @@ rule pull_all:
             ifos=['hl', 'hv', 'lv', 'hlv']
         )
 
-# rule run_efficiency_plots_if:
-#     input:
-#         expand(
-#             OUTPUT_DIR / '{cl_config}_{ifos}_IF/evaluation/efficiency_vs_snr.png',
-#             cl_config=cl_config_list,
-#             ifos=ifos_list
-#         )
-
-# rule run_efficiency_plots:
-#     input:
-#         expand(
-#             OUTPUT_DIR / '{cl_config}_{fm_config}_{ifos}/evaluation/efficiency_vs_snr.png',
-#             cl_config=cl_config_list,
-#             fm_config=fm_config_list,
-#             ifos=ifos_list
-#         )
-
 rule train_all:
     input:
         expand(
@@ -100,7 +82,6 @@ rule scan_all:
             run_name=run_name_list
         )
 
-
 rule benchmark:
     input:
         expand(
@@ -112,6 +93,5 @@ rule benchmark:
             coh_mode=coh_mode_list,
             fm_config=fm_config_list,
             noise_run=noise_run_list,
-            # foreground_run=foreground_run_list,
             run_name=run_name_list,
         )

@@ -37,6 +37,7 @@ import time
 from typing import Union
 
 from scipy import signal
+from transforms import TorchBandpassFIR, hrrs_value
 
 def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
     coeffs = []
@@ -47,105 +48,6 @@ def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
         coeffs.append(coeff)
     return coeffs
 
-
-def hrrs_value(
-    h_plus: torch.Tensor,
-    h_cross: torch.Tensor,
-    dim: int = -1,
-    dt: float = 1.0/4096,
-):
-    """
-    Args:
-        h_plus:  Tensor of shape (..., T)
-        h_cross: Tensor of shape (..., T)
-        dim:     Dimension over which to sum (default: last)
-        dt:      Time interval between samples (default: 1.0/4096)
-
-    Returns:
-        Tensor of shape (...) with HRRS per batch element
-    """
-    hrrs = torch.sqrt(
-        torch.sum((h_plus**2 + h_cross**2) * dt, dim=dim)
-    )
-    return hrrs
-
-
-class BandpassFilter:
-    def __init__(
-        self,
-        freq_low: list[float],
-        freq_high: list[float],
-        sample_rate: float,
-        order: int = 8,
-    ) -> None:
-        super().__init__()
-        self.coeffs = get_filt_coeffs(
-            freq_low,
-            freq_high,
-            sample_rate=sample_rate,
-            order=order,
-            output="sos",
-        )
-
-    def __call__(self, X):
-        y = 0
-        for coeff in self.coeffs:
-
-            y += signal.sosfiltfilt(coeff, X, axis=-1)
-
-        return y
-
-class TorchBandpassFIR(torch.nn.Module):
-    """
-    Differentiable, zero-phase FIR band-pass filter.
-    Works with [B, C, T] tensors.
-    Can be TorchScripted for Triton deployment.
-    """
-
-    def __init__(
-        self,
-        lowcut: float,
-        highcut: float,
-        sample_rate: int = 4096,
-        num_taps: int = 4096,
-        zero_phase: bool = True,
-    ):
-        super().__init__()
-        self.zero_phase = zero_phase
-
-        # ---- FIR design ----
-        fir_coeff = signal.firwin(
-            numtaps=num_taps,
-            cutoff=[lowcut, highcut],
-            pass_zero=False,
-            fs=sample_rate,
-        ).astype(np.float32)
-
-        # Conv1d expects [out_channels, in_channels/groups, kernel]
-        kernel = torch.tensor(fir_coeff, dtype=torch.float32).view(1, 1, -1)
-
-        self.register_buffer("kernel", kernel)
-        self.pad = num_taps // 2
-        self.num_taps = num_taps
-
-    def _conv(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Internal grouped convolution.
-        x: [B, C, T]
-        """
-        B, C, T = x.shape
-        weight = self.kernel.repeat(C, 1, 1)  # one kernel per channel
-        return torch.nn.functional.conv1d(x, weight, groups=C, padding="same")
-
-    def forward(self, x):
-        pad = self.num_taps // 2
-        x_pad = torch.nn.functional.pad(x, (pad, pad), mode="reflect")
-        y = self._conv(x_pad)
-        if self.zero_phase:
-            y = torch.flip(y, dims=[-1])
-            y = self._conv(y)
-            y = torch.flip(y, dims=[-1])
-        return y[..., pad:-pad]
 
 class EmbeddingLoader(pl.LightningDataModule):
     def __init__(self, embedding_path, labels_path=None, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
