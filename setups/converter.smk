@@ -1,3 +1,14 @@
+ifo_modes = [
+    'H', 'L', 'V', 'K',
+    'HL', 'HV', 'HK', 'LV', 'LK', 'VK',
+    'HLV', 'HLK', 'HVK', 'LVK', 
+    'HLVK'
+]
+
+ifos_to_ifo_num = {
+    ifo : len(ifo) for ifo in ifo_modes
+}
+
 data_ver_to_path = {
     "O4b_cat1": "O4_MDC_background", # Have omicron file
     "O4b_cat1-chunked": "O4_MDC_background-chunked",

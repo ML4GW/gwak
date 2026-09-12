@@ -30,7 +30,6 @@ wildcard_constraints:
     noise_run = '|'.join(x for x in noise_runs),
     foreground_run = '|'.join(x for x in foreground_runs),
     run_name = '|'.join(x for x in runs),
-    benchmark_model = '|'.join(x for x in benchmark_models)
 
 
 ts_pair_for_run = {
@@ -48,6 +47,7 @@ rule export:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/export.yaml",
+        model = rules.combine_models.output
     output:
         directory(
             OUTPUT_DIR / "export"
@@ -180,7 +180,7 @@ rule threshold_lock:
     input: 
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/threshold.yaml",
-        # infer_result = rules.condor_infer.output
+        infer_result = rules.condor_infer.output
     output:
         Path(
             LOG_DIR / "infer/{ifo_mode}/{ana_ver}/{data_ver}"

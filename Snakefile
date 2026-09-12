@@ -20,11 +20,11 @@ ana_ver_list = [
 ]
 data_ver_list = [
     "O4b_cat1-chunked",
-    # "O4b_cat12-katya"
+    "O4b_cat12-katya"
 ]
 ifos_list = ["HL"]
 cl_config_list = [
-    "ResNet_6d.test",
+    "ResNet_6d",
 ]
 coh_mode_list = [
     "real",
@@ -32,7 +32,7 @@ coh_mode_list = [
     "abs"
 ]
 fm_config_list = [
-    "NF_from_file.test",
+    "NF_from_file",
 ]
 noise_run_list = ["one_month"]
 foreground_run_list = [
@@ -63,7 +63,7 @@ rule train_all:
         expand(
             rules.combine_models.output,
             data_ver=data_ver_list,
-            ifos=ifos_list,
+            ifo_mode=ifos_list,
             cl_config=cl_config_list,
             coh_mode=coh_mode_list,
             fm_config=fm_config_list,

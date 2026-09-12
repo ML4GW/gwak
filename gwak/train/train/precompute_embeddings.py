@@ -91,12 +91,14 @@ if __name__=='__main__':
     parser.add_argument('--labels', type=str)
     parser.add_argument('--correlations', type=str)
     parser.add_argument('--coh_mode', type=str)
+    parser.add_argument('--glitch-root', type=str)
     parser.add_argument('--means', type=str, default=None)
     parser.add_argument('--stds', type=str, default=None)
     parser.add_argument('--nevents', type=int, default=10000)
     parser.add_argument('--include-signals', default=None, help='Use signal_classes, priors, waveforms from config if set')
     parser.add_argument('--dataset-path', type=str, default=None,
                         help='Path to a saved dataset (.npz or .h5) with shape (N,2,T). If provided, embeddings are computed on it instead of generating on the fly.')
+    
 
     args = parser.parse_args()
 
@@ -240,7 +242,7 @@ if __name__=='__main__':
             data_saving_file=data_saving_file,
             ifos=args.ifos,
             snr_prior=torch.distributions.Uniform(3, 30),
-            glitch_root=f"/home/hongyin.chen/anti_gravity/gwak/gwak/output/omicron/HL"
+            glitch_root=args.glitch_root
         )
 
         n_iter = args.nevents // batch_size

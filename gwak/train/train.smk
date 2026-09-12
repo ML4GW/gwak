@@ -1,10 +1,3 @@
-ifo_configs = [
-    "HL",
-    "HV",
-    "LV",
-    "HLV"
-]
-
 cl_configs = [
     'Astroconformer',
     'iTransformer',
@@ -23,7 +16,7 @@ fm_configs = [
 ]
 
 wildcard_constraints:
-    ifos       = '|'.join([x for x in ifo_configs]),
+    ifo_mode   = '|'.join([x for x in ifo_modes]),
     data_ver   = '|'.join([x for x in data_ver_to_path.keys()]),
     cl_config  = '|'.join([x for x in cl_configs]),
     coh_mode   = '|'.join([x for x in coh_modes]),
@@ -36,29 +29,30 @@ rule train_cl:
         data_dir = lambda wildcards: directory(
             DATA_DIR
             / data_ver_to_path[wildcards.data_ver]
-            / wildcards.ifos
+            / wildcards.ifo_mode
         )
     output:
         model        = Path(
             OUTPUT_DIR 
-            / "models/{ifos}/{data_ver}/{cl_config}/model_JIT.pt"
+            / "models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         logger_dir = directory(
-            OUTPUT_DIR / "models/{ifos}/{data_ver}/{cl_config}"
+            OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
         ),
         # The omicron triggers can only generate on LDG cluster.
-        omicron = DATA_DIR / "O4_MDC_background/omicron/",
+        omicron = DATA_DIR / "O4_MDC_background/omicron/{ifo_mode}",
+        num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} fit \
             --config {input.config} \
             --trainer.logger.save_dir {params.logger_dir} \
             --data.init_args.data_dir {input.data_dir} \
-            --data.ifos {wildcards.ifos} \
-            --model.num_ifos {wildcards.ifos} \
+            --data.ifos {wildcards.ifo_mode} \
+            --model.num_ifos {params.num_ifos} \
             --data.init_args.glitch_root {params.omicron}'
 
 rule precompute_embeddings:
@@ -67,30 +61,32 @@ rule precompute_embeddings:
         config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
         embedding_model = expand(
             rules.train_cl.output.model,
-            ifos="{ifos}",
+            ifo_mode="{ifo_mode}",
             data_ver="{data_ver}",
             cl_config="{cl_config}",
         ),
         data_dir = lambda wildcards: directory(
             DATA_DIR 
             / data_ver_to_path[wildcards.data_ver]
-            / wildcards.ifos
+            / wildcards.ifo_mode
         )
     output:
         precom_data_dir = directory(
-            OUTPUT_DIR / "data/{ifos}/{data_ver}/{cl_config}_{coh_mode}"
+            OUTPUT_DIR / "data/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
+        omicron = DATA_DIR / "O4_MDC_background/omicron/{ifo_mode}",
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
             --data-dir {input.data_dir} \
-            --ifos {wildcards.ifos} \
+            --ifos {wildcards.ifo_mode} \
             --config {input.config} \
             --embedding-model {input.embedding_model} \
             --coh_mode {wildcards.coh_mode} \
+            --glitch-root {params.omicron} \
             --means {output.precom_data_dir}/means.npy \
             --stds {output.precom_data_dir}/stds.npy \
             --embeddings {output.precom_data_dir}/embeddings.npy \
@@ -107,7 +103,7 @@ rule train_fm:
     output:
         model = Path(
             OUTPUT_DIR / "models" 
-            / "{ifos}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
             / "model_JIT.pt"
         ),
     params:
@@ -115,7 +111,7 @@ rule train_fm:
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         logger_dir = directory(
             OUTPUT_DIR / "models" 
-            / "{ifos}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
         ),
     shell:
         'source {params.gwak_env}; uv run \
@@ -135,7 +131,7 @@ rule combine_models:
     output:
         model = Path(
             OUTPUT_DIR / "models" 
-            / "{ifos}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
             / "combination/model_JIT.pt"
         ),
     params:
@@ -152,12 +148,12 @@ rule combine_models:
 
 rule make_offline_dataset:
     params:
-        ifos = 'HL',
+        ifo_mode = 'HL',
         num_samples = 100_000,
         dataset = 'train',
     output:
     shell:
-        'python train/make_offline_dataset.py {params.ifos} \
+        'python train/make_offline_dataset.py {params.ifo_mode} \
             {params.num_samples} \
             {params.dataset}'
 
