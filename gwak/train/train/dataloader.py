@@ -694,20 +694,20 @@ class SignalDataloader(GwakBaseDataloader):
             self.fakeGlitchMaker = FakeGlitchMaker(config=fakeGlitch_config,signals=fakeGlitch_types)
 
         self.snr_prior = snr_prior
-
+        highpass = 30
         bandpass = TorchBandpassFIR(
-            lowcut=30,
+            lowcut=highpass,
             highcut=2047,
             sample_rate=self.sample_rate
         )
         rescaler = SnrRescaler_Online(
             sample_rate = self.sample_rate,
-            highpass = 30
+            highpass = highpass
         )
         whitener = Whiten(
             self.fduration,
             self.sample_rate,
-            highpass = 30,
+            highpass = highpass,
         )
 
         self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
@@ -1230,6 +1230,8 @@ def generate_waveforms_standard(
 
     # sample from prior and generate waveforms
     if parameters is None:
+        # The type control of this sampling isn't working correctly
+        # Check the type with KinkkinkBBC f_high = Conston(2048)
         parameters = prior.sample(batch_size) # dict[str, torch.tensor]
     if ra is None:
         ra = loader.ra_prior.sample((batch_size,))

@@ -16,8 +16,18 @@ from deploy.libs.trigger_io import (
     find_outlier_by_segmets,
     resolve_oulier_config
 )
-from deploy.libs import gwak_output_dir, gwak_louvre_dir, gwak_logging_dir, ordinal
-from deploy.libs.analysis_utils import get_bbc_inj_names, bbc_inj_info, find_valid_triggers
+from deploy.libs import (
+    gwak_output_dir,
+    gwak_louvre_dir,
+    gwak_logging_dir,
+    ordinal,
+    convert_path_to_public_html_link
+)
+from deploy.libs.analysis_utils import (
+    get_bbc_inj_names,
+    bbc_inj_info,
+    find_valid_triggers
+)
 
 
 def threshold_lock(
@@ -103,6 +113,7 @@ def threshold_lock(
     plt.savefig(model_louvre_dir/"TS_ana.png", dpi=300, bbox_inches='tight')
     plt.close()
 
+    convert_path_to_public_html_link(model_louvre_dir/"TS_ana.png")
 
 def scan_outlier(
     ifo_mode: str,
