@@ -1,7 +1,10 @@
-cl_config: ResNet_6d
-fm_config: NF_from_file_conditioning
 ifo_mode: HL
+ana_ver: O4b_gwak_cat1
+data_ver: O4b_cat1
+cl_config: ResNet_6d
+coh_mode: real
+fm_config: NF_from_file_conditioning
 run_name: one_year
 infer_sample_rate: 4
 psd_length: 64
-threshold_level: 0.01
+threshold_level: 1

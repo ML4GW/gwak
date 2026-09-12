@@ -167,7 +167,7 @@ cython_debug/
 /.gwak/
 /gwak-init
 /setups/config.local.yaml
-
+*test.yaml
 # ignore output folders with artefacts
 */output/**
 !*/output/**/*.pt

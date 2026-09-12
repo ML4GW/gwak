@@ -66,7 +66,7 @@ data:
       - class_path: ml4gw.waveforms.SineGaussian # SineGaussian
         init_args:
           sample_rate: 0
-          duration: 0
+          duration: 2
       - class_path: ml4gw.waveforms.IMRPhenomPv2 # BBH
         init_args: {}
       # - class_path: ml4gw.waveforms.Gaussian # Gaussian
@@ -76,16 +76,19 @@ data:
       - class_path: ml4gw.waveforms.GenerateString # Cusp
         init_args:
           sample_rate: 0
+          duration: 2
       - class_path: ml4gw.waveforms.GenerateString # Kink
         init_args:
           sample_rate: 0
+          duration: 2
       - class_path: ml4gw.waveforms.GenerateString # KinkKink
         init_args:
           sample_rate: 0
+          duration: 2
       - class_path: ml4gw.waveforms.WhiteNoiseBurst # WhiteNoiseBurst
         init_args:
           sample_rate: 0
-          duration: 0
+          duration: 2
       - null # CCSN
       - null # Background
       - null # Glitch

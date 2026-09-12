@@ -150,28 +150,21 @@ class GaussianBBC(BasePrior):
     # this is a super wide range for all the signals with converted amplitude to hrss here: https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_1/Waveforms-O4b-1
         super().__init__()
         self.params = OrderedDict(
-            #hrss = LogUniform(8.5e-19, 4e-18), 
             hrss = LogUniform(1.6e-23, 2.0e-16),
-            polarization = Uniform(0, torch.pi),
-            eccentricity = Uniform(0, 1),
-            #duration = Uniform(0.001, 0.1)
-            duration = Uniform(0.001, 0.02) # this is the duration of the gaussian in seconds
+            duration = Uniform(0.001, 0.1) # This may be too flat in a one second or shorter window
+            # duration = Uniform(0.001, 0.02) # this is the duration of the gaussian in seconds
         )
-        #hrss = LogUniform(2e-20, 9e-20),
-        #hrss = Uniform(1e-20, 2.5e-20),
-        #duration = Uniform(0.001, 0.02)
 
 class WhiteNoiseBurstBBC(BasePrior):
-
     def __init__(self):
         super().__init__()
         self.params = OrderedDict(
-            frequency = Uniform(55, 1600),
-            bandwidth = Uniform(32, 2048),
+            time_envelope = Uniform(2e-2,2),
+            frequency = Uniform(40, 1500),
+            bandwidth = Uniform(10, 200),
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
             int_hdot_squared = LogUniform(3.0e-40, 2.5e-34),
-            duration = LogUniform(2e-2,2)
         )
 
 class CuspBBC(BasePrior):
@@ -181,7 +174,7 @@ class CuspBBC(BasePrior):
         self.params = OrderedDict(
             power = Constant(-4.0 / 3.0),
             amplitude = Uniform(4.0e-22, 4.0e-21),
-            f_high = Constant(1000)
+            f_high = Uniform(40, 1000)
         )
 
 class KinkBBC(BasePrior):
@@ -191,7 +184,7 @@ class KinkBBC(BasePrior):
         self.params = OrderedDict(
             power = Constant(-5.0 / 3.0),
             amplitude = Uniform(1.4e-21, 1.4e-20),
-            f_high = Constant(1000)
+            f_high = Uniform(40, 1000)
         )
 
 class KinkkinkBBC(BasePrior):
@@ -201,7 +194,7 @@ class KinkkinkBBC(BasePrior):
         self.params = OrderedDict(
             power = Constant(-2.0),
             amplitude = Uniform(4.7e-21, 4.7e-20),
-            f_high = Constant(1000)
+            f_high = Uniform(2047.9, 2048)
         )
 
 class LAL_BBHPrior(BasePrior):
@@ -312,86 +305,6 @@ class LAL_BBHPrior(BasePrior):
         
         return self.sampled_params
 
-
-class BBHPrior(BasePrior):
-
-    def __init__(self):
-    # something with sample method that returns dict that maps
-    # parameter name to tensor of parameter names
-        super().__init__()
-        # taken from bilby.gw.prior.BBHPriorDict()
-        self.params = dict(
-            mass_ratio = Uniform(0.5, 0.99), # Uniform(0.125, 1),
-            chirp_mass = Uniform(15, 30), # Uniform(25, 100),
-            theta_jn = Sine(),
-            phase = Constant(0), # Uniform(0, 2 * torch.pi),
-            a_1 = Uniform(0, 0.99),
-            a_2 = Uniform(0, 0.99),
-            tilt_1 = Sine(0, torch.pi),
-            tilt_2 = Sine(0, torch.pi),
-            phi_12 = Uniform(0, 2 * torch.pi),
-            phi_jl = Uniform(0, 2 * torch.pi),
-            reference_frequency = Constant(20.0, tensor=False), #Constant(50.0, tensor=False),
-            # CHECK THIS: time of coallesence and fs
-            tc = Constant(0),
-            fs = Constant(2048),
-            dist_mpc = Uniform(50, 200),
-            ra = Uniform(0, 2 * torch.pi),
-            dec = Cosine(),
-            psi = Uniform(0, torch.pi)
-        )
-
-    def sample(self, batch_size):
-
-        for k in self.params.keys():
-            self.sampled_params[k] = self.params[k].sample((batch_size,))
-
-        self.sampled_params['mass_2'] = self.sampled_params['chirp_mass'] * (1 + self.sampled_params['mass_ratio']) ** 0.2 / self.sampled_params['mass_ratio']**0.6
-        self.sampled_params['mass_1'] = self.sampled_params['mass_ratio'] * self.sampled_params['mass_2']
-
-        # if self.sampled_params['mass_2'] > self.sampled_params['mass_1']:
-        #     self.sampled_params['mass_1'], self.sampled_params['mass_2'] = self.sampled_params['mass_2'], self.sampled_params['mass_1']
-        #     self.sampled_params['mass_ratio'] = 1 / self.sampled_params['mass_ratio']
-
-
-        # # correct units
-        # self.sampled_params['mass_2'] *= lal.MSUN_SI
-        # self.sampled_params['mass_1'] *= lal.MSUN_SI
-
-        # convert from Bilby convention to Lalsimulation
-        self.sampled_params['incl'], self.sampled_params['s1x'], self.sampled_params['s1y'], \
-        self.sampled_params['s1z'], self.sampled_params['s2x'], self.sampled_params['s2y'], \
-        self.sampled_params['s2z'] = transform_precessing_spins(
-            self.sampled_params['theta_jn'], self.sampled_params['phi_jl'],
-            self.sampled_params['tilt_1'],
-            self.sampled_params['tilt_2'], self.sampled_params['phi_12'],
-            self.sampled_params['a_1'], self.sampled_params['a_2'],
-            self.sampled_params['mass_1'], self.sampled_params['mass_2'],
-            self.sampled_params['reference_frequency'], self.sampled_params['phase']
-            )
-
-        self.sampled_params['incl'] = torch.Tensor(self.sampled_params['incl'])
-        self.sampled_params['s1x'] = Constant(0).sample((batch_size,)) # torch.Tensor(self.sampled_params['s1x'])
-        self.sampled_params['s1y'] = Constant(0).sample((batch_size,)) # torch.Tensor(self.sampled_params['s1y'])
-        self.sampled_params['s1z'] = torch.Tensor(self.sampled_params['s1z'])
-        self.sampled_params['s2x'] = Constant(0).sample((batch_size,)) # torch.Tensor(self.sampled_params['s2x'])
-        self.sampled_params['s2y'] = Constant(0).sample((batch_size,)) # torch.Tensor(self.sampled_params['s2y'])
-        self.sampled_params['s2z'] = torch.Tensor(self.sampled_params['s2z'])
-
-        self.sampled_params['f_ref'] = self.sampled_params['reference_frequency']
-        self.sampled_params['phiRef'] = self.sampled_params['phase']
-
-        self.sampled_params['dist_mpc'] = (self.sampled_params['dist_mpc'] * u.Mpc).to("m").value # ???
-
-        logger = logging.getLogger(__name__)
-
-        for k in self.sampled_params.keys():
-            if type(self.sampled_params[k])==float:
-                logger.info(f'The shape of {k} is {self.sampled_params[k]}')
-            else:
-                logger.info(f'The shape of {k} is {self.sampled_params[k].shape}')
-        
-        return self.sampled_params
 
 class FakeGlitchPrior(BasePrior):
     def __init__(self,selected_signals=None):

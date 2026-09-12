@@ -44,7 +44,14 @@ activation_functions = {
 }
 
 class MLP(nn.Module):
-    def __init__(self, d_input:int, hidden_dims:list[int], d_output:int, dropout=0.0, activation='swish', output_activation=None):
+    def __init__(
+        self,
+        d_input:int,
+        hidden_dims:list[int],
+        d_output:int, dropout=0.0,
+        activation='swish',
+        output_activation=None
+    ):
         super().__init__()
         #copying the paper of having one-layer MLP
         layers = []
@@ -68,10 +75,16 @@ class MLP(nn.Module):
     
 class Encoder(nn.Module):
 
-    def __init__(self, seq_len, n_features, embedding_dim=64):
+    def __init__(
+        self,
+        seq_len,
+        n_features,
+        embedding_dim=64
+    ):
         super().__init__()
         self.seq_len, self.n_features = seq_len, n_features
-        self.embedding_dim, self.hidden_dim = embedding_dim, embedding_dim // 2
+        self.embedding_dim = embedding_dim
+        self.hidden_dim = embedding_dim // 2
         self.rnn1_0 = nn.LSTM(
             input_size=1,
             hidden_size=4,
@@ -126,7 +139,8 @@ class Encoder(nn.Module):
         x = torch.cat([x, other_dat], dim=1)
         x = F.tanh(self.linear3(x))
 
-        return x.reshape((batch_size, self.embedding_dim))  # phil harris way
+        # phil harris way
+        return x.reshape((batch_size, self.embedding_dim))
 
 class Decoder(nn.Module):
 

@@ -14,9 +14,12 @@ from deploy.libs.trigger_io import lovure_file_handler, resolve_oulier_config
 from deploy.libs.analysis_utils import get_bbc_inj_names, bbc_inj_info, find_valid_triggers
 
 def find_outlier_segs(
-    cl_config: str,
-    fm_config: str,
     ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
     threshold_setting: str,
     seg_count: int,
     **kwargs
@@ -25,18 +28,19 @@ def find_outlier_segs(
     # Init
     run_name = threshold_setting    
     outlier_ticks = np.arange(1, seg_count+1)
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
-    model_louvre_dir = gwak_louvre_dir(suffix=f"{model}/{run_name}")()
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+    model_louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{run_name}")()
     # model_louvre_dir, model_snapshot_dir = lovure_file_handler(
     #     model_louvre_dir=model_louvre_dir, model=model
     # )
 
     log_dir = gwak_logging_dir(
-        suffix=f"{model}/{threshold_setting}"
+        suffix=f"{ana_mode}/{model}/{threshold_setting}"
     )()
     log_dir.mkdir(parents=True, exist_ok=True)
     gwak_logger(log_dir / "find_outlier_segs.log")
-    outlier_file = gwak_output_dir(suffix=f"infer/{model}/{run_name}")(
+    outlier_file = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}/{run_name}")(
         append_path="outlier_config.h5"
     )
 
@@ -109,16 +113,20 @@ def find_outlier_segs(
 
 
 def plot_bbc_benchmark(
-    cl_config: str,
-    fm_config: str,
     ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
     threshold_setting: str,
     **kwargs
 ):
 
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     log_dir = gwak_logging_dir(
-        suffix=f"{model}/{threshold_setting}"
+        suffix=f"{ana_mode}/{model}/{threshold_setting}"
     )()
     gwak_logger(log_dir / "benchmark.log")
 
@@ -133,8 +141,8 @@ def plot_bbc_benchmark(
     signal_groups = get_bbc_inj_names(unblind_file)
 
     # infer_result_dir = Path("/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/ResNet_6d_NF_from_file_conditioning_HL")
-    louvre_dir = gwak_louvre_dir(suffix=f"{model}/{threshold_setting}")()
-    infer_result_dir = gwak_output_dir(suffix=f"infer/{model}")()
+    louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{threshold_setting}")()
+    infer_result_dir = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}")()
 
     unpack_file_1 = infer_result_dir / "bbc-short-0/bbc-unpack.h5"
     unpack_file_2 = infer_result_dir / "bbc-short-1/bbc-unpack.h5"
@@ -158,7 +166,7 @@ def plot_bbc_benchmark(
         plt.bar(keys, values, label=signal_type)
         total_trigger_count += sum(values)
 
-    plt.title(f"GWAK ({model}) \nBBC O4b performance \nRecovered events: {total_trigger_count}")
+    plt.title(f"GWAK ({ana_mode}{model}) \nBBC O4b performance \nRecovered events: {total_trigger_count}")
     # Step 3: formatting
     plt.xticks(rotation=45, ha='right')
     plt.xlabel("Wavefrom type")

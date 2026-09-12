@@ -20,7 +20,7 @@ from data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, Gaus
 from train.cl_models import Crayon
 
 from train.plotting import make_corner
-
+from transforms import frequency_cos_similarity
 #os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
@@ -29,15 +29,6 @@ device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 def str2bool(v):
     return v.lower() in ('yes', 'true', 't', '1')
 
-def frequency_cos_similarity(batch):
-    H = torch.fft.rfft(batch[:, 0, :], dim=-1)
-    L = torch.fft.rfft(batch[:, 1, :], dim=-1)
-    numerator = torch.sum(H * torch.conj(L), dim=-1)
-    norm_H = torch.linalg.norm(H, dim=-1)
-    norm_L = torch.linalg.norm(L, dim=-1)
-    rho_complex = numerator / (norm_H * norm_L + 1e-8)
-    rho_real = torch.real(rho_complex).unsqueeze(-1)
-    return rho_real
 
 
 if __name__=='__main__':

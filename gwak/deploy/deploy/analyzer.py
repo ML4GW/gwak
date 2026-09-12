@@ -16,14 +16,27 @@ from deploy.libs.trigger_io import (
     find_outlier_by_segmets,
     resolve_oulier_config
 )
-from deploy.libs import gwak_output_dir, gwak_louvre_dir, gwak_logging_dir
-from deploy.libs.analysis_utils import get_bbc_inj_names, bbc_inj_info, find_valid_triggers
+from deploy.libs import (
+    gwak_output_dir,
+    gwak_louvre_dir,
+    gwak_logging_dir,
+    ordinal,
+    convert_path_to_public_html_link
+)
+from deploy.libs.analysis_utils import (
+    get_bbc_inj_names,
+    bbc_inj_info,
+    find_valid_triggers
+)
 
 
 def threshold_lock(
-    cl_config: str,
-    fm_config: str,
     ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
     run_name: str,
     infer_sample_rate: int,
     psd_length: float,
@@ -34,22 +47,27 @@ def threshold_lock(
     if run_name not in noise_runs_list:
         print(f"Warning! Run name {run_name} not in {noise_runs_list}")
 
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
-    log_dir = gwak_logging_dir(suffix=f"infer/{model}/{run_name}")()
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+    log_dir = gwak_logging_dir(
+        suffix=f"infer/{ana_mode}/{model}/{run_name}"
+    )()
     log_dir.mkdir(parents=True, exist_ok=True)
     gwak_logger(log_dir / "threshold_lock.log")
-    louvre_dir = gwak_louvre_dir(suffix=f"{model}/{run_name}")()
+    louvre_dir = gwak_louvre_dir(
+        suffix=f"{ana_mode}/{model}/{run_name}"
+    )()
     model_louvre_dir, model_snapshot_dir = lovure_file_handler(
         model_louvre_dir=louvre_dir, model=model
     )
 
     tslide_data_dir = gwak_output_dir(
-        suffix=f"infer/{model}/{run_name}/inference_result"
+        suffix=f"infer/{ana_mode}/{model}/{run_name}/inference_result"
     )()
 
-    threshold_file = gwak_output_dir(suffix=f"infer/{model}")(
-        append_path="threshold.h5"
-    )
+    threshold_file = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}"
+    )(append_path="threshold.h5")
 
     # Main operation
     tslide_dict, tslide_data = unpack_timeslide(
@@ -95,11 +113,15 @@ def threshold_lock(
     plt.savefig(model_louvre_dir/"TS_ana.png", dpi=300, bbox_inches='tight')
     plt.close()
 
+    convert_path_to_public_html_link(model_louvre_dir/"TS_ana.png")
 
 def scan_outlier(
-    cl_config: str,
-    fm_config: str,
     ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
     run_name: str,
     threshold_setting: str,
     infer_sample_rate: int,
@@ -110,24 +132,26 @@ def scan_outlier(
     **kwargs
 ):
 
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     stream_cut = int(infer_sample_rate*psd_length)
 
     # Initialize file paths
     log_dir = gwak_logging_dir(
-        suffix=f"{model}/{run_name}_{threshold_setting}"
+        suffix=f"{ana_mode}/{model}/{run_name}_{threshold_setting}"
     )()
     log_dir.mkdir(parents=True, exist_ok=True)
     gwak_logger(log_dir / "scan_outlier.log")
 
-    threshold_file = gwak_output_dir(suffix=f"infer/{model}")(
-        append_path="threshold.h5"
-    )
+    threshold_file = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}"
+    )(append_path="threshold.h5")
+
     tslide_data_dir = gwak_output_dir(
-        suffix=f"infer/{model}/{run_name}/inference_result"
+        suffix=f"infer/{ana_mode}/{model}/{run_name}/inference_result"
     )()
     outlier_file = gwak_output_dir(
-        suffix=f"infer/{model}/{run_name}"
+        suffix=f"infer/{ana_mode}/{model}/{run_name}"
     )(append_path="outlier_config.h5")
 
     # Determine threshold
@@ -172,9 +196,12 @@ def scan_outlier(
 
 
 def bbc_benchmark(
-    cl_config: str,
-    fm_config: str,
     ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
     foreground: str,
     threshold_setting: str,
     buffer_dur: float = 1,
@@ -184,9 +211,11 @@ def bbc_benchmark(
 ):
 
     # Init
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
+    # model = f"{cl_config}_{coh_mode}_{fm_config}_{ifo_mode}"
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     log_dir = gwak_logging_dir(
-        suffix=f"{model}/{foreground}_{threshold_setting}"
+        suffix=f"{ana_mode}/{model}/{foreground}_{threshold_setting}"
     )()
     gwak_logger(log_dir / "benchmark.log")
 
@@ -201,7 +230,7 @@ def bbc_benchmark(
     unblind_file = unbind_file_dict[foreground]
     signal_groups = get_bbc_inj_names(unblind_file)
 
-    outlier_config = gwak_output_dir(suffix=f"infer/{model}")(
+    outlier_config = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}")(
         append_path=f"{foreground}/{outlier_cfg_name}"
     )
     # threshold_file = gwak_output_dir(suffix=f"infer/{model}")(
@@ -211,8 +240,8 @@ def bbc_benchmark(
     #     threshold = float(h5[f"{threshold_setting}"][()])
 
     # Output setting
-    louvre_dir = gwak_louvre_dir(suffix=f"{model}/{foreground}")()
-    output_dir = gwak_output_dir(suffix=f"infer/{model}/{foreground}")()
+    louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{foreground}")()
+    output_dir = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}/{foreground}")()
     model_louvre_dir, model_snapshot_dir = lovure_file_handler(
         model_louvre_dir=louvre_dir,
         model=model,

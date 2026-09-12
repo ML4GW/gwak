@@ -171,6 +171,7 @@ class resolve_oulier_config():
             "event_start", "event_end", "dur", "max_value",
         ]
 
+        # Add csv reader here so it can become an new entry point
         with h5py.File(outlier_config, "r") as h5_file:   
             self.outlier_dict = {key: h5_file[key][:] for key in h5_file}
 

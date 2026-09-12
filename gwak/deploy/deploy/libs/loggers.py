@@ -211,3 +211,13 @@ class gwak_louvre_dir(Pathfinder):
             path_function_name="figure directory",
             suffix=suffix
         )
+
+def convert_path_to_public_html_link(
+    public_html_path: Path
+):
+
+    user_name = os.getenv('USER')
+    base_path = f"/home/{user_name}/public_html"
+    _path = public_html_path.relative_to(base_path)
+    html_link_prefix = f"https://ldas-jobs.ligo.caltech.edu/~{user_name}"
+    logging.info(f"Plots can be find in: {html_link_prefix}/{_path}")
