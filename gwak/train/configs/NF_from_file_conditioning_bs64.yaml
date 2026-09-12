@@ -1,0 +1,34 @@
+# lightning.pytorch==2.3.2
+# NF conditioned on xcorr for 6D embedder: flow models P(embedding | xcorr)
+# n_dims = 6 (embedding only, xcorr is context)
+seed_everything: 0
+trainer:
+  callbacks:
+    - class_path: callback.ValidationCallback
+  accelerator: gpu
+  devices: [0]
+  strategy: ddp_find_unused_parameters_true
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: gwak2_NF
+      entity: gwak
+  max_epochs: 25
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 1
+ckpt_path: null
+model:
+  class_path: fm_models.BackgroundFlowModel
+  init_args:
+    n_dims: 6
+    n_flow_steps: 8
+    hidden_dim: 128
+    coh_mode: real
+    use_correlation: false
+    condition_on_correlation: true
+    normalize: true
+
+data:
+  class_path: dataloader.EmbeddingLoader
+  init_args:
+    batch_size: 64

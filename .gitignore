@@ -164,7 +164,10 @@ cython_debug/
 # local
 *.DS_Store
 *.snakemake
-
+/.gwak/
+/gwak-init
+/setups/config.local.yaml
+*test.yaml
 # ignore output folders with artefacts
 */output/**
 !*/output/**/*.pt

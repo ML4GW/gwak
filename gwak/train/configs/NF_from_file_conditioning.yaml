@@ -10,6 +10,9 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: gwak2_NF
+      entity: gwak
   max_epochs: 25
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -20,6 +23,7 @@ model:
     n_dims: 6
     n_flow_steps: 8
     hidden_dim: 128
+    coh_mode: real
     use_correlation: false
     condition_on_correlation: true
     normalize: true

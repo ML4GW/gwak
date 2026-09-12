@@ -1,285 +1,308 @@
-import re
 import h5py
-import shutil
 import yaml
-
+import logging
 import numpy as np
 
-from tqdm import tqdm
-from pathlib import Path
 from typing import Optional
-from deploy.libs import accumlator, Pathfinder
-from matplotlib import pyplot as plt
 
-# from bokeh.plotting import figure 
-# from bokeh.io import output_notebook, save, show, reset_output, export_png
-from deploy.libs import gwak_dir, gwak_output_dir, gwak_louvre_dir, O4_bbc_short_0_data_dir, O4_bbc_short_1_data_dir
-
-def lovure_file_handler(
-    model_louvre_dir: Path,
-    model,
-    remake: bool=False,
-    caching: bool=True,
-):
-
-    model_snapshot_dir = model_louvre_dir / "snapshot"
-    if (model_louvre_dir).exists() and remake:
-
-        model_snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-        shutil.rmtree(model_louvre_dir)
-        return model_louvre_dir, model_snapshot_dir
-
-    # Check if cache exists
-    if (model_louvre_dir/"cache").exists():
-        shutil.rmtree(model_louvre_dir/"cache")
-
-    if caching:
-        cache_dir = model_louvre_dir / "cache"
-        (cache_dir / "snapshot").mkdir(parents=True, exist_ok=True) 
-
-        for png_file in model_louvre_dir.glob("*.png"):
-            shutil.move(str(png_file), str(cache_dir / png_file.name))
-        for png_file in model_louvre_dir.glob("snapshot/*.png"):
-            shutil.move(str(png_file), str(cache_dir / "snapshot" /png_file.name))
-
-    model_snapshot_dir.mkdir(parents=True, exist_ok=True)
-
-    return model_louvre_dir, model_snapshot_dir
+import matplotlib.pyplot as plt
+from pathlib import Path
+from deploy.libs import gwak_logger
+from deploy.libs.infer_utils import noise_runs_list
+from deploy.libs.trigger_io import (
+    lovure_file_handler,
+    unpack_timeslide,
+    select_threshold,
+    find_outlier_by_segmets,
+    resolve_oulier_config
+)
+from deploy.libs import (
+    gwak_output_dir,
+    gwak_louvre_dir,
+    gwak_logging_dir,
+    ordinal,
+    convert_path_to_public_html_link
+)
+from deploy.libs.analysis_utils import (
+    get_bbc_inj_names,
+    bbc_inj_info,
+    find_valid_triggers
+)
 
 
-def scan(
-    # louvre_dir: Pathfinder,
-    cl_config: str, 
+def threshold_lock(
+    ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
     fm_config: str,
-    ifo_mode: str, 
     run_name: str,
-    seg_num: int,
-    thereshold_level: float,
     infer_sample_rate: int,
     psd_length: float,
-    plot_padding: int,
-    plotting: bool,
+    threshold_level: float,
     **kwargs
 ):
 
-    anomaly_dict = {}
-    anomaly_data = {}
-    tslide_data_list = []
+    if run_name not in noise_runs_list:
+        print(f"Warning! Run name {run_name} not in {noise_runs_list}")
 
-    model = f"{cl_config}_{fm_config}_{ifo_mode}"
-    louvre_dir = gwak_louvre_dir(suffix=f"{model}/{run_name}")()
-    tslide_data_dir = gwak_output_dir()(
-        append_path=f"infer/{model}/{run_name}/inference_result"
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+    log_dir = gwak_logging_dir(
+        suffix=f"infer/{ana_mode}/{model}/{run_name}"
+    )()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    gwak_logger(log_dir / "threshold_lock.log")
+    louvre_dir = gwak_louvre_dir(
+        suffix=f"{ana_mode}/{model}/{run_name}"
+    )()
+    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
+        model_louvre_dir=louvre_dir, model=model
     )
 
-    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
-        model_louvre_dir=louvre_dir,
+    tslide_data_dir = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}/{run_name}/inference_result"
+    )()
+
+    threshold_file = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}"
+    )(append_path="threshold.h5")
+
+    # Main operation
+    tslide_dict, tslide_data = unpack_timeslide(
+        psd_length=psd_length,
+        infer_sample_rate=infer_sample_rate,
+        tslide_data_dir=tslide_data_dir
+    )
+
+    threshold = select_threshold(
+        tslide_dict=tslide_dict,
+        tslide_data=tslide_data,
+        threshold_level=threshold_level,
+        run_name=run_name,
         model=model
     )
 
+    # Save threshold data
+    with h5py.File(threshold_file, "a") as h:
+
+        h.pop(run_name, None)
+        h.create_dataset(run_name, data=threshold)
+
+    logging.info(f"Therehold generated at: {threshold_file}.")
+
+    # Plotting
+    if threshold_level >= 1:
+        hist_label = f"Max Outlier: {np.min(tslide_data):.2f} \
+        \n{ordinal(threshold_level)} Outlier: {threshold:.2f}"
+
+    elif threshold_level < 1:
+        hist_label = f"Max Outlier: {np.min(tslide_data):.2f} \
+        \n{threshold_level*100}% Outlier: {threshold:.2f}"
+
+    # Plot Timeslide outputs
+    plt.title(f"{run_name.capitalize()} \n{model} \nTimeslide Output distribution")
+    plt.hist(tslide_data, bins=100, zorder=2, label=hist_label,)
+    plt.legend()
+    plt.axvline(threshold, color="red")
+    plt.grid(zorder=0)
+    plt.yscale("log")
+    plt.xlabel("Metric")
+    plt.ylabel("Data Counts")
+    plt.savefig(model_louvre_dir/"TS_ana.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+    convert_path_to_public_html_link(model_louvre_dir/"TS_ana.png")
+
+def scan_outlier(
+    ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
+    run_name: str,
+    threshold_setting: str,
+    infer_sample_rate: int,
+    psd_length: float,
+    accumlation_length:float,
+    pad:float,
+    threshold_value: Optional[float]=None,
+    **kwargs
+):
+
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     stream_cut = int(infer_sample_rate*psd_length)
-    file_list = list(sorted(tslide_data_dir.glob("*.h5")))
 
-    # The stream_cut will be effected stride_batch_size is too small/large
-    for fname in tqdm(file_list):
+    # Initialize file paths
+    log_dir = gwak_logging_dir(
+        suffix=f"{ana_mode}/{model}/{run_name}_{threshold_setting}"
+    )()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    gwak_logger(log_dir / "scan_outlier.log")
 
-        with h5py.File(fname, "r") as h5_file: 
+    threshold_file = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}"
+    )(append_path="threshold.h5")
 
-            tslide_data_list.append(h5_file["data"][0, stream_cut:])
+    tslide_data_dir = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}/{run_name}/inference_result"
+    )()
+    outlier_file = gwak_output_dir(
+        suffix=f"infer/{ana_mode}/{model}/{run_name}"
+    )(append_path="outlier_config.h5")
 
-    # Merge all the nan-truncated timeslide in the list to 
-    # one numpy array with the shape of (x_n,) and find the thereshold. 
-    tslide_data = np.concatenate(tslide_data_list)
+    # Determine threshold
+    if threshold_value is not None:
+        threshold = threshold_value
+    else:
+        logging.info(f"{threshold_file}")
+        with h5py.File(threshold_file, "r") as h5:
+            threshold = float(h5[f"{threshold_setting}"][()])
 
-    if thereshold_level >= 1: 
-        thereshold = np.sort(tslide_data)[int(thereshold_level)]
-        print()
-        print(f"    The top {int(thereshold_level)}th of {run_name} outlier of {model} is at : {round(thereshold, 2)}.")
-        print()
+    # Main operation
+    tslide_dict, tslide_data = unpack_timeslide(
+        infer_sample_rate=infer_sample_rate,
+        psd_length=psd_length,
+        tslide_data_dir=tslide_data_dir,
+    )
 
-    if thereshold_level < 1: 
-        thereshold = np.quantile(tslide_data, thereshold_level)
-        print()
-        print(f"    The {run_name} {thereshold_level} thereshold of {model} is at : {round(thereshold, 2)}.")
-        print()
-    for ts_data, fname in zip(tslide_data_list, file_list):
+    outlier_dict = find_outlier_by_segmets(
+        tslide_dict=tslide_dict,
+        threshold=threshold,
+        infer_sample_rate=infer_sample_rate,
+        psd_length=psd_length,
+        accumlation_length=accumlation_length,
+        pad=pad,
+    )
 
-        fname_re = re.compile(r"(?P<t0>\d{10}\.*\d*)-(?P<length>\d+\.*\d*)_(?P<shift>\d+\.*\d*)")
-        match = fname_re.search(str(fname))
-
-        if match is None:
-            print(f"Couldn't parse file {fname.path}")
-            # logging.warning(f"Couldn't parse file {fname.path}")
-
-        start = int(match.group("t0"))
-        length = int(match.group("length"))
-        shift = int(float(match.group("shift")))
-
-        if length <= int(psd_length): # Skip data that are too short
-
-            print(f"Skip {fname}")
-            continue
-        try:
-            np.min(ts_data) < thereshold
-        except:
-            continue
-        if np.min(ts_data) < thereshold:
-            segment_name = f"{start}-{length}"
-
-            indices = np.where(ts_data < thereshold)[0]
-
-            if anomaly_dict.get(segment_name) is None:
-                anomaly_dict[segment_name] = []
-            if anomaly_data.get(segment_name) is None:
-                anomaly_data[segment_name] = {}
-            anomaly_data[segment_name][f"{shift}"] = []
-
-            indices = np.where(ts_data < thereshold)[0]
-
-            start_pad = plot_padding
-            end_pad = ts_data.shape[0] - (start_pad + 1)
-            anomaly_dict[segment_name].append((shift, indices, ts_data[indices]))
-            indices = indices[(indices > start_pad) & (indices < end_pad)]
-
-            for idx in indices:
-                ts_data[indices]
-                if ts_data[idx - start_pad: idx + (start_pad + 1)].shape[0] != (start_pad + start_pad + 1):
-                    continue
-                anomaly_data[segment_name][f"{shift}"].append(ts_data[idx - start_pad: idx + (start_pad + 1)])
-
-    # Make Problematic Segments data
-    error_segments_name = []
-    error_counts_per_seg = []
-    if len(anomaly_dict.keys()) < seg_num:
-        seg_num = len(anomaly_dict.keys())
-
-    for count, seg_name in enumerate(anomaly_dict.keys()):
-
-        error_segments_name.append(seg_name)
-        indices_counts = 0
-        for i in range(len(anomaly_dict[seg_name])):
-
-            indices_counts += len(anomaly_dict[seg_name][i][1])
-            if indices_counts == 0:
-                print(f"Insifficent value for outlier {seg_name} {anomaly_dict[seg_name][i][1]}")
-                break
-        error_counts_per_seg.append(indices_counts)
-
-    sort_idx = np.argsort(error_counts_per_seg)[-seg_num:]
-
-    error_ticks = np.linspace(1, seg_num, seg_num)
-    error_segments_name = np.array(error_segments_name)[sort_idx]
-    error_counts_per_seg = np.array(error_counts_per_seg)[sort_idx]
+    # Data saving
+    logging_list = []
+    with h5py.File(outlier_file, "w") as h:
+        for key, item in outlier_dict.items():
+            logging_list.append(key)
+            h.create_dataset(
+                key,
+                data=np.concatenate(outlier_dict[key])
+            )
+    logging.info(f" ")
+    logging.info(f"Outlier information saved at: {outlier_file}.")
+    # logging.info(f"Contained infomation includes:")
+    # for key in logging_list:
+    #     logging.info(f"{key}")
+    logging.info(f" ")
 
 
-    error_config = model_louvre_dir / f"error_config.h5"
-    with h5py.File(error_config, "w") as error_h5:
-        error_data = []
-        for seg_name, anomaly_infos in anomaly_dict.items():
+def bbc_benchmark(
+    ifo_mode: str,
+    ana_ver: str,
+    data_ver: str,
+    cl_config: str,
+    coh_mode: str,
+    fm_config: str,
+    foreground: str,
+    threshold_setting: str,
+    buffer_dur: float = 1,
+    # This needs versioning, and should propergate to plot_bbc_benchmark
+    outlier_cfg_name: str = "outlier_config.h5",
+    **kwargs
+):
 
-            t0 = int(seg_name[:10])
-            length = int(seg_name[11:])
+    # Init
+    # model = f"{cl_config}_{coh_mode}_{fm_config}_{ifo_mode}"
+    ana_mode = f"{ifo_mode}/{ana_ver}"
+    model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+    log_dir = gwak_logging_dir(
+        suffix=f"{ana_mode}/{model}/{foreground}_{threshold_setting}"
+    )()
+    gwak_logger(log_dir / "benchmark.log")
 
-            for shift, indices, value in anomaly_infos:
+    # Input setting
+    O4_bbc_dir = Path(
+        "/home/burst.benchmark/unblinded_o4b-2_injections/injections/"
+    )
+    unbind_file_dict = {
+        "bbc-short-0": O4_bbc_dir / "burst_benchmark_short-0.h5",
+        "bbc-short-1": O4_bbc_dir / "burst_benchmark_short-1.h5"
+    }
+    unblind_file = unbind_file_dict[foreground]
+    signal_groups = get_bbc_inj_names(unblind_file)
 
-                H1_time = (indices + stream_cut)/infer_sample_rate + t0
+    outlier_config = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}")(
+        append_path=f"{foreground}/{outlier_cfg_name}"
+    )
+    # threshold_file = gwak_output_dir(suffix=f"infer/{model}")(
+    #     append_path="threshold.h5"
+    # )
+    # with h5py.File(threshold_file, "r") as h5:
+    #     threshold = float(h5[f"{threshold_setting}"][()])
 
-                error_seg = accumlator(H1_time, value, accumlation_length=16, pad=0.5)
+    # Output setting
+    louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{foreground}")()
+    output_dir = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}/{foreground}")()
+    model_louvre_dir, model_snapshot_dir = lovure_file_handler(
+        model_louvre_dir=louvre_dir,
+        model=model,
+    )
 
-                incre_len = error_seg.shape[0]
-                meta_data = np.ones((incre_len,3))
-                meta_data[:, 0] *= t0
-                meta_data[:, 1] *= length
-                meta_data[:, 2] *= shift
+    benchmark_result = output_dir / "bbc-unpack.h5"
+    false_trigger_config = output_dir / "false_triggers.h5"
 
-                error_data.append(np.concatenate((meta_data, error_seg), axis=1))
-        error_h5.create_dataset("data", data=np.vstack(error_data))
+    # Output inits
+    valid_arrays = []
+    inj_total_count = 0
+    gwak_triggered_count = 0
+    performance= {}
 
-    if plotting:
-        # Plot Timeslide outputs
-        plt.title(f"{run_name.capitalize()} \n{model} \nTimeslide Output distribution")
-        plt.hist(
-            tslide_data, 
-            bins=100,
-            zorder=2,
-            label=f"Max Outlier: {np.min(tslide_data):.2f} \n{thereshold_level*100}% Outlier: {thereshold:.2f}",
-        )
-        plt.legend()
-        plt.axvline(thereshold, color="red")
-        plt.grid(zorder=0)
-        plt.yscale("log")
-        plt.xlabel("Metric")
-        plt.ylabel("Data Counts")
-        plt.savefig(model_louvre_dir/"TS_ana.png", dpi=300, bbox_inches='tight')
-        plt.close()
+    # Main process
+    logging.info(f"Unpacking {foreground}")
 
-        # Plot Problematic Segments
-        plt.figure(figsize=(4, 8))
-        plt.title(f"Top {seg_num} Problematic Segments", fontsize=13, fontweight='bold')
-        plt.barh(
-            error_ticks, 
-            error_counts_per_seg, 
-            color="black", 
-            alpha=0.7,
-            height=0.5,
-            zorder=2
-        )
-        plt.yticks(error_ticks, error_segments_name)
-        plt.xscale("log")
-        plt.xlabel("Anomaly counts", fontweight="bold")
-        plt.ylabel("Segments",  fontweight="bold")
-        plt.grid(zorder=0)
-        plt.savefig(model_louvre_dir/"Scaned_Segments.png", dpi=300, bbox_inches='tight')
-        plt.close()
+    data_config = resolve_oulier_config(outlier_config)
+    # outlier_keys = data_config.key_list
+    outlier_keys = ["seg_start", "seg_end", "event_start", "event_end"]
+    outlier_info = data_config.get_result_by_key(outlier_keys)
+    trigger_time = (outlier_info["event_start"] + outlier_info["event_end"])/2
 
+    # Apply scanning logic
+    bbc_info_generator = bbc_inj_info(unblind_file, signal_groups, buffer_dur)
+    for inj_time_buffer, bbc_inj_count, signal in bbc_info_generator:
 
-        snap_time = np.arange(0, 10+1/infer_sample_rate, 1/infer_sample_rate)
-        for seg_name, shift_dict in anomaly_data.items():
-            if seg_name in error_segments_name[-5:]:
-                plt.figure(figsize=(10, 4))
-                plt.title("GWAK Stream snapshot")
-                for shift, data_list in shift_dict.items():
-                    for snapshot in data_list:
-                        plt.plot(snap_time, snapshot)
-                plt.xlabel("Time(s)")
-                plt.savefig(model_snapshot_dir / f"GWAK-Stream_{seg_name}.png", dpi=300, bbox_inches='tight')
-                plt.close()
+        # Collecting performance
+        valid = find_valid_triggers(inj_time_buffer, trigger_time)
+        triggered_count = sum(valid)
+        performance[signal] = np.array([triggered_count, bbc_inj_count])
 
+        # Meta data
+        valid_arrays.append(valid)
+        inj_total_count += bbc_inj_count
+        gwak_triggered_count += triggered_count
 
-        for seg_name, anomaly_infos in anomaly_dict.items():
-            if seg_name in error_segments_name[-5:]:
-                t0 = int(seg_name[:10])
-                length = int(seg_name[11:])
-                error_values = []
-                h1_error_times = []
-                l1_error_times = []
+    has_duplicates = np.any(np.count_nonzero(valid_arrays, axis=0) > 1)
+    valid_triggers = np.logical_or.reduce(valid_arrays)
+    logging.info(f"    Has duplicate triggers: {has_duplicates}")
 
-                for shift, indices, value in anomaly_infos:
+    triggered_raito = gwak_triggered_count/inj_total_count
+    err_count = len(trigger_time) - gwak_triggered_count
+    err_ratio = err_count / gwak_triggered_count
+    logging.info(f"    Correct_triggered_count = {gwak_triggered_count}")
+    logging.info(f"    Error report count (ratio): {err_count} ({err_ratio:.02f})")
+    logging.info(f"    bbc_inj_total_count = {inj_total_count}")
+    logging.info(f"    triggered_raito ={triggered_raito:.4f}")
+    logging.info("")
 
-                    H1_time = (indices + stream_cut)/infer_sample_rate + t0 * 0
-                    L1_time = (indices + stream_cut)/infer_sample_rate + shift + t0 * 0 
+    # Saving result
+    with h5py.File(benchmark_result, "w") as h:
+        for name, values in performance.items():
+            h.create_dataset(name, data=values)
+    logging.info(f"Benchmark_result saved at: {benchmark_result}")
+    if sum(~valid_triggers) > 0:
+        false_triggers = {
+            key: outlier_info[key][~valid_triggers] for key in outlier_keys
+        }
 
-                    error_values.append(value)
-                    h1_error_times.append(H1_time)
-                    l1_error_times.append(L1_time)
+        with h5py.File(false_trigger_config, "w") as h:
 
-                h1_timestamps = np.sort(np.concatenate(h1_error_times)) * infer_sample_rate
-                l1_timestamps = np.sort(np.concatenate(l1_error_times)) * infer_sample_rate
-
-                h1_second_indices = h1_timestamps.astype(int)
-                l1_second_indices = l1_timestamps.astype(int)
-                h1_counts = np.bincount(h1_second_indices, minlength=length*infer_sample_rate)
-                l1_counts = np.bincount(l1_second_indices, minlength=length*infer_sample_rate)
-                
-                plt.figure(figsize=(10, 4))
-                plt.title(f"Segment: {seg_name} Error Rate")
-                plt.plot(np.arange(0, length, 1/infer_sample_rate), h1_counts, label="H1")
-                plt.plot(np.arange(0, length, 1/infer_sample_rate), l1_counts, label="L1")
-                plt.xlabel("Time(s)")
-                plt.ylabel("Error count")
-                plt.legend()
-                plt.savefig(model_snapshot_dir / f"GWAK-Stream_{seg_name}_error_rate.png", dpi=300, bbox_inches='tight')
-                plt.close()
-
-    print(f"Plots saved at: {louvre_dir}")
+            for key in outlier_keys:
+                h.create_dataset(key, data=false_triggers[key])

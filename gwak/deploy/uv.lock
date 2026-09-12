@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -718,6 +718,7 @@ dependencies = [
     { name = "scipy" },
     { name = "torch" },
     { name = "tqdm" },
+    { name = "transforms" },
 ]
 
 [package.dev-dependencies]
@@ -744,6 +745,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "torch", specifier = "<2.6" },
     { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "transforms", editable = "../../libs/transforms" },
 ]
 
 [package.metadata.requires-dev]
@@ -3448,6 +3450,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/eb/79/72064e6a701c21830
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/c0/8f5d070730d7836adc9c9b6408dec68c6ced86b304a9b26a14df072a6e8c/traitlets-5.14.3-py3-none-any.whl", hash = "sha256:b74e89e397b1ed28cc831db7aea759ba6640cb3de13090ca145426688ff1ac4f", size = 85359, upload-time = "2024-04-19T11:11:46.763Z" },
 ]
+
+[[package]]
+name = "transforms"
+version = "0.1.0"
+source = { editable = "../../libs/transforms" }
 
 [[package]]
 name = "triton"

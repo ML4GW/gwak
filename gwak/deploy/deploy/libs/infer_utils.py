@@ -16,6 +16,12 @@ EXTREME_CCSN = [
     "Powell_2020/y20"
 ]
 
+noise_runs_list = [
+    "background", "test_run",
+    "one_day", "one_month", "one_year",
+    "one_decade", "one_centure",
+]
+
 def get_ip_address() -> str:
     """
     Get the local nodes cluster-internal IP address
@@ -146,13 +152,13 @@ def get_seg_start_end(path):
     return seg_start, seg_end
 
 def accumlator(
-    idx_arr: np.ndarray,
+    timestamp_arr: np.ndarray,
     val_arr: np.ndarray,
     accumlation_length:float=1,
     pad: Optional[float]=None,
 ):
     """
-    idx_arr: Outlier index
+    timestamp_arr: Outlier timestamp
     val_arr: Outlier gwak value
     accumlation_length: Look around length (sec) for gwak outliers. 
     If other outliers are found within the accumlation_length, then include it as part of the outlier.
@@ -161,11 +167,11 @@ def accumlator(
     if pad == None:
         pad = accumlation_length/2
     # Find indices where gap > kernel and split them
-    diff = np.diff(idx_arr)
+    diff = np.diff(timestamp_arr)
     breaks = np.where(diff > accumlation_length)[0] + 1
     groups_val = np.split(val_arr, breaks)
     # Split into contiguous groups
-    groups_idx = np.split(idx_arr, breaks)
+    groups_idx = np.split(timestamp_arr, breaks)
 
     # Compute segment bounds (min, max) for each group
     mins = np.array([g[0] for g in groups_idx])

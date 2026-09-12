@@ -41,6 +41,7 @@ def client_action(
     kernel_size,
     sample_rate,
     inference_sampling_rate,
+    dim_split,
     arguments,
     job_tag=None
 ):
@@ -87,6 +88,7 @@ def client_action(
                 kernel_size=kernel_size,
                 sample_rate=sample_rate,
                 inference_sampling_rate=inference_sampling_rate,
+                dim_split=dim_split,
             )
 
             cmd = f"python {str(arguments)} --config {config_file}"

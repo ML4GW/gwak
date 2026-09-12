@@ -5,55 +5,86 @@ ifo_modes = [
     'HLVK'
 ]
 
-runs = [
-    'background', 'bbc-short-0', 'bbc-short-1', 
+noise_runs = [
+    'background', 'test_run',
     'one_day', 'one_month', 'one_year', 
     'one_decade','one_centure',
-    'test_run'
 ]
 
+foreground_runs = [
+    'bbc-short-0', 'bbc-short-1', 
+    'injections'
+]
+
+runs = noise_runs + foreground_runs
+
+benchmark_models = [
+    "EM_NF_HL",
+    "EM_IF_HL",
+]
 
 wildcard_constraints:
     ifo_mode = '|'.join(x for x in ifo_modes),
-    run_name = '|'.join(x for x in runs)
+    ana_ver = '|'.join([x for x in ana_ver_to_path.keys()]),
+    data_ver = '|'.join([x for x in data_ver_to_path.keys()]),
+    noise_run = '|'.join(x for x in noise_runs),
+    foreground_run = '|'.join(x for x in foreground_runs),
+    run_name = '|'.join(x for x in runs),
 
 
-runs_TS_converter = {
-    'background': 0, 'bbc-short-0': 0, 'bbc-short-1': 0, 
-    'one_day': 86400, 'one_month': 2678400., 'one_year': 31557600, 
-    'one_decade': 315576000, 'one_centure': 3155760000,
-    'test_run': 1
+ts_pair_for_run = {
+    f"{run}_{ts_run}": ts_run
+    for run in foreground_runs
+    for ts_run in noise_runs
 }
 
+ts_pair_for_run.update(
+    {f"{run}_{run}": run for run in noise_runs}
+)
 
 # snakemake -c1 $GWAK_OUTPUT_DIR/export/{cl_config}_{fm_config}_{ifo_mode}/combination
 rule export:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
-    # params:
-        # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f" {params.gpu} 
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/export.yaml",
+        model = rules.combine_models.output
     output:
-        artefact = directory(OUTPUT_DIR / "export/{cl_config}_{fm_config}_{ifo_mode}")
+        directory(
+            OUTPUT_DIR / "export"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
     shell:
-        "set -x; cd deploy; uv run python \
-        {input.arg} export \
-        --config {input.config} \
-        --cl_config {wildcards.cl_config} \
-        --fm_config {wildcards.fm_config}"
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} export \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} "
 
 
 # python deploy/cli.py export --config deploy/config/export.yaml --project combination
+# Consider adding a swap key for the I/O searching in the Pathfinder
 rule production_export:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         image = IMAGE_DIR / "deploy.sif",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/export.yaml"
+        config = GWAK_ROOT / "gwak/deploy/configs/export.yaml"
+    output:
+        directory(
+            CONTAINER_OUTPUT_DIR / "export"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+        )
     params:
-        bind_1 = f"{CONTAIN_OUTPUT_DIR}:/production",
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        bind_1 = f"{CONTAINER_OUTPUT_DIR}:/production",
         bind_2 = f"{OUTPUT_DIR}:/opt/gwak/gwak/output",
     shell: 
-        "set -x; apptainer exec --nv \
+        "source {params.gwak_env}; set -x; apptainer exec --nv \
         --bind {params.bind_1},{params.bind_2} \
         {input.image} \
         python {input.arg} export  \
@@ -63,67 +94,71 @@ rule production_export:
 # snakemake -c1 $GWAK_OUTPUT_DIR/infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}
 rule condor_infer:
     input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/infer_condor.yaml",
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/infer_condor.yaml",
         plan_model = rules.export.output
-    params:
-        # gpu = "CUDA_VISIBLE_DEVICES=GPU-9be0d4df-e1db-fd6a-912b-a6a07ae3430f", {params.gpu}
-        timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
     output:
-        artefact = directory(OUTPUT_DIR / "infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}")
+        directory(
+            OUTPUT_DIR / "infer"
+            / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+        ana_data = lambda wildcards: ana_ver_to_path[wildcards.ana_ver],
+        timeslide = lambda wildcards: runs_to_TS[wildcards.run_name],
     shell:
-        'mkdir -p tmp; '
-        'set -x; cd deploy; uv run python \
-        {input.arg} infer_condor \
-        --config {input.config} \
-        --run_name {wildcards.run_name} \
-        --cl_config {wildcards.cl_config} \
-        --fm_config {wildcards.fm_config} \
-        --Tb {params.timeslide}'
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} infer_condor \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --ana_data {params.ana_data} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
+            --run_name {wildcards.run_name} \
+            --Tb {params.timeslide}"
 
 
 rule slurm_infer:
     input:
-        config = 'deploy/deploy/config/infer_slurm.yaml',
+        config = 'deploy/configs/infer_slurm.yaml',
     params:
-        timeslide = lambda wildcards: runs_TS_converter[wildcards.run_name]
+        timeslide = lambda wildcards: runs_to_TS[wildcards.run_name]
     output:
-        artefact = directory(OUTPUT_DIR / "Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}")
+        artefact = directory(
+            OUTPUT_DIR / "Slurm_Jobs"
+            / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}"
+        )
     shell:
-        "set -x; cd deploy; uv run python \
+        "set -x; cd gwak/deploy; uv run python \
         deploy/cli.py deploy \
         --config ../{input.config} \
-        --run_name {wildcards.run_name} \
         --cl_config {wildcards.cl_config} \
         --fm_config {wildcards.fm_config} \
+        --ifo_mode {wildcards.ifo_mode} \
+        --run_name {wildcards.run_name} \
         --Tb {params.timeslide}"
 
-rule scan_outlier:
-    input:
-        arg = GWAK_DIR / "gwak/deploy/deploy/cli.py",
-        config = GWAK_DIR / "gwak/deploy/deploy/config/analysis.yaml",
-        infer_result = rules.condor_infer.output
-    output: 
-        artefact = directory(LOUVRE_DIR / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}/")
-    shell:
-        "set -x; cd deploy; uv run python \
-        {input.arg} post_analyze --config {input.config} \
-        --run_name {wildcards.run_name} \
-        --cl_config {wildcards.cl_config} \
-        --fm_config {wildcards.fm_config}"
 
+##--- Summary ---##
 rule export_all:
     input:
         expand(
             rules.export.output,
-            cl_config=["torch_rbw_zp_resnet_do6_dcs128_epoch25"],
-            fm_config=["NF_from_file_conditioning"],
             ifo_mode=["HL"],
+            data_ver=["O4b_cat12-katya"],
+            cl_config=["ResNet_6d"],
+            coh_mode=["real"],
+            fm_config=["NF_from_file_conditioning"],
         )
 
-# snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F 
+# snakemake -c4 output/Slurm_Jobs/{cl_config}_{fm_config}_{ifo_mode}/{run_name}/ -F
 rule slurm_infer_all:
-    input: 
+    input:
         expand(
             rules.slurm_infer.output,
             cl_config=[
@@ -138,23 +173,168 @@ rule slurm_infer_all:
             run_name=["one_year"]
         )
 
-rule scan_all:
+# #####################
+# ### Post-analysis ###
+# #####################
+rule threshold_lock:
     input: 
-        expand(
-            rules.scan_outlier.output,
-            cl_config=[
-                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
-            ], 
-            fm_config=[
-                "NF_from_file_conditioning",
-            ], 
-            ifo_mode=["HL"], 
-            run_name=[
-                "one_year", 
-                # "bbc-short-0", 
-                # "bbc-short-1", 
-            ]
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/threshold.yaml",
+        infer_result = rules.condor_infer.output
+    output:
+        Path(
+            LOG_DIR / "infer/{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}"
+            / "threshold_lock.log"
         )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} threshold_lock \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
+            --run_name {wildcards.run_name}"
+
+rule scan_outlier:
+    input:
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/scan_outlier.yaml",
+        log = Path(
+            LOG_DIR / "infer/{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{noise_run}"
+            / "threshold_lock.log"
+        )
+    output:
+        Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}_{noise_run}"
+            / "scan_outlier.log"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} scan_outlier \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
+            --run_name {wildcards.run_name} \
+            --threshold_setting {wildcards.noise_run}"
+
+rule bbc_benchmark:
+    input:
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/benchmark.yaml",
+        task_1 = Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/bbc-short-0_{noise_run}"
+            / "scan_outlier.log"
+        ),
+        task_2 = Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/bbc-short-1_{noise_run}"
+            / "scan_outlier.log"
+        )
+    output:
+        Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}" 
+            / "{cl_config}_{coh_mode}_{fm_config}"
+            / "{foreground_run}_{noise_run}/benchmark.log"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} resolve_O4_bbc \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
+            --foreground {wildcards.foreground_run} \
+            --threshold_setting {wildcards.noise_run}"
+
+rule find_outlier_segs:
+    input:
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/plot_segs.yaml",
+        task = Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{noise_run}_{noise_run}"
+            / "scan_outlier.log"
+        ),
+    output:
+        Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{noise_run}"
+            / "find_outlier_segs.log"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} plot_segs \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
+            --threshold_setting {wildcards.noise_run}"
+
+rule plot_bbc_benchmark:
+    input:
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/plot_bbc.yaml",
+        task_1 = Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/bbc-short-0_{noise_run}"
+            / "benchmark.log"
+        ),
+        task_2 = Path(
+            LOG_DIR / "{ifo_mode}/{ana_ver}/{data_ver}" 
+            / "{cl_config}_{coh_mode}_{fm_config}/bbc-short-1_{noise_run}"
+            / "benchmark.log"
+        )
+    output:
+        # artefact = LOUVRE_DIR / "{cl_config}_{coh_mode}_{fm_config}_{ifo_mode}/{noise_run}/trigger-rate.png"
+        Path(
+            LOUVRE_DIR / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{noise_run}"
+            / "trigger-rate.png"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} plot_bbc \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
+            --threshold_setting {wildcards.noise_run}"
+
 
 rule estimate_far:
     input:

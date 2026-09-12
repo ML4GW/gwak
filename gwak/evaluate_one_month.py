@@ -49,7 +49,7 @@ def load_chunks(inference_dir: str) -> list[str]:
 def frequency_cos_similarity(batch: torch.Tensor) -> np.ndarray:
     H = torch.fft.rfft(batch[:, 0, :], dim=-1)
     L = torch.fft.rfft(batch[:, 1, :], dim=-1)
-    rho = torch.real(
+    rho = torch.abs(
         torch.sum(H * torch.conj(L), dim=-1) /
         (torch.linalg.norm(H, dim=-1) * torch.linalg.norm(L, dim=-1) + 1e-8)
     )

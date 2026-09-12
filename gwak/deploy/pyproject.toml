@@ -20,6 +20,7 @@ dependencies = [
     "scipy>=1.15.3",
     "torch<2.6",
     "tqdm>=4.67.1",
+    "transforms",
 ]
 
 [dependency-groups]
@@ -45,6 +46,7 @@ explicit = true
 [tool.uv.sources]
 ml4gw = { path = "../../ml4gw", editable = true }
 ml4gw-hermes = { path = "../../hermes", editable = true }
+transforms = {path = "../../libs/transforms", editable = true }
 
 
 [build-system]

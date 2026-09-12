@@ -5,6 +5,7 @@ from typing import Optional
 import os
 from pathlib import Path
 
+
 def gwak_logger(
     log_file,
     log_level=logging.DEBUG,
@@ -32,11 +33,27 @@ def gwak_logger(
     formatter = logging.Formatter(log_format, datefmt=date_format)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+
+    # Addtional logging rules
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("onnxscript").setLevel(logging.WARNING)
+    logging.getLogger("onnx_ir").setLevel(logging.WARNING)
+    # logging.getLogger("torch.onnx").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
     # Prevent duplicate handlers
     if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
         logger.addHandler(console_handler)
-        
-        
+
+
+def ordinal(n):
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{int(n)}{suffix}"
+
+
 class Pathfinder:
 
     def __init__(
@@ -54,7 +71,11 @@ class Pathfinder:
 
         except KeyError:
             logging.error("")
-            logging.error(cow(f"Can not find {dir_var} in env \n please export {dir_var}!"))
+            logging.error(cow(
+                f"Can not find {dir_var} in env \n"
+                f"please export {dir_var} or run \n"
+                f"source .gwak/env.sh under GWAK_ROOT!"
+            ))
             sys.exit()
 
         except Exception as e:
@@ -82,6 +103,7 @@ class Pathfinder:
             logging.info(f"    {self.project_path}")
         return self.project_path
 
+
 class gwak_dir(Pathfinder):
 
     def __init__(
@@ -89,7 +111,7 @@ class gwak_dir(Pathfinder):
         suffix: Optional[str]=None,
     ):
         super().__init__(
-            dir_var="GWAK_DIR",
+            dir_var="GWAK_ROOT",
             path_function_name="gwak directory",
             suffix=suffix
         )
@@ -142,6 +164,18 @@ class gwak_output_dir(Pathfinder):
             suffix=suffix
         )
 
+class gwak_logging_dir(Pathfinder):
+
+    def __init__(
+        self,
+        suffix: Optional[str]=None,
+    ):
+        super().__init__(
+            dir_var="GWAK_LOG_DIR",
+            path_function_name="logging directory",
+            suffix=suffix
+        )
+
 class gwak_timeslide_dir(Pathfinder):
 
     def __init__(
@@ -153,7 +187,6 @@ class gwak_timeslide_dir(Pathfinder):
             path_function_name="timeslide directory",
             suffix=suffix
         )
-
 
 class gwak_image_dir(Pathfinder):
 
@@ -178,3 +211,13 @@ class gwak_louvre_dir(Pathfinder):
             path_function_name="figure directory",
             suffix=suffix
         )
+
+def convert_path_to_public_html_link(
+    public_html_path: Path
+):
+
+    user_name = os.getenv('USER')
+    base_path = f"/home/{user_name}/public_html"
+    _path = public_html_path.relative_to(base_path)
+    html_link_prefix = f"https://ldas-jobs.ligo.caltech.edu/~{user_name}"
+    logging.info(f"Plots can be find in: {html_link_prefix}/{_path}")

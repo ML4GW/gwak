@@ -1,0 +1,11 @@
+{
+  "e_thr": 10.330083194319254,
+  "ethr_quantile": 0.999,
+  "kappa_noise": 12.469575601562303,
+  "e_chi2_check": 0.9358998232296185,
+  "n_bg_tiles_ethr": 53510400,
+  "n_events_processed_kappa": 600,
+  "n_gated_ok": 65,
+  "n_chi2_heldout": 70,
+  "calib_wall_s": 121.87451910972595
+}

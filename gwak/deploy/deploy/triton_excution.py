@@ -34,11 +34,13 @@ def run_infer(
     kernel_size:int=2048,
     sample_rate:int=4096,
     inference_sampling_rate:float=1,
+    dim_split: list=[6,1,1],
     **kwargs
 ):
 
     # File and Path management
     gwak_logger(job_dir / "log.log")
+    roll_idx = np.cumsum(dim_split)
     seg_start, seg_end = get_seg_start_end(strain_file)
     if shifts[1] >= seg_end:
         logging.warning("Shift is larger then the entire backgorund data.")
@@ -60,6 +62,7 @@ def run_infer(
         sample_rate=sample_rate,
         inference_sampling_rate=inference_sampling_rate,
         inj_type=None,
+        dim_sum=sum(dim_split),
     )
     logging.info(f"Strain data loaded.")
     # Triton setup
@@ -68,7 +71,7 @@ def run_infer(
         model_name=gwak_streamer,
         callback=sequence,
     )
-    results = []
+
     with client:
 
         for i, (bh_state, _) in enumerate(sequence):
@@ -93,14 +96,21 @@ def run_infer(
         result = client.get()
         while result is None:
             result = client.get()
-        results.append(result[0])
+        # Make a function for this to connect between combine model and here.
+        # Are there __names__ for this type of setup regardding to the output format
 
-    # Job Done leaving client         
-    results = np.stack(results)
+        gwak_value = result[0]
+        print(f"{gwak_value.shape = }")
+        # embedding = result[0][:, 0:roll_idx[0]]
+        # f_coh = result[0][:, roll_idx[0]:roll_idx[1]]
+        # gwak_value = result[0][:, roll_idx[1]:roll_idx[2]]
+
     logging.info(f"Collecting result to {result_file.resolve()}")
 
     with h5py.File(result_file, "w") as f:
-        f.create_dataset(f"data", data=results)
+        # f.create_dataset(f"embedding", data=embedding)
+        # f.create_dataset(f"f_coh", data=f_coh)
+        f.create_dataset(f"gwak_value", data=gwak_value)
 
         try:
             f.attrs["GPS_start"] = sequence.gps_start
