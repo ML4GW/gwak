@@ -18,18 +18,23 @@ include: GWAK_ROOT / "gwak/postselection/postselection.smk"
 ana_ver_list = [
     "O4b_gwak_cat12"
 ]
+ifos_list = ["HL"]
 data_ver_list = [
-    "O4b_cat1-chunked",
+    # "O4b_cat1-chunked",
     "O4b_cat12-katya"
 ]
-ifos_list = ["HL"]
 cl_config_list = [
-    "ResNet_6d",
+    "ResNet_6d_split",
+    "ResNet_6d_narrow_band",
+    # "ResNet_6d",
+    # "ResNet_6d.test",
 ]
 coh_mode_list = [
-    # "real",
+    "real",
     # "real_imag",
-    "abs"
+    # "abs",
+    # "random",
+    # "half",
 ]
 fm_config_list = [
     "NF_from_file",
@@ -85,7 +90,9 @@ rule scan_all:
 rule benchmark:
     input:
         expand(
-            rules.scan_outlier.output + rules.find_outlier_segs.output + rules.plot_bbc_benchmark.output,
+            rules.scan_outlier.output \
+            # + rules.find_outlier_segs.output \
+            + rules.plot_bbc_benchmark.output,
             ifo_mode=ifos_list,
             ana_ver=ana_ver_list,
             data_ver=data_ver_list,
@@ -94,4 +101,14 @@ rule benchmark:
             fm_config=fm_config_list,
             noise_run=noise_run_list,
             run_name=run_name_list,
+        )
+
+rule save_all_embd: 
+    input:
+        expand(
+            rules.make_signal_embeddings.output,
+            ifo_mode=ifos_list,
+            data_ver=data_ver_list,
+            cl_config=cl_config_list,
+            coh_mode=coh_mode_list
         )

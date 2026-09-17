@@ -3,10 +3,12 @@ cl_configs = [
     'iTransformer',
     'ResNet',
     "ResNet_6d",
+    "ResNet_6d_split",
+    "ResNet_6d_narrow_band",
     "ResNet_6d.test",
 ]
 coh_modes = [
-    "real", "real_imag", "abs",
+    "real", "real_imag", "abs", "random", "half"
 ]
 fm_configs = [
     'NF_onlyBkg',
@@ -198,7 +200,6 @@ rule make_signal_embeddings:
             --correlations {output.precom_data_dir}/correlations.npy \
             --signal-type all \
             --nevents 100000 '
-
 
 # rule compare_embeddings:
 #     input:

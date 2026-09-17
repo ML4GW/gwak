@@ -11,7 +11,7 @@ class CombinedModel(nn.Module):
         embedder_model,
         metric_model,
         coh_mode,
-        full_return=False
+        full_return=True
     ):
         super().__init__()
         self.embedder_model = embedder_model
@@ -86,10 +86,10 @@ def main(
     if coh_mode == "real_imag": 
         coh_size=2
     
-    # assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
-    # print(f"Output shape: {output.shape}")
-    # print(f"Format: {[embedding_size, coh_size, 1]}")
-    # print(f"Output: {output[:,-1]}")
+    assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
+    print(f"Output shape: {output.shape}")
+    print(f"Format: {[embedding_size, coh_size, 1]}")
+    print(f"Output: {output[:,-1]}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

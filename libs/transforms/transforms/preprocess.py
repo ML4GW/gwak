@@ -5,6 +5,11 @@ from scipy import signal
 
 # precompute_embeddings
 def frequency_cos_similarity(batch, mode):
+
+    if mode == "random":
+        rand_data = torch.randn((batch.shape[0],), device=batch.device)
+        return rand_data.unsqueeze(-1)
+
     H = torch.fft.rfft(batch[:, 0, :], dim=-1)
     L = torch.fft.rfft(batch[:, 1, :], dim=-1)
     numerator = torch.sum(H * torch.conj(L), dim=-1)
@@ -20,7 +25,17 @@ def frequency_cos_similarity(batch, mode):
         score = torch.cat([score_1, score_2], dim=1)
         return score
     if mode == "abs":
+        # print(torch.abs(rho_complex).unsqueeze(-1).shape)
         return torch.abs(rho_complex).unsqueeze(-1)
+
+    if mode == "half":
+        H = torch.fft.rfft(batch[:, 0, 1024:-1024], dim=-1)
+        L = torch.fft.rfft(batch[:, 1, 1024:-1024], dim=-1)
+        numerator = torch.sum(H * torch.conj(L), dim=-1)
+        norm_H = torch.linalg.norm(H, dim=-1)
+        norm_L = torch.linalg.norm(L, dim=-1)
+        rho_complex = numerator / (norm_H * norm_L + 1e-8)
+        return torch.real(rho_complex).unsqueeze(-1)
 
 
 class TorchBandpassFIR(torch.nn.Module):

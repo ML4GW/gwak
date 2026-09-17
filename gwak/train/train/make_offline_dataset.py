@@ -50,7 +50,8 @@ def main(ifos, num_samples_per_class, dataset,
         "WhiteNoiseBurst",
         "CCSN",
         "Background",
-        "Glitch"]
+        "Glitch"
+    ]
 
     priors = [
         SineGaussianBBC(),
