@@ -294,6 +294,7 @@ def bbc_benchmark(
 
     # Saving result
     with h5py.File(benchmark_result, "w") as h:
+        h.attrs["err_count"] = err_count
         for name, values in performance.items():
             h.create_dataset(name, data=values)
     logging.info(f"Benchmark_result saved at: {benchmark_result}")

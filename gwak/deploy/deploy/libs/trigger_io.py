@@ -81,11 +81,16 @@ def unpack_timeslide(
     infer_sample_rate,
     psd_length,
     tslide_data_dir,
+    dim_split: list=[6,1,1],
+    full_return: bool=False,
 ):
 
     tslide_data = []
+    embd_info = []
+    coh_info = []
     tslide_dict = {}
 
+    roll_idx = np.cumsum(dim_split)
     stream_cut = int(infer_sample_rate*psd_length)
     file_list = list(sorted(tslide_data_dir.glob("*.h5")))
 
@@ -96,11 +101,22 @@ def unpack_timeslide(
 
             gwak_stream = h5_file["gwak_value"][stream_cut:]
             tslide_dict[fname] = gwak_stream
-            tslide_data.append(gwak_stream)
+            if len(gwak_stream.shape) == 1:
+                tslide_data.append(gwak_stream)
+            else:
+                embd_info.append(gwak_stream[:,0:roll_idx[0]])
+                coh_info.append(gwak_stream[:,roll_idx[0]:roll_idx[1]])
+                tslide_data.append(gwak_stream[:,roll_idx[1]:roll_idx[2]])
 
     # Merge all the nan-truncated timeslide in the list to 
     # one numpy array with the shape of (x_n,) and find the threshold. 
     tslide_data = np.concatenate(tslide_data, axis=0).ravel()
+    if full_return:
+
+        embd_data = np.concatenate(embd_info, axis=0)
+        coh_data = np.concatenate(coh_info, axis=0)
+
+        return tslide_dict, tslide_data, embd_data, coh_data
 
     return tslide_dict, tslide_data
 

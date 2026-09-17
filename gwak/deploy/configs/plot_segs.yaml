@@ -5,4 +5,4 @@ cl_config: ResNet_6d
 coh_mode: real
 fm_config: NF_from_file_conditioning
 threshold_setting: one_year
-seg_count: 10
+seg_count: 1

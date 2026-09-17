@@ -30,7 +30,9 @@ def find_outlier_segs(
     outlier_ticks = np.arange(1, seg_count+1)
     ana_mode = f"{ifo_mode}/{ana_ver}"
     model = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
-    model_louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{run_name}")()
+    model_louvre_dir = gwak_louvre_dir(
+        suffix=f"{ana_mode}/{model}/{run_name}"
+    )()
     # model_louvre_dir, model_snapshot_dir = lovure_file_handler(
     #     model_louvre_dir=model_louvre_dir, model=model
     # )
@@ -109,9 +111,6 @@ def find_outlier_segs(
     logging.info(f"Plots saved at: {model_louvre_dir}")
 
 
-
-
-
 def plot_bbc_benchmark(
     ifo_mode: str,
     ana_ver: str,
@@ -140,8 +139,9 @@ def plot_bbc_benchmark(
     unblind_file = unbind_file_dict["bbc-short-0"]
     signal_groups = get_bbc_inj_names(unblind_file)
 
-    # infer_result_dir = Path("/home/hongyin.chen/anti_gravity/gwak/gwak/output/infer/ResNet_6d_NF_from_file_conditioning_HL")
-    louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{threshold_setting}")()
+    louvre_dir = gwak_louvre_dir(
+        suffix=f"{ana_mode}/{model}/{threshold_setting}"
+    )()
     infer_result_dir = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}")()
 
     unpack_file_1 = infer_result_dir / "bbc-short-0/bbc-unpack.h5"
@@ -149,7 +149,7 @@ def plot_bbc_benchmark(
 
     h5_info_1 = h5py.File(unpack_file_1, "r")
     h5_info_2 = h5py.File(unpack_file_2, "r")
-
+    err_counts = h5_info_1.attrs["err_count"] + h5_info_2.attrs["err_count"]
     total_trigger_count = 0
     plt.figure(figsize=(18, 8), dpi=400)
     for signal_type, signals in signal_groups.items():
@@ -166,7 +166,12 @@ def plot_bbc_benchmark(
         plt.bar(keys, values, label=signal_type)
         total_trigger_count += sum(values)
 
-    plt.title(f"GWAK ({ana_mode}{model}) \nBBC O4b performance \nRecovered events: {total_trigger_count}")
+    plt.title(
+        f"GWAK {ana_mode}\n"
+        f"{model}\n"
+        f"BBC O4b performance\n"
+        f"Recovered events: {total_trigger_count} @ {err_counts} false triggers"
+    )
     # Step 3: formatting
     plt.xticks(rotation=45, ha='right')
     plt.xlabel("Wavefrom type")
