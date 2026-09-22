@@ -178,12 +178,22 @@ rule bootstrap_conda_data_env:
     shell:
         """
         set -euo pipefail
+
+        source "$HOME/miniconda3/etc/profile.d/conda.sh"
+
         if conda env list | awk '{{print $1}}' | grep -Fxq "{params.env_name}"; then
-            conda env update --name {params.env_name} --file {input.env_file} --prune
+            conda env update \
+                --name {params.env_name} \
+                --file {input.env_file} \
+                --prune
         else
-            conda env create --name {params.env_name} --file {input.env_file}
+            conda env create \
+                --name {params.env_name} \
+                --file {input.env_file}
         fi
-        source activate gwak-data
+
+        conda activate {params.env_name}
+
         cd {params.data_project_dir}
         UV_PROJECT_ENVIRONMENT="$CONDA_PREFIX" uv sync --inexact
         cd {params.root}
