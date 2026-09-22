@@ -43,7 +43,7 @@ rule train_cl:
             OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
         ),
         # The omicron triggers can only generate on LDG cluster.
-        omicron = DATA_DIR / "O4_MDC_background/omicron/{ifo_mode}",
+        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
         'source {params.gwak_env}; uv run \
@@ -77,7 +77,7 @@ rule precompute_embeddings:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
-        omicron = DATA_DIR / "O4_MDC_background/omicron/{ifo_mode}",
+        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
@@ -181,7 +181,7 @@ rule make_signal_embeddings:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
-        omicron = DATA_DIR / "O4_MDC_background/omicron/{ifo_mode}",
+        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
