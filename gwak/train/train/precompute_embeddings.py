@@ -13,7 +13,17 @@ from train.dataloader import SignalDataloader
 from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from transforms import frequency_cos_similarity
 
-device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
+if not torch.cuda.is_available():
+    raise RuntimeError(
+        "CUDA is not available. "
+        "precompute_embeddings requires a working CUDA GPU."
+    )
+
+device = torch.device("cuda:0")
+
+print(f"CUDA available: {torch.cuda.is_available()}")
+print(f"CUDA device count: {torch.cuda.device_count()}")
+print(f"Using GPU: {torch.cuda.get_device_name(0)}")
 
 
 # ---------- helpers to load saved datasets ----------
@@ -37,6 +47,7 @@ def _pick_data_and_labels_from_npz(npz):
             break
     return data, labels
 
+
 def _pick_data_and_labels_from_h5(h5):
     candidates_data = ['data', 'X', 'inputs', 'waves', 'pulses', 'processed']
     candidates_labels = ['labels', 'y', 'targets', 'class', 'classes']
@@ -57,6 +68,7 @@ def _pick_data_and_labels_from_h5(h5):
             break
     return data, labels
 
+
 def load_saved_dataset(path):
     """
     Returns (data_like, labels_array_or_None, length, is_memmapped_like)
@@ -67,22 +79,27 @@ def load_saved_dataset(path):
         npz = np.load(path, mmap_mode='r')
         data, labels = _pick_data_and_labels_from_npz(npz)
         if data is None:
-            raise ValueError("Could not find a 3D array in NPZ for data (expected shape (N,2,T)).")
+            raise ValueError(
+                "Could not find a 3D array in NPZ for data (expected shape (N,2,T)).")
         return data, (labels if labels is not None else None), data.shape[0], True
     elif ext.endswith('.h5') or ext.endswith('.hdf5'):
         h5 = h5py.File(path, 'r')
         data, labels = _pick_data_and_labels_from_h5(h5)
         if data is None:
-            raise ValueError("Could not find a 3D dataset in H5 for data (expected shape (N,2,T)).")
+            raise ValueError(
+                "Could not find a 3D dataset in H5 for data (expected shape (N,2,T)).")
         return (h5, data), (labels if labels is not None else None), data.shape[0], False
     else:
-        raise ValueError(f"Unsupported dataset extension: {path}. Use .npz or .h5")
+        raise ValueError(
+            f"Unsupported dataset extension: {path}. Use .npz or .h5")
 
 # ----------------------------------------------------
 
-if __name__=='__main__':
 
-    parser = argparse.ArgumentParser(description='Process and merge ROOT files into datasets.')
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(
+        description='Process and merge ROOT files into datasets.')
     parser.add_argument('--embedding-model', type=str, default=None)
     parser.add_argument('--data-dir', type=str)
     parser.add_argument('--config', type=str)
@@ -95,10 +112,10 @@ if __name__=='__main__':
     parser.add_argument('--means', type=str, default=None)
     parser.add_argument('--stds', type=str, default=None)
     parser.add_argument('--nevents', type=int, default=10000)
-    parser.add_argument('--signal-type', default=None, help='Use signal_classes, priors, waveforms from config if set')
+    parser.add_argument('--signal-type', default=None,
+                        help='Use signal_classes, priors, waveforms from config if set')
     parser.add_argument('--dataset-path', type=str, default=None,
                         help='Path to a saved dataset (.npz or .h5) with shape (N,2,T). If provided, embeddings are computed on it instead of generating on the fly.')
-    
 
     args = parser.parse_args()
 
@@ -114,9 +131,13 @@ if __name__=='__main__':
     psd_length = config['data']['init_args']['psd_length']
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
-    batch_size = 2048
+    # batch_size = 2048
+    # same as RestNet_6d.yaml
+    batch_size = config['data']['init_args']['batch_size']
     batches_per_epoch = 2000000
-    num_workers = config['data']['init_args']['num_workers']
+    # Debugging
+    # num_workers = config['data']['init_args']['num_workers']
+    num_workers = 0
     data_saving_file = config['data']['init_args']['data_saving_file']
 
     duration = fduration + kernel_length
@@ -158,22 +179,24 @@ if __name__=='__main__':
             None,
         ]
         extra_kwargs = [
-            None, {"ringdown_duration": 0.9}, None, 
-            None, None, None, 
-            None, 
-            None, 
+            None, {"ringdown_duration": 0.9}, None,
+            None, None, None,
+            None,
+            None,
             None, None
         ]
 
     elif args.signal_type in ['WNB', 'wnb']:
         signal_classes = ["WhiteNoiseBurst", "Background", "Glitch"]
         priors = [WhiteNoiseBurstBBC(), None, None]
-        waveforms = [WhiteNoiseBurst(sample_rate=sample_rate, duration=duration), None, None]
+        waveforms = [WhiteNoiseBurst(
+            sample_rate=sample_rate, duration=duration), None, None]
         extra_kwargs = [None, None, None]
     elif args.signal_type in ['SG', 'sg']:
         signal_classes = ["SineGaussian", "Background", "Glitch"]
         priors = [SineGaussianBBC(), None, None]
-        waveforms = [SineGaussian(sample_rate=sample_rate, duration=duration), None, None]
+        waveforms = [SineGaussian(
+            sample_rate=sample_rate, duration=duration), None, None]
         extra_kwargs = [None, None, None]
     elif args.signal_type in ["Noise", "noise"]:
         signal_classes = ['Glitch', 'Background']
@@ -181,7 +204,7 @@ if __name__=='__main__':
         waveforms = [None, None]
         extra_kwargs = [None, None]
 
-    all_processed = []
+    # all_processed = []
     all_labels = []
     all_embeddings = []
     all_correlations = []
@@ -192,7 +215,8 @@ if __name__=='__main__':
         if not ds_path.exists():
             raise FileNotFoundError(f"--dataset-path not found: {ds_path}")
 
-        loaded, labels_arr, n_samples, is_memmap = load_saved_dataset(str(ds_path))
+        loaded, labels_arr, n_samples, is_memmap = load_saved_dataset(
+            str(ds_path))
 
         h5_handle = None
         data_ds = None
@@ -205,9 +229,11 @@ if __name__=='__main__':
             end = min(start + batch_size, n_samples)
             batch_np = np.asarray(data_ds[start:end])
             if batch_np.ndim != 3 or batch_np.shape[1] != 2:
-                raise ValueError(f"Expected batch shape (B,2,T); got {batch_np.shape}")
+                raise ValueError(
+                    f"Expected batch shape (B,2,T); got {batch_np.shape}")
 
-            processed = torch.from_numpy(batch_np).to(device=device, dtype=torch.float32)
+            processed = torch.from_numpy(batch_np).to(
+                device=device, dtype=torch.float32)
 
             labels_chunk = labels_arr[start:end] if labels_arr is not None else None
 
@@ -219,7 +245,8 @@ if __name__=='__main__':
                 ).cpu().detach().numpy()
 
             if labels_chunk is None:
-                labels_chunk = -1 * np.ones((embeddings.shape[0],), dtype=np.int32)
+                labels_chunk = -1 * \
+                    np.ones((embeddings.shape[0],), dtype=np.int32)
 
             all_labels.append(np.asarray(labels_chunk))
             all_embeddings.append(embeddings)
@@ -257,59 +284,120 @@ if __name__=='__main__':
             train_iter = iter(train_loader)
 
             for i in range(n_iter):
-
-                if i % 10 == 0:
-                    print(f"Processed batch {i}/{n_iter}")
+                if i % 10 == 0 or i == n_iter - 1:
+                    print(
+                        f"Starting batch {i + 1}/{n_iter}",
+                        flush=True,
+                    )
 
                 clean_batch, glitch_batch = next(train_iter)
                 clean_batch = clean_batch.to(device)
                 glitch_batch = glitch_batch.to(device)
 
-                processed, labels, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
+                processed, labels, _, _ = loader.on_after_batch_transfer(
+                    [clean_batch, glitch_batch],
+                    None,
+                    local_test=True,
+                )
 
                 if processed.shape[0] == 0:
+                    print(
+                        f"Skipped batch {i + 1}/{n_iter}: empty processed batch",
+                        flush=True,
+                    )
                     del clean_batch, glitch_batch
                     torch.cuda.empty_cache()
                     continue
-                all_processed.append(processed.cpu().detach().numpy())
-                embeddings = embed_model(processed).cpu().detach().numpy()
-                if args.correlations:
-                    correlations = frequency_cos_similarity(
-                        processed,
-                        mode=args.coh_mode
-                    ).cpu().detach().numpy()
 
-                all_labels.append(labels.cpu().detach().numpy())
+                if i == 0:
+                    print(
+                        f"processed shape = {tuple(processed.shape)}, "
+                        f"size = "
+                        f"{processed.numel() * processed.element_size() / 1024**2:.2f} MiB",
+                        flush=True,
+                    )
+
+                embeddings = (
+                    embed_model(processed)
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+
+                if args.correlations:
+                    correlations = (
+                        frequency_cos_similarity(
+                            processed,
+                            mode=args.coh_mode,
+                        )
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
+
+                all_labels.append(
+                    labels.detach().cpu().numpy()
+                )
                 all_embeddings.append(embeddings)
+
                 if args.correlations:
                     all_correlations.append(correlations)
 
                 del clean_batch, glitch_batch, processed, embeddings
+
+                if args.correlations:
+                    del correlations
+
                 torch.cuda.empty_cache()
 
+                if i % 10 == 0 or i == n_iter - 1:
+                    print(
+                        f"Finished batch {i + 1}/{n_iter}",
+                        flush=True,
+                    )
 
     # ---------- save outputs ----------
-    all_processed = np.concatenate(all_processed, axis=0) if len(all_processed) else np.empty((0,), dtype=np.int32)
-    all_labels = np.concatenate(all_labels, axis=0) if len(all_labels) else np.empty((0,), dtype=np.int32)
-    all_embeddings = np.concatenate(all_embeddings, axis=0) if len(all_embeddings) else np.empty((0, 0), dtype=np.float32)
+    # all_processed = np.concatenate(all_processed, axis=0) if len(
+    #     all_processed) else np.empty((0,), dtype=np.int32)
+    all_labels = np.concatenate(all_labels, axis=0) if len(
+        all_labels) else np.empty((0,), dtype=np.int32)
+    all_embeddings = np.concatenate(all_embeddings, axis=0) if len(
+        all_embeddings) else np.empty((0, 0), dtype=np.float32)
     if args.correlations:
-        all_correlations = np.concatenate(all_correlations, axis=0) if len(all_correlations) else np.empty((0, 1), dtype=np.float32)
+        all_correlations = np.concatenate(all_correlations, axis=0) if len(
+            all_correlations) else np.empty((0, 1), dtype=np.float32)
     saving_dir = Path(args.labels).parent
     saving_dir.mkdir(parents=True, exist_ok=True)
-    np.save(saving_dir / "processed_strain.py", all_processed)
-    np.save(f'{args.labels}', all_labels)
-    np.save(f'{args.labels}', all_labels)
-    print('Labels shape', all_labels.shape)
+    # np.save(saving_dir / "processed_strain.py", all_processed)
+    np.save(args.labels, all_labels)
+    print(
+        "Labels shape",
+        all_labels.shape,
+        flush=True,
+    )
 
-    np.save(f'{args.embeddings}', all_embeddings)
-    print('Embeddings shape', all_embeddings.shape)
+    np.save(args.embeddings, all_embeddings)
+    print(
+        "Embeddings shape",
+        all_embeddings.shape,
+        flush=True,
+    )
 
     if args.correlations:
-        np.save(f'{args.correlations}', all_correlations)
-        print('Correlation shape', all_correlations.shape)
+        np.save(
+            args.correlations,
+            all_correlations,
+        )
+        print(
+            "Correlation shape",
+            all_correlations.shape,
+            flush=True,
+        )
 
-    means = np.mean(all_embeddings, axis=0) if all_embeddings.size else np.array([])
-    stds = np.std(all_embeddings, axis=0) if all_embeddings.size else np.array([])
+    means = np.mean(
+        all_embeddings, axis=0) if all_embeddings.size else np.array([])
+    stds = np.std(all_embeddings,
+                  axis=0) if all_embeddings.size else np.array([])
     if args.means is not None:
         np.save(f'{args.means}', means)
     if args.stds is not None:

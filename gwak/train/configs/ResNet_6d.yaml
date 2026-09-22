@@ -108,9 +108,9 @@ data:
     psd_length: 64
     fduration: 2
     fftlength: 2
-    batch_size: 256
+    batch_size: 32
     batches_per_epoch: 80
-    num_workers: 4
+    num_workers: 1
     data_saving_file: null
     anneal_snr: false
     snr_prior: 
