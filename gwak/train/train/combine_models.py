@@ -85,6 +85,8 @@ def main(
     coh_size=1
     if coh_mode == "real_imag": 
         coh_size=2
+    if coh_mode == "random2": 
+        coh_size=2
     
     assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
     print(f"Output shape: {output.shape}")

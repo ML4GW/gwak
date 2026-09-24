@@ -24,9 +24,9 @@ data_ver_list = [
     "O4b_cat12-katya"
 ]
 cl_config_list = [
-    "ResNet_6d_split",
-    "ResNet_6d_narrow_band",
-    # "ResNet_6d",
+    # "ResNet_6d_split",
+    # "ResNet_6d_narrow_band",
+    "ResNet_6d",
     # "ResNet_6d.test",
 ]
 coh_mode_list = [
@@ -34,6 +34,7 @@ coh_mode_list = [
     # "real_imag",
     # "abs",
     # "random",
+    "random2",
     # "half",
 ]
 fm_config_list = [
@@ -91,7 +92,7 @@ rule benchmark:
     input:
         expand(
             rules.scan_outlier.output \
-            # + rules.find_outlier_segs.output \
+            + rules.find_outlier_segs.output \
             + rules.plot_bbc_benchmark.output,
             ifo_mode=ifos_list,
             ana_ver=ana_ver_list,

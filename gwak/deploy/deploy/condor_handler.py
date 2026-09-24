@@ -23,7 +23,7 @@ from deploy.libs import (
 )
 from deploy.libs.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
 from infer_data import get_shifts_meta_data
-
+from transforms import cohmode_to_dim
 
 def condor_infer_wrapper(
     condor_nodes: int,
@@ -54,7 +54,7 @@ def condor_infer_wrapper(
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
     coh_mode: str="real",
     fm_config: str='NF_onlyBkg',
-    dim_split: list=[6, 1, 1],
+
     **kwargs,
 ):
     """ Timeslide and Hermes(Triton) handeler to generate test result for GWAK model. 
@@ -88,6 +88,11 @@ def condor_infer_wrapper(
     
     ifo_str = ''.join(ifo[0] for ifo in ifos)
     prefix = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+    dim_split = [
+        6, # Embedding dimension
+        cohmode_to_dim(coh_mode),
+        1
+    ]
     # File handling     
     if model_repo_dir is None: 
         model_repo_dir = output_dir(

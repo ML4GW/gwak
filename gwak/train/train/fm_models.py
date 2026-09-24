@@ -423,6 +423,8 @@ class BackgroundFlowModel(GwakBaseModelClass):
         context_features = 1
         if coh_mode == "real_imag":
             context_features = 2
+        if coh_mode == "random2":
+            context_features = 2
 
         if condition_on_correlation:
             # flow input = embeddings only

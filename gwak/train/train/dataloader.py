@@ -155,8 +155,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
         bandpass = TorchBandpassFIR(
-            lowcut=30,
-            highcut=2047,
+            highpass=30,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
 
@@ -396,9 +396,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
         }
 
         bandpass = TorchBandpassFIR(
-                    lowcut=30,
-                    highcut=2047,
-                    sample_rate=self.sample_rate
+            highpass=30,
+            lowpass=2047,
+            sample_rate=self.sample_rate
         )
 
         whitener = Whiten(
@@ -708,8 +708,8 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_prior = snr_prior
         highpass = 30
         bandpass = TorchBandpassFIR(
-            lowcut=highpass,
-            highcut=2047,
+            highpass=highpass,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
         rescaler = SnrRescaler_Online(

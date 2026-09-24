@@ -30,4 +30,3 @@ data_ver: O4b_cat1
 cl_config: null
 coh_mode: null
 fm_config: null
-dim_split: [6, 1, 1]
