@@ -24,9 +24,9 @@ data_ver_list = [
     "O4b_cat12-katya"
 ]
 cl_config_list = [
+    "ResNet_6d",
     # "ResNet_6d_split",
     # "ResNet_6d_narrow_band",
-    "ResNet_6d",
     # "ResNet_6d.test",
 ]
 coh_mode_list = [
@@ -34,7 +34,7 @@ coh_mode_list = [
     # "real_imag",
     # "abs",
     # "random",
-    "random2",
+    # "random2",
     # "half",
 ]
 fm_config_list = [
@@ -54,14 +54,16 @@ rule build_containers:
 
 rule pull_all:
     input:
-        expand(rules.pull_data.output,
+        expand(rules.pull_data_from_segments.output,
             segment_type=[
-                'short-0.o4b-2', 
-                'short-1.o4b-2', 
-                'short-0.o4b-0', 
-                'short-1.o4b-0'
+                "o4.strain",
+                # 'o4b.bbc-background-2',
+                # 'o4b.short-0-2', 
+                # 'o4b.short-1-2', 
+                # 'o4b.short-0-0', 
+                # 'o4b.short-1-0'
             ],
-            ifos=['hl', 'hv', 'lv', 'hlv']
+            ifos=ifos_list
         )
 
 rule train_all:
