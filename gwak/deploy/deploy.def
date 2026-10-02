@@ -9,15 +9,15 @@ From: ghcr.io/astral-sh/uv:0.6.11-python3.11-bookworm-slim
         --exclude '.pytest_cache' \
         --exclude '.git' \
         --exclude '*.pyc' \
-        $GWAK_DIR/gwak/deploy/ \
+        $GWAK_ROOT/gwak/deploy/ \
         ${APPTAINER_ROOTFS}/opt/gwak/gwak/deploy/
 
 %files
-    $GWAK_DIR/gwak/data/data.smk /opt/gwak/gwak/data/data.smk
-    $GWAK_DIR/gwak/train/train.smk /opt/gwak/gwak/train/train.smk
-    # $GWAK_DIR/gwak/deploy /opt/gwak/gwak/deploy
-    $GWAK_DIR/ml4gw /opt/gwak/ml4gw
-    $GWAK_DIR/hermes /opt/gwak/hermes
+    $GWAK_ROOT/gwak/data/data.smk /opt/gwak/gwak/data/data.smk
+    $GWAK_ROOT/gwak/train/train.smk /opt/gwak/gwak/train/train.smk
+    # $GWAK_ROOT/gwak/deploy /opt/gwak/gwak/deploy
+    $GWAK_ROOT/ml4gw /opt/gwak/ml4gw
+    $GWAK_ROOT/hermes /opt/gwak/hermes
 
 %post
     apt-get update

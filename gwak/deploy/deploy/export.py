@@ -12,6 +12,7 @@ from typing import Callable, Optional
 import hermes.quiver as qv
 
 from deploy.libs import gwak_logger, Pathfinder
+from deploy.libs import gwak_dir, gwak_output_dir
 from deploy.libs import scale_model, add_streaming_input_preprocessor
 
 
@@ -32,30 +33,33 @@ def export(
     inference_rate: float,
     sample_rate: int,
 
+    export_dir: Pathfinder,
     # model_weights: str,
     highpass: Optional[float] = None,
     # streams_per_gpu: int,
     model_dir: Optional[Path] = None,
-    output_dir: Optional[Pathfinder] = None,
     platform: qv.Platform = qv.Platform.ONNX,
     device: str = "cpu",
+    data_ver: str="O4b_cat12",
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
+    coh_mode: str="real",
     fm_config: str='NF_onlyBkg',
     **kwargs,
 ):
 
     num_ifos = len(ifos)
     ifo_str = ''.join(ifo[0] for ifo in ifos)
-    prefix = f"{cl_config}_{fm_config}_{ifo_str}"
+    prefix = f"{cl_config}_{coh_mode}_{fm_config}"
 
-    file_path = Path(__file__).resolve()
-    gwak_folder = file_path.parents[2] #gwak/gwak/
+    # gwak_folder = file_path.parents[2] #gwak/gwak/
     if model_dir is None: 
-        model_dir = gwak_folder / "output" / prefix / project / "model_JIT.pt"
+        model_dir = gwak_output_dir(
+            suffix=f"models/{ifo_str}/{data_ver}/{prefix}/{project}"
+        )(append_path="model_JIT.pt")
 
-    output_dir = output_dir(append_path=f"export/{prefix}/{project}")
-    if output_dir is None: 
-        output_dir = gwak_folder / "output/export" / prefix / project
+    output_dir = export_dir(
+        append_path=f"{ifo_str}/{data_ver}/{prefix}/{project}"
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
     repo = qv.ModelRepository(output_dir, clean=clean)

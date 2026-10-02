@@ -8,20 +8,35 @@ subcommands_keys = [
     "infer", 
     "infer_condor", 
     "deploy", 
-    "post_analyze",
-    "resolve_O4_bbc"
+    "threshold_lock",
+    "scan_outlier",
+    "resolve_O4_bbc",
+    "plot_segs",
+    "plot_bbc",
+
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
 # The skipped keys should only by string types variables. 
 # Avoid passing non string type variables to skip list. 
-# Otherwise, you would have to add an additinaol type check to 
+# Otherwise, you would have to add an additinaol type check to it
 skip_keys = [
+    # Versioning
     "project",
-    "run_name",
+    "ifo_mode",
+    "ana_ver",
+    "data_ver",
     "cl_config",
+    "coh_mode",
     "fm_config",
-    "Tb"
+    "run_name",
+    # "model",
+    "ana_data",
+    "threshold_setting",
+    "foreground",
+    "Tb", # int
+    "threshold", # float
+    # "benchmark_dir", # Path
 ]
 
 def build_parser(
@@ -43,7 +58,9 @@ def export_args_hook():
     import yaml
     from deploy.libs import gwak_dir
 
-    export_cfg = gwak_dir()(append_path="gwak/deploy/deploy/config/export.yaml")
+    export_cfg = gwak_dir()(
+        append_path="gwak/deploy/configs/export.yaml"
+    )
 
     with open(export_cfg) as f:
         export_args = yaml.safe_load(f)
@@ -76,11 +93,20 @@ def main(args=None):
     if subcommand == "infer_slurm":
         from deploy.slurm_handeler import slurm_infer_wrapper as main_cli
 
-    if subcommand == "post_analyze":
-        from deploy.analyzer import scan as main_cli
+    if subcommand == "threshold_lock":
+        from deploy.analyzer import threshold_lock as main_cli
+
+    if subcommand == "scan_outlier":
+        from deploy.analyzer import scan_outlier as main_cli
 
     if subcommand == "resolve_O4_bbc":
-        from deploy.analyzer import resolve_bbc as main_cli
+        from deploy.analyzer import bbc_benchmark as main_cli
+
+    if subcommand == "plot_segs":
+        from deploy.monet import find_outlier_segs as main_cli
+
+    if subcommand == "plot_bbc":
+        from deploy.monet import plot_bbc_benchmark as main_cli
 
     # Create subparser
     subparser = build_parser(action=ActionConfigFile)

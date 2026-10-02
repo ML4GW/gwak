@@ -29,6 +29,7 @@ def infer(
     data_format: str,
     segments: list,
     shifts: list,
+    dim_split: list,
     Tb: int,
     psd_length: float,
     stride_batch_size: int,
@@ -70,6 +71,7 @@ def infer(
         kernel_size=kernel_size,
         sample_rate=sample_rate,
         inference_sampling_rate=inference_sampling_rate,
+        dim_split=dim_split,
         arguments=arguments,
     )
 

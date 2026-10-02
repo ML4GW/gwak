@@ -15,7 +15,12 @@ from hermes.aeriel.monitor import ServerMonitor
 
 from deploy.libs import get_ip_address 
 from deploy.libs import gwak_logger, Pathfinder
-from deploy.libs import gwak_dir, gwak_output_dir, O4_bbc_short_0_data_dir, O4_bbc_short_1_data_dir
+from deploy.libs import (
+    gwak_dir,
+    gwak_output_dir,
+    O4_bbc_short_0_data_dir,
+    O4_bbc_short_1_data_dir
+)
 from deploy.libs.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
 from infer_data import get_shifts_meta_data
 
@@ -35,15 +40,21 @@ def condor_infer_wrapper(
     image: str,
     grpc_port: int = 8001,
     fname: Optional[Pathfinder] = None, 
+    ana_data: Optional[str] = None,
     model_repo_dir: Optional[Pathfinder] = None,
     result_dir: Optional[Pathfinder] = None,
     server_patients: int=3, 
     monitor_patients: Optional[int]=3,
+    max_concurrent_node: int = 8,
     job_rate_limit: int = 1,
     inference_rate: float = 2,
     inj_type: Optional[str]=None,
+    ana_ver: str="O4b_cat1",
+    data_ver: str="O4b_cat12",
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
+    coh_mode: str="real",
     fm_config: str='NF_onlyBkg',
+    dim_split: list=[6, 1, 1],
     **kwargs,
 ):
     """ Timeslide and Hermes(Triton) handeler to generate test result for GWAK model. 
@@ -64,7 +75,9 @@ def condor_infer_wrapper(
     Keyword Arguments:
         model_repo_dir -- Automatic resolve to gwak/gwak/output/export if equals to None. (default: {None})
         result_dir -- Automatic resolve to gwak/gwak/output/infer if equals to None (default: {None})
-        condor_nodes -- Max number of paralle running jobs. (default: {20})
+        condor_nodes -- Number of Condor jobs used to split the input files.
+        max_concurrent_node -- Maximum number of Condor jobs running at the same time.
+        job_rate_limit -- Maximum number of inference workers inside each Condor job.
         monitor_patients -- The addtional waiting time wating for monitor to return messages. (default: {3})
         inference_sampling_rate -- Numbers of kernel to run in one second. (default: {2})
         inj_type -- Class of wavform to inject on timeslide. (default: {None})
@@ -74,30 +87,29 @@ def condor_infer_wrapper(
     deploy_dir = gwak_dir(suffix="gwak/deploy")()
     
     ifo_str = ''.join(ifo[0] for ifo in ifos)
-    prefix = f"{cl_config}_{fm_config}_{ifo_str}"
+    prefix = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     # File handling     
     if model_repo_dir is None: 
         model_repo_dir = output_dir(
-            append_path=f"export/{prefix}/{project}"
+            append_path=f"export/{ifo_str}/{prefix}/{project}"
         )
     if result_dir is None:
         result_dir = output_dir(
-            append_path=f"infer/{prefix}/{run_name}"
+            append_path=f"infer/{ifo_str}/{ana_ver}/{prefix}/{run_name}"
         )
     if result_dir.exists():
         shutil.rmtree(result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
     # Define fname    
-    if run_name == "bbc-short-0":
-        fname = O4_bbc_short_0_data_dir()
-    if run_name == "bbc-short-1":
-        fname = O4_bbc_short_1_data_dir()
 
-    if fname is not None:
-        fname = fname(append_path=ifo_str)
-    else:
-        fname = output_dir(append_path=f"BBC_AnalysisReady_Cat12/{ifo_str}")
+    fname = fname(append_path=f"{ana_data}/{ifo_str}")
+    if run_name == "bbc-short-0":
+        fname = O4_bbc_short_0_data_dir(suffix=ifo_str)()
+    if run_name == "bbc-short-1":
+        fname = O4_bbc_short_1_data_dir(suffix=ifo_str)()
+
+
 
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
@@ -194,6 +206,7 @@ def condor_infer_wrapper(
                     kernel_size=kernel_size,
                     sample_rate=sample_rate,
                     inference_sampling_rate=int(inference_rate),
+                    dim_split=dim_split,
                     job_rate_limit=job_rate_limit,
                 )
 
@@ -213,7 +226,7 @@ def condor_infer_wrapper(
 
             condor_submit_with_rate_limit(
                 sub_files=sub_files,
-                rate_limit=condor_nodes
+                rate_limit=max_concurrent_node
             )
 
             run_time = (time.time() - start_time)

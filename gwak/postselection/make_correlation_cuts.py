@@ -56,21 +56,37 @@ RUN (same input as the reference; auto Stage-1 whitening in the gwak venv):
       --output       results/correlation_cuts.csv --first-n 20000
 """
 import os
+import sys
 
 # MANDATORY before numpy import (RLIMIT_NPROC segfault / OpenBLAS thread storm on py3.6 otherwise).
 for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
            "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
+# Make a `gwak_corrcuts/` package vendored NEXT TO this file importable no matter the CWD or how
+# the script is launched (`python make_correlation_cuts.py`, `-m ...`, or from the gwak repo root).
+# This is the feature-math package; ship it alongside this script. See the module docstring.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
 import argparse  # noqa: E402
 import json  # noqa: E402
 import subprocess  # noqa: E402
-import sys  # noqa: E402
 import tempfile  # noqa: E402
 import time  # noqa: E402
 import multiprocessing as mp  # noqa: E402
 
 import numpy as np  # noqa: E402
+
+
+def _resolve_data(path):
+    """Locate a shipped data file (model/calib JSON): use `path` if it exists, else look for the
+    same basename next to this script. Returns an absolute path so spawned workers resolve it too."""
+    if os.path.exists(path):
+        return os.path.abspath(path)
+    alt = os.path.join(_HERE, os.path.basename(path))
+    return os.path.abspath(alt) if os.path.exists(alt) else path
 
 # --------------------------------------------------------------------------------------------
 # Defaults (documented in recon_timeslide.py / DESIGN_timeslide.md)
@@ -399,6 +415,10 @@ def main(argv=None):
 
     if args.kernels is None and args.data_dir is None:
         ap.error("provide either --kernels (pre-whitened) or --data-dir (raw, auto-whitened)")
+
+    # locate shipped data files next to the script if not found relative to the CWD
+    args.model_json = _resolve_data(args.model_json)
+    args.calib = _resolve_data(args.calib)
 
     # --- config with native calibration (tiles MUST match the trained model) -----------------
     from gwak_corrcuts.config import Config
