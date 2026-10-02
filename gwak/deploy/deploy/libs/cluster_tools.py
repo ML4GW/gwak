@@ -76,35 +76,20 @@ def write_condor_config(
     executable,
     config
 ):
-    job_dir = Path(job_dir)
-    executable = Path(executable)
 
     condor_config = {}
     submit_file = job_dir / "condor.sub"
     job_out = job_dir / "job.out"
-    job_err = job_dir / "job.err"
     job_out.touch()
-    job_err.touch()
 
     condor_config["universe"] = "vanilla"
-    condor_config["executable"] = "/bin/bash"
-    condor_config["arguments"] = executable.name
+    condor_config["executable"] = executable
 
     condor_config["log"] = job_dir / "job.log"
     condor_config["output"] = job_out
-    condor_config["error"] = job_err
-    condor_config["stream_output"] = True
-    condor_config["stream_error"] = True
-
-    # Transfer only the launcher, not the Condor scratch contents.
-    condor_config["should_transfer_files"] = "YES"
-    condor_config["transfer_executable"] = False
-    condor_config["transfer_input_files"] = str(executable)
-    condor_config["transfer_output_files"] = '""'
-    condor_config["when_to_transfer_output"] = "ON_EXIT"
+    condor_config["error"] = job_dir / "job.err"
 
     for key in condor_kwargs.keys():
-
         condor_config[key] = condor_kwargs[key]
 
     with open(submit_file, "w") as f:
