@@ -45,6 +45,7 @@ def condor_infer_wrapper(
     result_dir: Optional[Pathfinder] = None,
     server_patients: int=3, 
     monitor_patients: Optional[int]=3,
+    max_concurrent_node: int = 8,
     job_rate_limit: int = 1,
     inference_rate: float = 2,
     inj_type: Optional[str]=None,
@@ -74,7 +75,9 @@ def condor_infer_wrapper(
     Keyword Arguments:
         model_repo_dir -- Automatic resolve to gwak/gwak/output/export if equals to None. (default: {None})
         result_dir -- Automatic resolve to gwak/gwak/output/infer if equals to None (default: {None})
-        condor_nodes -- Max number of paralle running jobs. (default: {20})
+        condor_nodes -- Number of Condor jobs used to split the input files.
+        max_concurrent_node -- Maximum number of Condor jobs running at the same time.
+        job_rate_limit -- Maximum number of inference workers inside each Condor job.
         monitor_patients -- The addtional waiting time wating for monitor to return messages. (default: {3})
         inference_sampling_rate -- Numbers of kernel to run in one second. (default: {2})
         inj_type -- Class of wavform to inject on timeslide. (default: {None})
@@ -223,7 +226,7 @@ def condor_infer_wrapper(
 
             condor_submit_with_rate_limit(
                 sub_files=sub_files,
-                rate_limit=job_rate_limit
+                rate_limit=max_concurrent_node
             )
 
             run_time = (time.time() - start_time)
