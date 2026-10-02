@@ -218,233 +218,75 @@ def write_infer_config(
 def submit_condor_job(sub_file:Path):
 
     result = subprocess.run(
-        ["condor_submit", str(sub_file)],
+        ["condor_submit", sub_file], 
         cwd=sub_file.parent,
         capture_output=True, 
         text=True
     )
 
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"condor_submit failed for {sub_file}\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
-        )
-
+    # Extract job ID from output using regex
     match = re.search(r"submitted to cluster (\d+)", result.stdout)
-    if not match:
-        raise RuntimeError(
-            "condor_submit returned success but no cluster ID was found for "
-            f"{sub_file}\nstdout:\n{result.stdout}"
-        )
+    if match:
+        
+        job_id = match.group(1) + ".0"  # Format as "12345.0"
+        logging.info(f"Job {job_id} submitted successfully!")
 
-    job_id = match.group(1) + ".0"
-    logging.info(f"Job {job_id} submitted successfully!")
-    return job_id
-
-
-def _query_condor_job(job_id: str):
-    """Return the current HTCondor status and hold reason."""
-
-    result = subprocess.run(
-        ["condor_q", job_id, "-af", "JobStatus", "HoldReason"],
-        capture_output=True,
-        text=True
-    )
-
-    if "SECMAN" in result.stderr:
-        logging.warning(
-            f"Temporary HTCondor SECMAN error while checking {job_id}: "
-            f"{result.stderr.strip()}"
-        )
-        return "SECMAN", None
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"condor_q failed for {job_id}\n"
-            f"stdout:\n{result.stdout}\n"
-            f"stderr:\n{result.stderr}"
-        )
-
-    job_info = result.stdout.strip()
-    if not job_info:
-        return None, None
-
-    parts = job_info.split(maxsplit=1)
-    try:
-        job_state = int(parts[0])
-    except ValueError as exc:
-        raise RuntimeError(
-            f"Could not parse JobStatus for {job_id}: {job_info}"
-        ) from exc
-
-    hold_reason = parts[1] if len(parts) > 1 else "No HoldReason reported"
-    return job_state, hold_reason
-
-
-def _query_condor_history(
-    job_id: str,
-    timeout: int = 30,
-    interval: int = 1,
-):
-    """Return the final HTCondor status after a job leaves condor_q."""
-
-    start = time.time()
-
-    while True:
-        result = subprocess.run(
-            [
-                "condor_history",
-                job_id,
-                "-limit",
-                "1",
-                "-af",
-                "JobStatus",
-                "ExitCode",
-                "ExitBySignal",
-                "ExitSignal",
-                "RemoveReason",
-            ],
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"condor_history failed for {job_id}\n"
-                f"stdout:\n{result.stdout}\n"
-                f"stderr:\n{result.stderr}"
-            )
-
-        line = result.stdout.strip()
-        if line:
-            parts = line.split(maxsplit=4)
-            parts.extend(["undefined"] * (5 - len(parts)))
-            return {
-                "JobStatus": parts[0],
-                "ExitCode": parts[1],
-                "ExitBySignal": parts[2],
-                "ExitSignal": parts[3],
-                "RemoveReason": parts[4],
-            }
-
-        if time.time() - start > timeout:
-            raise RuntimeError(
-                f"Job {job_id} left condor_q but no matching "
-                f"condor_history record appeared within {timeout} s."
-            )
-
-        time.sleep(interval)
-
-
-def _remove_condor_jobs(job_ids):
-    """Remove jobs submitted by this inference run."""
-
-    for job_id in job_ids:
-        if not job_id:
-            continue
-
-        result = subprocess.run(
-            ["condor_rm", job_id],
-            capture_output=True,
-            text=True
-        )
-
-        if result.returncode == 0:
-            logging.info(f"Removed HTCondor job {job_id} during cleanup.")
-        else:
-            logging.warning(
-                f"Could not remove HTCondor job {job_id}: "
-                f"{result.stderr.strip()}"
-            )
+        return job_id
+    else:
+        logging.info("Job submission failed or Job ID not found.")
+        return None
 
 
 def condor_submit_with_rate_limit(
     sub_files: list,
     rate_limit: int= 20
 ):
-    """Submit Condor jobs up to the rate limit and verify final status."""
 
     job_status = {
-        "Waiting": list(sub_files),
+        "Waiting": sub_files,
         "Running": [],
         "Done": []
     }
-
+    
     total_jobs = len(job_status["Waiting"])
 
-    try:
-        while len(job_status["Done"]) < total_jobs:
+    while len(job_status["Done"]) < total_jobs :
 
-            while job_status["Waiting"] and len(job_status["Running"]) < rate_limit:
-                sub_file = job_status["Waiting"].pop(0)
-                logging.info(f"Submitting {sub_file}")
-                job_id = submit_condor_job(sub_file=sub_file)
-                job_status["Running"].append((sub_file, job_id))
+        # Check if we need to submit new jobs
+        if len(job_status["Running"]) < rate_limit:
+            try: 
+                logging.info(f"Submitting {job_status['Waiting'][0]}")
+                job_id = submit_condor_job(sub_file=job_status["Waiting"][0])
 
-            if not job_status["Running"]:
-                break
+                # Add in to Running track list
+                job_status["Running"].append((job_status["Waiting"][0], job_id))
+                job_status["Waiting"].pop(0)
+                continue
+            except IndexError:
+                pass
 
-            time.sleep(10)
-            still_running = []
+        check_held = subprocess.run(["condor_release", "-all"], capture_output=True, text=True)
+        time.sleep(10)
+        # Check if any job is done
+        for idx, (sub_file, job_id) in enumerate(job_status["Running"]):
+            result = subprocess.run(["condor_q", f"{job_id}"], capture_output=True, text=True)
 
-            for sub_file, job_id in job_status["Running"]:
-                job_state, hold_reason = _query_condor_job(job_id)
-
-                if job_state == "SECMAN":
-                    still_running.append((sub_file, job_id))
-                    continue
-
-                # HTCondor JobStatus 5 is Held.
-                if job_state == 5:
-                    raise RuntimeError(
-                        f"HTCondor job {job_id} is held.\n"
-                        f"HoldReason: {hold_reason}\n"
-                        f"Submit file: {sub_file}"
-                    )
-
-                if job_state is not None:
-                    still_running.append((sub_file, job_id))
-                    continue
-
-                history = _query_condor_history(job_id)
-                job_completed = (
-                    history["JobStatus"] == "4"
-                    and history["ExitCode"] == "0"
-                    and history["ExitBySignal"].lower() == "false"
-                )
-
-                if not job_completed:
-                    raise RuntimeError(
-                        f"HTCondor job {job_id} did not complete successfully.\n"
-                        f"Final status: {history}\n"
-                        f"Submit file: {sub_file}"
-                    )
-
+            if "SECMAN" in result.stderr:
+                time.sleep(1)
+                continue
+            if not (job_id in result.stdout):
                 error_file = Path(sub_file).parent / "job.err"
-                wait_for_file(error_file)
-
-                if os.path.getsize(error_file) != 0:
-                    logging.warning(f"Error file not empty: {error_file}")
-
-                logging.info(f"Job {job_id} completed successfully.")
                 job_status["Done"].append(sub_file)
+                job_status["Running"].pop(idx)
+                
+                wait_for_file(error_file)
+                condor_success = (result.returncode == 0)
+                triton_success = (os.path.getsize(error_file) == 0)
 
-            job_status["Running"] = still_running
-
-    except Exception:
-        active_job_ids = [job_id for _, job_id in job_status["Running"]]
-
-        if active_job_ids:
-            logging.error(
-                "Inference workflow failed. Removing remaining active "
-                f"HTCondor jobs: {active_job_ids}"
-            )
-            _remove_condor_jobs(active_job_ids)
-
-        raise
-
-    logging.info(
-        f"All {len(job_status['Done'])}/{total_jobs} "
-        "HTCondor jobs completed successfully."
-    )
+                if condor_success and triton_success:
+                    logging.info(f"Job {job_id} ran successfully!")
+                if not condor_success:
+                    logging.error(f"Job {job_id} failed check: {sub_file}")
+                if not triton_success:
+                    logging.warning(f"Error file not empty: {error_file}")
+            time.sleep(0.1)
