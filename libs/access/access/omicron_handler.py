@@ -3,9 +3,7 @@ import re
 import subprocess
 
 import gwdatafind.utils
-import torch
 import time
-from torch.nn import functional as F 
 import math
 import h5py
 import shutil

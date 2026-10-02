@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
-from deploy.libs import gwak_logger
+from machinery import gwak_logger
 from deploy.libs.infer_utils import get_ip_address
 from deploy.libs.infer_core import client_action, run_bash
 

@@ -66,7 +66,7 @@ rule get_segment_list:
             --project {params.pyproject} python {input.arg} \
             --config {input.config} make_seg_list \
             --segment_type {wildcards.segment_type} \
-            --resolved_segment {output.segments} \
+            --resolved_segments {output.segments} \
             --logger {log}"
 
 # Step 2: download the strain of every segment in the list.

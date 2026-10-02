@@ -6,9 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from pathlib import Path
-from deploy.libs import gwak_logger
+from machinery import gwak_logger
 from collections import defaultdict
-from deploy.libs import gwak_output_dir, gwak_louvre_dir, gwak_logging_dir
+from machinery import gwak_output_dir, gwak_louvre_dir, gwak_logging_dir
 
 from deploy.libs.trigger_io import lovure_file_handler, resolve_oulier_config
 from deploy.libs.analysis_utils import get_bbc_inj_names, bbc_inj_info, find_valid_triggers

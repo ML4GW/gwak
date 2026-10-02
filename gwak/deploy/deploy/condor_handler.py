@@ -14,8 +14,8 @@ from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
 from deploy.libs import get_ip_address 
-from deploy.libs import gwak_logger, Pathfinder
-from deploy.libs import (
+from machinery import gwak_logger, Pathfinder
+from machinery import (
     gwak_dir,
     gwak_output_dir,
     O4_bbc_short_0_data_dir,

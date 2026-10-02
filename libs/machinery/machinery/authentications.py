@@ -8,8 +8,8 @@ def check_scitoken():
     # This is required to access the data from the GW datafind service.
     # """
 
-    print("")
-    print("Check SciToken status.")
+    logging.info("")
+    logging.info("Check SciToken status.")
 
     result = subprocess.run(
         [
@@ -23,7 +23,7 @@ def check_scitoken():
     )
 
     if result.returncode == 0:
-        print("    SciToken successfully activated. ")
+        logging.info("    SciToken successfully activated. ")
     else:
-        print("    SciToken failed...")
-    print("")
+        logging.info("    SciToken failed...")
+    logging.info("")

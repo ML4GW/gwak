@@ -7,7 +7,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 from pathlib import Path
-from deploy.libs import gwak_logger
+from machinery import gwak_logger
 from deploy.libs.infer_utils import noise_runs_list
 from deploy.libs.trigger_io import (
     lovure_file_handler,
@@ -16,7 +16,7 @@ from deploy.libs.trigger_io import (
     find_outlier_by_segmets,
     resolve_oulier_config
 )
-from deploy.libs import (
+from machinery import (
     gwak_output_dir,
     gwak_louvre_dir,
     gwak_logging_dir,

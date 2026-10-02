@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 from collections import defaultdict
 from deploy.libs import accumlator
-from deploy.libs.loggers import ordinal
+from machinery import ordinal
 
 
 def lovure_file_handler(

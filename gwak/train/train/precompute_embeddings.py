@@ -16,7 +16,7 @@ from ml4gw.waveforms import (
 )
 
 from train.dataloader import SignalDataloader
-from data.prior import (
+from trainer.prior import (
     SineGaussianBBC,
     LAL_BBHPrior,
     GaussianBBC,

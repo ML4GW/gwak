@@ -56,7 +56,7 @@ def build_parser(
 def export_args_hook():
 
     import yaml
-    from deploy.libs import gwak_dir
+    from machinery import gwak_dir
 
     export_cfg = gwak_dir()(
         append_path="gwak/deploy/configs/export.yaml"

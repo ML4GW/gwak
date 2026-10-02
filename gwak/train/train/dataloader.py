@@ -24,8 +24,7 @@ from torch.distributions.uniform import Uniform
 from torch.distributions import TransformedDistribution, Distribution
 from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 from ml4gw.waveforms import GenerateString
-import data
-from data.prior import FakeGlitchPrior
+from trainer.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
