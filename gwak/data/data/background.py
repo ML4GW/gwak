@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
-from machinery import authentications, gwak_logger, gwak_dir
+from machinery import authentications, gwak_logger, gwak_dir, gwak_data_dir
 from access.segment_utils import (
     load_segments, select_segments, write_segment_list, find_local_segments
 )
@@ -68,10 +68,10 @@ def gwak_background(
     ifos: list[str], 
     channels: list[str],
     sample_rate: int,
-    save_dir: Path,
     logger: Path,
+    save_dir: Optional[Path]=None,
     verbose: Optional[bool] = False,
-    version_tag: Optional[str] = None,
+    version_tag: Optional[str] = "test",
     host: str = "datafind.ldas.cit:80",
     state_flag: list[str]=None,
     frame_type: list[str]=None,
@@ -94,6 +94,9 @@ def gwak_background(
     gwak_logger(logger)
     # File handling
     ifo_abbrs = "".join(ifo[0] for ifo in ifos)
+    save_dir = gwak_data_dir(
+        suffix=f"{ifo_abbrs}/{version_tag}"
+    )()
     save_dir.mkdir(parents=True, exist_ok=True)
 
     if host == "datafind.igwn.org":

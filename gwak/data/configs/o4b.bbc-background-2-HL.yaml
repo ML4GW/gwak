@@ -2,7 +2,7 @@
 make_seg_list:
   ifos: &ifos ["H1", "L1"]
   state_flag: &state_flag ["DMT-ANALYSIS_READY:1", "DMT-ANALYSIS_READY:1"]
-  version_tag: &version_tag null
+  version_tag: &version_tag test
   ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_2/O4b-2
   ana_end:   1401699900
   dqsegdb_url: https://segments.igwn.org
@@ -18,7 +18,7 @@ get_strain:
   channels: ["GDS-CALIB_STRAIN_CLEAN", "GDS-CALIB_STRAIN_CLEAN"]
   frame_type: ["HOFT_C00", "HOFT_C00"]
   sample_rate: 4096
-  save_dir: output/O4_MDC_background/HL
+  save_dir: null
   verbose: False
   host: *host
   logger: null
