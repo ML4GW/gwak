@@ -140,6 +140,7 @@ class O4_bbc_short_0_data_dir(Pathfinder):
             path_function_name="data directory",
             suffix=suffix
         )
+
 class O4_bbc_short_1_data_dir(Pathfinder):
 
     def __init__(
@@ -212,29 +213,20 @@ class gwak_louvre_dir(Pathfinder):
             suffix=suffix
         )
 
+
 def convert_path_to_public_html_link(
-    output_path: Path
+    public_html_path: Path
 ):
-    """
-    Log a public_html URL when the output is stored under ~/public_html.
 
-    If the output is stored elsewhere, log the local filesystem path
-    instead of raising an error.
-    """
-
-    output_path = Path(output_path).expanduser()
-
-    user_name = os.getenv("USER")
+    user_name = os.getenv('USER')
     base_path = Path.home() / "public_html"
+    public_html_path = Path(public_html_path).expanduser()
 
     try:
-        relative_path = output_path.relative_to(base_path)
+        _path = public_html_path.relative_to(base_path)
     except ValueError:
-        logging.info(f"Plot saved locally at: {output_path}")
-        return str(output_path)
+        logging.info(f"Plot saved locally at: {public_html_path}")
+        return
 
     html_link_prefix = f"https://ldas-jobs.ligo.caltech.edu/~{user_name}"
-    html_link = f"{html_link_prefix}/{relative_path}"
-
-    logging.info(f"Plot can be found at: {html_link}")
-    return html_link
+    logging.info(f"Plots can be found in: {html_link_prefix}/{_path}")
