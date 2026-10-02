@@ -144,8 +144,8 @@ class BatchWhitener(torch.nn.Module):
             fast=False
         )
         self.bandpass = TorchBandpassFIR(
-            lowcut=highpass,
-            highcut=2047,
+            highpass=highpass,
+            lowpass=2047,
             sample_rate=sample_rate
         )
         self.whitener = Whiten(

@@ -15,6 +15,7 @@ dependencies = [
     "matplotlib>=3.10.8",
     "ml4gw",
     "ml4gw-hermes",
+    "machinery",
     "onnx>=1.17.0",
     "pyrate-limiter>=4.0.2",
     "scipy>=1.15.3",
@@ -32,10 +33,6 @@ dev = [
     "pytest~=7.3",
 ]
 
-test = [
-    "cowsay>=6.1",
-]
-
 [tool.uv]
 extra-index-url = ["https://pypi.nvidia.com/"]
 
@@ -49,8 +46,11 @@ torch = { index = "pytorch-cu128" }
 torchaudio = { index = "pytorch-cu128" }
 ml4gw = { path = "../../ml4gw", editable = true }
 ml4gw-hermes = { path = "../../hermes", editable = true }
+machinery = {path = "../../libs/machinery", editable = true }
 transforms = {path = "../../libs/transforms", editable = true }
 
+[tool.hatch.build.targets.wheel]
+packages = ["deploy"]
 
 [build-system]
 requires = ["hatchling"]

@@ -11,8 +11,7 @@ from typing import Callable, Optional
 
 import hermes.quiver as qv
 
-from deploy.libs import gwak_logger, Pathfinder
-from deploy.libs import gwak_dir, gwak_output_dir
+from machinery import gwak_logger, Pathfinder, gwak_dir, gwak_output_dir
 from deploy.libs import scale_model, add_streaming_input_preprocessor
 
 

@@ -24,8 +24,7 @@ from torch.distributions.uniform import Uniform
 from torch.distributions import TransformedDistribution, Distribution
 from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 from ml4gw.waveforms import GenerateString
-import data
-from data.prior import FakeGlitchPrior
+from trainer.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
@@ -155,8 +154,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
         bandpass = TorchBandpassFIR(
-            lowcut=30,
-            highcut=2047,
+            highpass=30,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
 
@@ -396,9 +395,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
         }
 
         bandpass = TorchBandpassFIR(
-                    lowcut=30,
-                    highcut=2047,
-                    sample_rate=self.sample_rate
+            highpass=30,
+            lowpass=2047,
+            sample_rate=self.sample_rate
         )
 
         whitener = Whiten(
@@ -583,12 +582,23 @@ class SignalDataloader(GwakBaseDataloader):
         whiten: bool = True,   # make whitening optional
         **kwargs
     ):
+
+        for name, value in {
+            "signal_classes": signal_classes,
+            "waveforms": waveforms,
+            "priors": priors,
+            "extra_kwargs": extra_kwargs,
+        }.items():
+            if not isinstance(value, list):
+                raise TypeError(
+                    f"{name} must be a list, got {type(value).__name__}"
+                )
         super().__init__(*args, **kwargs)
-        self.signal_classes = signal_classes if type(signal_classes) == list else [signal_classes]
         self.num_classes = len(signal_classes)
-        self.waveforms = waveforms if type(waveforms) == list else [waveforms]
-        self.priors = priors if type(priors) == list else [priors]
-        self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
+        self.signal_classes = signal_classes
+        self.waveforms = waveforms
+        self.priors = priors
+        self.extra_kwargs = extra_kwargs
         self.loader_mode = loader_mode
         self.anneal_snr = anneal_snr
         self.snr_init_factor = snr_init_factor
@@ -609,9 +619,12 @@ class SignalDataloader(GwakBaseDataloader):
             "WhiteNoiseBurst":5,
             "CCSN":6,
             "Background":7,
-            "Glitch":7,
-            "FakeGlitch":8,
-            "MultiSineGaussian":9
+            # "Glitch":7,
+            # "FakeGlitch":8,
+            # "MultiSineGaussian":9
+            "Glitch":8,
+            "FakeGlitch":9,
+            "MultiSineGaussian":10
         }
         self.all_signal_label_names = {
             1:"SineGaussian",
@@ -620,11 +633,16 @@ class SignalDataloader(GwakBaseDataloader):
             4:"Strings (Cusp/Kink/2Kink)",
             5:"WhiteNoiseBurst",
             6:"CCSN",
-            7:"Bkg/Glitch",
-            8:"FakeGlitch",
-            9:"MultiSineGaussian"
+            # 7:"Bkg/Glitch",
+            # 8:"FakeGlitch",
+            # 9:"MultiSineGaussian"
+            7: "Background",
+            8: "Glitch",
+            9: "FakeGlitch",
+            10: "MultiSineGaussian"
         }
-
+        # self.noise_type = ["Bkg/Glitch"]
+        self.noise_type = ["Glitch", "Background"]
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
@@ -661,7 +679,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # new computation for when several classes have the same label (e.g. merging strings)
         if self.rebalance_classes:
-            uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
+            uniq, counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
             frac_per_label = 1.0/len(uniq)
             counts_per_label = {}
             for label,ct in zip(uniq,counts):
@@ -678,13 +696,6 @@ class SignalDataloader(GwakBaseDataloader):
                     for i in range(deficit):
                         self.num_per_class[i] += 1
 
-        # save correspondence between numerical labels and signal names
-        # convention is label 1 = first signal, label 2 = second signal, etc.
-        #class_labels = [i+1 for i in range(self.num_classes)]
-        #if self.data_saving_file is not None:
-        #    self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
-        #    self.data_group["class_label_names"] = self.signal_classes
-
         # make a list of signals we can use for "fake" glitch generation
         # i.e. where we populate one ifo with a signal and the other with nothing
         # use only signals for which waveforms/priors are easy
@@ -696,8 +707,8 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_prior = snr_prior
         highpass = 30
         bandpass = TorchBandpassFIR(
-            lowcut=highpass,
-            highcut=2047,
+            highpass=highpass,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
         rescaler = SnrRescaler_Online(
@@ -752,14 +763,14 @@ class SignalDataloader(GwakBaseDataloader):
             coincident=False,
             mode=self.loader_mode
         )
+
+        train_glitch_dataset = None
         if self.has_glitch:
             train_glitch_dataset = self.make_dataset(
                 self.train_fnames,
                 coincident=True,
                 mode="glitch"
             )
-        else:
-            train_glitch_dataset = None
 
         train_paired_dataset = CleanGlitchPairedDataset(
             train_clean_dataset,
@@ -767,8 +778,8 @@ class SignalDataloader(GwakBaseDataloader):
         )
 
         return torch.utils.data.DataLoader(
-            train_paired_dataset, 
-            batch_size=None, 
+            train_paired_dataset,
+            batch_size=None,
             num_workers=self.num_workers,
         )
 
@@ -778,16 +789,23 @@ class SignalDataloader(GwakBaseDataloader):
             coincident=False,
             mode=self.loader_mode
         )
+
+        val_glitch_dataset = None
         if self.has_glitch:
             val_glitch_dataset = self.make_dataset(
                 self.val_fnames,
                 coincident=True,
                 mode="glitch"
             )
-        else:
-            val_glitch_dataset = None
-        val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset, val_glitch_dataset)
-        return torch.utils.data.DataLoader(val_paired_dataset, batch_size=None)
+            
+        val_paired_dataset = CleanGlitchPairedDataset(
+            val_clean_dataset,
+            val_glitch_dataset
+        )
+        return torch.utils.data.DataLoader(
+            val_paired_dataset,
+            batch_size=None
+        )
 
     def test_dataloader(self):
         test_clean_dataset = self.make_dataset(
@@ -1041,7 +1059,6 @@ class SignalDataloader(GwakBaseDataloader):
         hrss_raw = torch.tensor(hrss_raw, device=snr_scaling.device, dtype=snr_scaling.dtype)
         hrss = hrss_raw * snr_scaling
         return batch, snrs, hrss
-
 
     def on_after_batch_transfer(self, batch, dataloader_idx, local_test=False):
 

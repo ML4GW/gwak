@@ -18,18 +18,24 @@ include: GWAK_ROOT / "gwak/postselection/postselection.smk"
 ana_ver_list = [
     "O4b_gwak_cat12"
 ]
+ifos_list = ["HL"]
 data_ver_list = [
-    "O4b_cat1-chunked",
+    # "O4b_cat1-chunked",
     "O4b_cat12-katya"
 ]
-ifos_list = ["HL"]
 cl_config_list = [
     "ResNet_6d",
+    # "ResNet_6d_split",
+    # "ResNet_6d_narrow_band",
+    # "ResNet_6d.test",
 ]
 coh_mode_list = [
-    # "real",
+    "real",
     # "real_imag",
-    "abs"
+    # "abs",
+    # "random",
+    # "random2",
+    # "half",
 ]
 fm_config_list = [
     "NF_from_file",
@@ -48,14 +54,16 @@ rule build_containers:
 
 rule pull_all:
     input:
-        expand(rules.pull_data.output,
+        expand(rules.pull_data_from_segments.output,
             segment_type=[
-                'short-0.o4b-2', 
-                'short-1.o4b-2', 
-                'short-0.o4b-0', 
-                'short-1.o4b-0'
+                "o4.strain",
+                # 'o4b.bbc-background-2',
+                # 'o4b.short-0-2', 
+                # 'o4b.short-1-2', 
+                # 'o4b.short-0-0', 
+                # 'o4b.short-1-0'
             ],
-            ifos=['hl', 'hv', 'lv', 'hlv']
+            ifos=ifos_list
         )
 
 rule train_all:
@@ -85,7 +93,9 @@ rule scan_all:
 rule benchmark:
     input:
         expand(
-            rules.scan_outlier.output + rules.find_outlier_segs.output + rules.plot_bbc_benchmark.output,
+            rules.scan_outlier.output \
+            + rules.find_outlier_segs.output \
+            + rules.plot_bbc_benchmark.output,
             ifo_mode=ifos_list,
             ana_ver=ana_ver_list,
             data_ver=data_ver_list,
@@ -94,4 +104,14 @@ rule benchmark:
             fm_config=fm_config_list,
             noise_run=noise_run_list,
             run_name=run_name_list,
+        )
+
+rule save_all_embd: 
+    input:
+        expand(
+            rules.make_signal_embeddings.output,
+            ifo_mode=ifos_list,
+            data_ver=data_ver_list,
+            cl_config=cl_config_list,
+            coh_mode=coh_mode_list
         )

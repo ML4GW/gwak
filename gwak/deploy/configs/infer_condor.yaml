@@ -17,7 +17,7 @@ ana_data: BBC_AnalysisReady_Cat12
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
-grpc_port: 8001
+grpc_port: 8301
 image: hermes/tritonserver:23.01
 model_repo_dir: null
 result_dir: null
@@ -30,4 +30,3 @@ data_ver: O4b_cat1
 cl_config: null
 coh_mode: null
 fm_config: null
-dim_split: [0, 0, 1]

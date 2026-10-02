@@ -1,23 +1,23 @@
 ifo_configs = [
-    'hl',
-    'hv',
-    'lv',
-    'hlv'
+    'HL',
+    'HV',
+    'LV',
+    'HLV'
 ]
 segment_types = [
-    'original.o4b-2',
-    'short-0.o4b-2',
-    'short-1.o4b-2',
-    'original.o4b-0',
-    'short-0.o4b-0',
-    'short-1.o4b-0',
+    "o4.strain",
+    'o4b.bbc-background-0',
+    'o4b.bbc-background-2',
+    'o4b.short-0-0',
+    'o4b.short-1-0',
+    'o4b.short-0-2',
+    'o4b.short-1-2',
 ]
 wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs]),
     segment_type = '|'.join([x for x in segment_types])
 
 rule get_token:
-    output: token_log = "tmp/token_ready.txt"
     shell:
         """
         echo " "
@@ -26,9 +26,9 @@ rule get_token:
         echo " "
         echo "    Check if any window pops up automatically."
         echo " "
-        echo " "
         htgettoken -a vault.ligo.org -i igwn
-        echo "Token obtained at $(date)" > {output}
+        echo " "
+        echo " "
         """
 
 rule pull_O3a_data:
@@ -47,27 +47,42 @@ rule pull_O3b_data:
         'python data/cli.py --config {input.config} \
             --segments {input.segments} '
 
-rule find_valid_segments:
-    params:
-        segments = GWAK_ROOT / 'gwak/data/segments/'
-    output:
-        save_path = OUTPUT_DIR / 'data/segments.{segment_type}-{ifos}.npy'
-    shell:
-        'python data/segments_intersection.py \
-            --folder-segments {params.segments} \
-            --segment-type {wildcards.segment_type} \
-            --ifos {wildcards.ifos} \
-            --save-path {output.save_path}'
 
-rule pull_data:
+# Step 1: resolve the segments of a config 
+# into an (N, 2) [start, end] array. 
+rule get_segment_list:
     input:
-        token_log = "tmp/token_ready.txt",
+        arg = GWAK_ROOT / "gwak/data/data/cli.py",
         config = GWAK_ROOT / 'gwak/data/configs/{segment_type}-{ifos}.yaml',
-        segments = OUTPUT_DIR / 'data/segments.{segment_type}-{ifos}.npy'
     output:
-        'tmp/{segment_type}-{ifos}.log'
+        segments = OUTPUT_DIR / 'data/segments.{segment_type}-{ifos}.npy'
+    log:
+        LOG_DIR / 'data/segments.{segment_type}-{ifos}.log'
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/data/pyproject.toml",
     shell:
-        'python -u data/cli.py --config {input.config} \
-            --segments {input.segments} \
-            | tee {output}'
+        "source {params.gwak_env}; uv run \
+            --project {params.pyproject} python {input.arg} \
+            --config {input.config} make_seg_list \
+            --segment_type {wildcards.segment_type} \
+            --resolved_segments {output.segments} \
+            --logger {log}"
 
+# Step 2: download the strain of every segment in the list.
+rule pull_data_from_segments:
+    input:
+        arg = GWAK_ROOT / "gwak/data/data/cli.py",
+        config = GWAK_ROOT / 'gwak/data/configs/{segment_type}-{ifos}.yaml',
+        segments = rules.get_segment_list.output.segments,
+    output:
+        logger = LOG_DIR / 'data/{segment_type}-{ifos}-0.log'
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/data/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; uv run \
+            --project {params.pyproject} python {input.arg} \
+            --config {input.config} get_strain \
+            --segments {input.segments} \
+            --logger {output.logger}"

@@ -47,7 +47,7 @@ rule export:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/export.yaml",
-        model = rules.combine_models.output
+        # model = rules.combine_models.output
     output:
         directory(
             OUTPUT_DIR / "export"
@@ -208,7 +208,7 @@ rule scan_outlier:
         config = GWAK_ROOT / "gwak/deploy/configs/scan_outlier.yaml",
         log = Path(
             LOG_DIR / "infer/{ifo_mode}/{ana_ver}/{data_ver}"
-            / "{cl_config}_{coh_mode}_{fm_config}/{noise_run}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}"
             / "threshold_lock.log"
         ),
         # infer_result = rules.condor_infer.output
@@ -335,6 +335,9 @@ rule plot_bbc_benchmark:
             --coh_mode {wildcards.coh_mode} \
             --fm_config {wildcards.fm_config} \
             --threshold_setting {wildcards.noise_run}"
+
+
+
 
 
 rule estimate_far:

@@ -3,10 +3,17 @@ cl_configs = [
     'iTransformer',
     'ResNet',
     "ResNet_6d",
+    "ResNet_6d_split",
+    "ResNet_6d_narrow_band",
     "ResNet_6d.test",
 ]
 coh_modes = [
-    "real", "real_imag", "abs",
+    "real",
+    "real_imag",
+    "abs",
+    "random",
+    "random2",
+    "half",
 ]
 fm_configs = [
     'NF_onlyBkg',
@@ -98,7 +105,6 @@ rule precompute_embeddings:
 rule train_fm:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli_fm.py",
-        main = GWAK_ROOT / "gwak/train/train/fm_models.py",
         config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
         precom_data_dir = rules.precompute_embeddings.output.precom_data_dir
     output:
@@ -198,7 +204,6 @@ rule make_signal_embeddings:
             --correlations {output.precom_data_dir}/correlations.npy \
             --signal-type all \
             --nevents 100000 '
-
 
 # rule compare_embeddings:
 #     input:

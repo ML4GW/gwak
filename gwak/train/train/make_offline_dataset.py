@@ -9,7 +9,7 @@ from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString
 from train.preselection import cwb_stats_2ifo, cwb_cc_rho_max_over_delay_2ifo
 from ml4gw.distributions import PowerLaw
 
-from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from trainer.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from pathlib import Path
 
 from tqdm import tqdm
@@ -50,7 +50,8 @@ def main(ifos, num_samples_per_class, dataset,
         "WhiteNoiseBurst",
         "CCSN",
         "Background",
-        "Glitch"]
+        "Glitch"
+    ]
 
     priors = [
         SineGaussianBBC(),

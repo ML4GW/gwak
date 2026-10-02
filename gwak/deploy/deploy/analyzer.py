@@ -7,7 +7,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 from pathlib import Path
-from deploy.libs import gwak_logger
+from machinery import gwak_logger
 from deploy.libs.infer_utils import noise_runs_list
 from deploy.libs.trigger_io import (
     lovure_file_handler,
@@ -16,7 +16,7 @@ from deploy.libs.trigger_io import (
     find_outlier_by_segmets,
     resolve_oulier_config
 )
-from deploy.libs import (
+from machinery import (
     gwak_output_dir,
     gwak_louvre_dir,
     gwak_logging_dir,
@@ -294,6 +294,7 @@ def bbc_benchmark(
 
     # Saving result
     with h5py.File(benchmark_result, "w") as h:
+        h.attrs["err_count"] = err_count
         for name, values in performance.items():
             h.create_dataset(name, data=values)
     logging.info(f"Benchmark_result saved at: {benchmark_result}")
