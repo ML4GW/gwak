@@ -1,3 +1,9 @@
+projects = [
+    "data",
+    "train",
+    "deploy"
+]
+
 ifo_modes = [
     'H', 'L', 'V', 'K',
     'HL', 'HV', 'HK', 'LV', 'LK', 'VK',

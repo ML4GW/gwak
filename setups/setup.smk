@@ -131,6 +131,20 @@ localrules:
     bootstrap_conda_data_env,
     bootstrap_complete
 
+rule get_token:
+    shell:
+        """
+        echo " "
+        echo " "
+        echo "Get scitoken..."
+        echo " "
+        echo "    Check if any window pops up automatically."
+        echo " "
+        htgettoken -a vault.ligo.org -i igwn
+        echo " "
+        echo " "
+        """
+
 rule bootstrap_submodules:
     output:
         done=str(BOOTSTRAP_DIR / "submodules.done"),
@@ -244,11 +258,14 @@ rule gwak_info:
 
         print("=" * 80)
 
-rule build_deploy_containers:
+wildcard_constraints:
+    project_name = '|'.join([x for x in projects]),
+
+rule build_project_container:
     input:
-        deploy_container = GWAK_ROOT / "gwak/deploy/deploy.def"
+        deploy_container = GWAK_ROOT / "gwak/deploy/{project_name}.def"
     output:
-        deploy_image =  IMAGE_DIR / "deploy.sif"
+        deploy_image =  IMAGE_DIR / "{project_name}.sif"
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         processors = "--mksquashfs-args '-processors 32'"

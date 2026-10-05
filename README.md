@@ -81,6 +81,5 @@ $ snakemake -c1 benchmark
 Run with container. 
 ```
 $ snakemake -c1 build_containers
-$ snakemake -c1 production_export
 ```
 The result will from the container will redirect to `GWAK_CONTAIN_OUTPUT_DIR`.

@@ -7,7 +7,7 @@ GWAK_ROOT = Path(workflow.basedir).resolve()
 DEFAULT_CONFIG = GWAK_ROOT / "setups" / "config.yaml"
 LOCAL_SETUP_CONFIG_FILE = GWAK_ROOT / "setups" / "config.local.yaml"
 
-include: GWAK_ROOT / "setups/converter.smk"
+include: GWAK_ROOT / "setups/smk_keyword.smk"
 include: GWAK_ROOT / "setups/setup.smk"
 include: GWAK_ROOT / "gwak/data/data.smk"
 include: GWAK_ROOT / "gwak/train/train.smk"
@@ -50,7 +50,10 @@ rule gwak_init:
     input: rules.bootstrap_complete.output
 
 rule build_containers:
-    input: rules.build_deploy_containers.output
+    input: 
+        expand(rules.build_project_container.output,
+            project_name=["train", "deploy"]
+        )
 
 rule pull_all:
     input:

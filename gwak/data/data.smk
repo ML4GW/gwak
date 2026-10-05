@@ -17,20 +17,6 @@ wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs]),
     segment_type = '|'.join([x for x in segment_types])
 
-rule get_token:
-    shell:
-        """
-        echo " "
-        echo " "
-        echo "Get scitoken..."
-        echo " "
-        echo "    Check if any window pops up automatically."
-        echo " "
-        htgettoken -a vault.ligo.org -i igwn
-        echo " "
-        echo " "
-        """
-
 rule pull_O3a_data:
     input:
         config = GWAK_ROOT / 'gwak/data/configs/O3a.yaml',
