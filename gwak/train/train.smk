@@ -35,8 +35,8 @@ rule train_cl:
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         data_dir = lambda wildcards: directory(
             DATA_DIR
-            / data_ver_to_path[wildcards.data_ver]
             / wildcards.ifo_mode
+            / data_ver_to_path[wildcards.data_ver]
         )
     output:
         model        = Path(
@@ -50,7 +50,9 @@ rule train_cl:
             OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
         ),
         # The omicron triggers can only generate on LDG cluster.
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+        ),
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
         'source {params.gwak_env}; uv run \
@@ -63,7 +65,6 @@ rule train_cl:
             --data.init_args.glitch_root {params.omicron}'
 
 # Same as train_cl, but runs inside the train.sif container
-# snakemake -c1 $CONTAINER_OUTPUT_DIR/models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt
 rule production_train_cl:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli.py",
@@ -75,7 +76,7 @@ rule production_train_cl:
             / wildcards.ifo_mode
         )
     output:
-        model        = Path(
+        model = Path(
             CONTAINER_OUTPUT_DIR
             / "models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt"
         )
@@ -86,7 +87,9 @@ rule production_train_cl:
             CONTAINER_OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
         ),
         # The omicron triggers can only generate on LDG cluster.
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode
+        ),
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
         'source {params.gwak_env}; set -x; apptainer exec --nv \
@@ -111,9 +114,9 @@ rule precompute_embeddings:
             cl_config="{cl_config}",
         ),
         data_dir = lambda wildcards: directory(
-            DATA_DIR 
-            / data_ver_to_path[wildcards.data_ver]
+            DATA_DIR
             / wildcards.ifo_mode
+            / data_ver_to_path[wildcards.data_ver]
         )
     output:
         precom_data_dir = directory(
@@ -122,7 +125,9 @@ rule precompute_embeddings:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+        ),
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
@@ -215,8 +220,8 @@ rule make_signal_embeddings:
         ),
         data_dir = lambda wildcards: directory(
             DATA_DIR
-            / data_ver_to_path[wildcards.data_ver]
             / wildcards.ifo_mode
+            / data_ver_to_path[wildcards.data_ver]
         )
     output:
         precom_data_dir = directory(
@@ -225,7 +230,9 @@ rule make_signal_embeddings:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+        ),
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \

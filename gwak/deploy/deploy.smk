@@ -125,23 +125,28 @@ rule condor_infer:
 
 rule slurm_infer:
     input:
-        config = 'deploy/configs/infer_slurm.yaml',
-    params:
-        timeslide = lambda wildcards: runs_to_TS[wildcards.run_name]
+        arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+        config = GWAK_ROOT / "gwak/deploy/configs/infer_slurm.yaml",
     output:
-        artefact = directory(
+        directory(
             OUTPUT_DIR / "Slurm_Jobs"
-            / "{cl_config}_{fm_config}_{ifo_mode}/{run_name}"
+            / "{ifo_mode}/{ana_ver}/{data_ver}"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
         )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
+        ana_data = lambda wildcards: ana_ver_to_path[wildcards.ana_ver],
+        timeslide = lambda wildcards: runs_to_TS[wildcards.run_name],
     shell:
-        "set -x; cd gwak/deploy; uv run python \
-        deploy/cli.py deploy \
-        --config ../{input.config} \
-        --cl_config {wildcards.cl_config} \
-        --fm_config {wildcards.fm_config} \
-        --ifo_mode {wildcards.ifo_mode} \
-        --run_name {wildcards.run_name} \
-        --Tb {params.timeslide}"
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} infer_slurm \
+            --config {input.config} \
+            --cl_config {wildcards.cl_config} \
+            --fm_config {wildcards.fm_config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --run_name {wildcards.run_name} \
+            --Tb {params.timeslide}"
 
 
 ##--- Summary ---##
@@ -161,16 +166,17 @@ rule slurm_infer_all:
     input:
         expand(
             rules.slurm_infer.output,
+            ifo_mode=["HL"],
+            ana_ver=["O4b_gwak_cat12"],
+            data_ver=["O4b_cat1-chunked"],
             cl_config=[
-                "ResNet_cat12",
-                "ResNet_separate-glitch",
-                "torch_rbw_zp_resnet_do6_dcs128_epoch25",
-            ], 
+                "ResNet_6d.test",
+            ],
+            coh_mode=["real"],
             fm_config=[
-                "NF_from_file_conditioning",
-            ], 
-            ifo_mode=["HL"], 
-            run_name=["one_year"]
+                "NF_from_file.test",
+            ],
+            run_name=["one_month"]
         )
 
 # #####################

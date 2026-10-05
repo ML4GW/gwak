@@ -4,16 +4,15 @@ from jsonargparse import ArgumentParser, ActionConfigFile
 
 subcommands_keys = [
     "export",
-    "condor_client", 
-    "infer", 
-    "infer_condor", 
-    "deploy", 
+    "condor_client",
+    "infer_slurm",
+    "infer_condor",
+    "deploy",
     "threshold_lock",
     "scan_outlier",
     "resolve_O4_bbc",
     "plot_segs",
     "plot_bbc",
-
 ]
 
 # Keys to skip during resolving subcommands (export, infer, deploy,...)
