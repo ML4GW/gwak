@@ -9,6 +9,7 @@ import subprocess
 
 from typing import Union
 from pathlib import Path
+from machinery import gwak_logger, gwak_dir
 
 def wait_for_file(path, timeout=6000, interval=1):
     start = time.time()
@@ -108,6 +109,9 @@ def write_slurm_config(
     infer_config,
 ):
 
+    # deploy_dir = gwak_dir(suffix="gwak/deploy")()
+    # pyproject_toml = deploy_dir / "pyproject.toml"
+    env_setting = gwak_dir()(append_path=".gwak/env.sh")
     file_path = Path(__file__).resolve()
     filename = job_dir / "submit.slurm" 
     deploy_app_path = file_path.parents[2]
@@ -146,6 +150,7 @@ def write_slurm_config(
 
     config_content.append("")
     config_content.append(f"cd {deploy_app_path}")
+    config_content.append(f"source {env_setting}")
     cmds = kwargs.get("cmd") or []
     for cmd in cmds:
         config_content.append(cmd)
@@ -156,23 +161,26 @@ def write_slurm_config(
     with open(filename, "w") as f:
         f.write("\n".join(config_content))
 
-    print(f"SLURM script written to: {filename}")
+    logging.info(f"SLURM script written to: {filename}")
     return filename
 
 def write_infer_core_config(
+    keep_fname_dir: bool = False,
     **infer_core_kwargs
 ):
+    """ keep_fname_dir -- Write full strain paths instead of basenames. """
 
     yaml_file = Path(infer_core_kwargs["job_dir"]) / "config.yaml"
 
     with open(yaml_file, "w") as f:
         for key, value in infer_core_kwargs.items():
-            if key in ("fnames") and isinstance(value, list):
+            if key == "fnames" and isinstance(value, list):
                 f.write(f"{key}:\n")
                 for item in value:
-                    f.write(f"  - {Path(item).name}\n")
+                    item = Path(item) if keep_fname_dir else Path(item).name
+                    f.write(f"  - {item}\n")
 
-            elif key in ("segments") and isinstance(value, list):
+            elif key == "segments" and isinstance(value, list):
                 f.write(f"{key}:\n")
                 for item in value:
                     f.write(f"  - {item}\n")

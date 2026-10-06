@@ -99,7 +99,7 @@ rule condor_infer:
         plan_model = rules.export.output
     output:
         directory(
-            OUTPUT_DIR / "infer"
+            OUTPUT_DIR / "infer_condor"
             / "{ifo_mode}/{ana_ver}/{data_ver}"
             / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
         )
@@ -128,11 +128,9 @@ rule slurm_infer:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/infer_slurm.yaml",
     output:
-        directory(
-            OUTPUT_DIR / "Slurm_Jobs"
+            OUTPUT_DIR / "infer"
             / "{ifo_mode}/{ana_ver}/{data_ver}"
-            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
-        )
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/log.log"
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",
@@ -142,9 +140,13 @@ rule slurm_infer:
         "source {params.gwak_env}; set -x; uv run \
             --project {params.pyproject} python {input.arg} infer_slurm \
             --config {input.config} \
-            --cl_config {wildcards.cl_config} \
-            --fm_config {wildcards.fm_config} \
             --ifo_mode {wildcards.ifo_mode} \
+            --ana_ver {wildcards.ana_ver} \
+            --ana_data {params.ana_data} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} \
             --run_name {wildcards.run_name} \
             --Tb {params.timeslide}"
 
@@ -167,7 +169,7 @@ rule slurm_infer_all:
         expand(
             rules.slurm_infer.output,
             ifo_mode=["HL"],
-            ana_ver=["O4b_gwak_cat12"],
+            ana_ver=["O4b_gwak_cat1"],
             data_ver=["O4b_cat1-chunked"],
             cl_config=[
                 "ResNet_6d.test",
@@ -176,7 +178,8 @@ rule slurm_infer_all:
             fm_config=[
                 "NF_from_file.test",
             ],
-            run_name=["one_month"]
+            run_name=["one_month"],
+            # run_name=["bbc-short-0", "bbc-short-1"]
         )
 
 # #####################

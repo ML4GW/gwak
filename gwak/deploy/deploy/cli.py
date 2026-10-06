@@ -5,6 +5,7 @@ from jsonargparse import ArgumentParser, ActionConfigFile
 subcommands_keys = [
     "export",
     "condor_client",
+    "infer",
     "infer_slurm",
     "infer_condor",
     "deploy",
@@ -86,11 +87,11 @@ def main(args=None):
     if subcommand == "infer":
         from deploy.infer_module import infer as main_cli
 
-    if subcommand == "infer_condor":
-        from deploy.condor_handler import condor_infer_wrapper as main_cli
-
     if subcommand == "infer_slurm":
         from deploy.slurm_handeler import slurm_infer_wrapper as main_cli
+
+    if subcommand == "infer_condor":
+        from deploy.condor_handler import condor_infer_wrapper as main_cli
 
     if subcommand == "threshold_lock":
         from deploy.analyzer import threshold_lock as main_cli
@@ -117,7 +118,7 @@ def main(args=None):
     # Parse and instantiate classes
     args = subparser.parse_args()
     args = subparser.instantiate_classes(args)
-    if subcommand == "infer_condor":
+    if subcommand in ("infer_condor", "infer_slurm"):
         for key, value in export_args_hook().items():
             setattr(args, key, value)
     delattr(args, "subcommand")

@@ -8,35 +8,35 @@ from concurrent.futures import ThreadPoolExecutor
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
-from machinery import gwak_logger
+from machinery import gwak_logger, gwak_dir
 from deploy.libs.infer_utils import get_ip_address
 from deploy.libs.infer_core import client_action, run_bash
 
 
 def infer(
-    deploy_dir: Path,
-    output_dir: Path,
-    job_dir: Path,
-    result_dir: Path,
     # Triron and model
     project: str,
     model_repo_dir: Path, # >>> Dicided after slurm_batch >>> job_dir
     image: str,
-    grpc_port: int, # >>> Dicided after slurm_batch
     patients: int,
     # Data setting
-    ifos: list,
     fnames: list, # >>> Dicided after slurm_batch (Data Cut)
-    num_shifts: int, # >>> Dicided after slurm_batch (Tb)
-    data_format: str,
     segments: list, # >>> Dicided after slurm_batch (Data Cut)
+    num_shifts: int, # >>> Dicided after slurm_batch (Tb)
     shifts: list,
     Tb: int,
+    job_dir: Path,
+    result_dir: Path,
+    # ip
+    grpc_port: int, # >>> Dicided after slurm_batch
+    data_format: str,
     psd_length: float,
     stride_batch_size: int,
+    ifos: list,
     kernel_size: int,
     sample_rate: int,
     inference_sampling_rate: int,
+    dim_split: list,
     job_rate_limit: int,
     singularity_path: Optional[str]=None,
     **kwargs
@@ -46,6 +46,7 @@ def infer(
     log_file = job_dir / "log.log"
     triton_log = job_dir / "triton.log"
     gwak_logger(log_file)
+    deploy_dir = gwak_dir(suffix="gwak/deploy")()
     # Triton server setup
     ip = get_ip_address()
     gwak_streamer = f"gwak-{project}-streamer"
@@ -61,12 +62,14 @@ def infer(
     # The Triton excution to run
     arguments = deploy_dir / "deploy/triton_excution.py"
     # Spin up Triton Serve
-    with serve_context:
+    with serve_context as instance:
 
-        if patients is not None:
-            logging.info(f"Waiting {patients} seconds to recieve connetion to port {grpc_port}!")
-            time.sleep(patients)
-            
+        # The wait argument will break in the version for this hermis version, 
+        # so we build a wapper to handle it. 
+        # We need to switch back to the wait argument once the issue is resolved.
+        logging.info(f"Waiting up to {patients} seconds for Triton on port {grpc_port}!")
+        instance.wait(endpoint=f"localhost:{grpc_port}", timeout=patients)
+
         monitor = ServerMonitor(
             model_name=gwak_streamer,
             ips="localhost",
@@ -76,7 +79,9 @@ def infer(
             name="monitor",
             max_request_rate=1,
         )
-
+        # Wait 5 seconds for the monitor to spin up.
+        # time.sleep(monitor_patients)
+        time.sleep(5)
         with monitor:
 
             start = time.time()
@@ -98,6 +103,7 @@ def infer(
                 kernel_size=kernel_size,
                 sample_rate=sample_rate,
                 inference_sampling_rate=inference_sampling_rate,
+                dim_split=dim_split,
                 arguments=arguments,
             )
 
@@ -111,4 +117,3 @@ def infer(
                         logging.error(f"Thread crashed: {e}")
 
             print(f"Time spent for inference: {(time.time() - start)/3600:.02f} hrs")
-                
