@@ -1,5 +1,8 @@
-from deploy.libs.find_gpus import gpu_selector
-import os 
+from machinery.find_gpus import gpu_selector
+import os
+# Force GPU selection in CIT login node
+# Should be retired after Condorizing
+# We will leave it here during the upgrade
 gpu_list = gpu_selector()
 os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
 
@@ -12,7 +15,7 @@ from typing import Callable, Optional
 import hermes.quiver as qv
 
 from machinery import gwak_logger, Pathfinder, gwak_dir, gwak_output_dir
-from deploy.libs import scale_model, add_streaming_input_preprocessor
+from infer_modules import scale_model, add_streaming_input_preprocessor
 
 
 def export(

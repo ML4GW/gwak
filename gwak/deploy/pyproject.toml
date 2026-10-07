@@ -23,6 +23,7 @@ dependencies = [
     "torchaudio==2.7.1",
     "tqdm>=4.67.1",
     "transforms",
+    "infer_modules"
 ]
 
 [dependency-groups]
@@ -48,6 +49,7 @@ ml4gw = { path = "../../ml4gw", editable = true }
 ml4gw-hermes = { path = "../../hermes", editable = true }
 machinery = {path = "../../libs/machinery", editable = true }
 transforms = {path = "../../libs/transforms", editable = true }
+infer_modules = {path = "../../libs/infer_modules", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["deploy"]

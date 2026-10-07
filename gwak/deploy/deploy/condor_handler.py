@@ -1,4 +1,4 @@
-from deploy.libs.find_gpus import gpu_selector
+from machinery.find_gpus import gpu_selector
 import os 
 
 gpu_list = gpu_selector(free_mem=10000)
@@ -13,7 +13,7 @@ from contextlib import nullcontext
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
-from deploy.libs import get_ip_address 
+from infer_modules import get_ip_address 
 from machinery import gwak_logger, Pathfinder
 from machinery import (
     gwak_dir,
@@ -21,7 +21,7 @@ from machinery import (
     O4_bbc_short_0_data_dir,
     O4_bbc_short_1_data_dir
 )
-from deploy.libs.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
+from machinery.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
 from infer_data import get_shifts_meta_data
 from transforms import cohmode_to_dim
 

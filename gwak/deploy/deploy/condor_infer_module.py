@@ -10,8 +10,8 @@ from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
 from machinery import gwak_logger, Pathfinder, gwak_dir
-from deploy.libs.infer_utils import get_ip_address
-from deploy.libs.infer_core import client_action, run_bash
+from infer_modules import get_ip_address
+from infer_modules.infer_core import client_action, run_bash
 
 
 def infer(

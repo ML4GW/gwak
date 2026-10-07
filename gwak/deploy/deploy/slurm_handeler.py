@@ -11,7 +11,11 @@ from machinery import (
     O4_bbc_short_0_data_dir,
     O4_bbc_short_1_data_dir
 )
-from deploy.libs.cluster_tools import write_slurm_config, write_export_config, write_infer_core_config
+from machinery.cluster_tools import (
+    write_slurm_config,
+    write_export_config,
+    write_infer_core_config
+)
 from infer_data import get_shifts_meta_data
 from transforms import cohmode_to_dim
 

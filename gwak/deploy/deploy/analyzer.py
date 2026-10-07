@@ -8,8 +8,8 @@ from typing import Optional
 import matplotlib.pyplot as plt
 from pathlib import Path
 from machinery import gwak_logger
-from deploy.libs.infer_utils import noise_runs_list
-from deploy.libs.trigger_io import (
+from infer_modules.infer_utils import noise_runs_list
+from access.trigger_io import (
     lovure_file_handler,
     unpack_timeslide,
     select_threshold,
@@ -23,7 +23,7 @@ from machinery import (
     ordinal,
     convert_path_to_public_html_link
 )
-from deploy.libs.analysis_utils import (
+from access.analysis_utils import (
     get_bbc_inj_names,
     bbc_inj_info,
     find_valid_triggers

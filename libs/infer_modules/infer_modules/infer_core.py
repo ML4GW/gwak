@@ -5,8 +5,8 @@ from zlib import adler32
 from pathlib import Path
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
-from deploy.libs.infer_utils import get_ip_address
-from deploy.libs.cluster_tools import write_infer_config
+from machinery.cluster_tools import write_infer_config
+from .infer_utils import get_ip_address
 
 def bash_commnad_files(bash_file, command):
     bash_file = bash_file / "triton.sh"

@@ -7,8 +7,8 @@ import numpy as np
 
 from pathlib import Path
 from pyrate_limiter import Duration, Rate, Limiter
-from libs.time_slides import segments_from_paths, get_num_shifts_from_Tb
-from deploy.libs.infer_utils import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
+from infer_modules.time_slides import segments_from_paths, get_num_shifts_from_Tb
+from infer_modules import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
 
 from ml4gw import gw
 from ml4gw.transforms import SnrRescaler

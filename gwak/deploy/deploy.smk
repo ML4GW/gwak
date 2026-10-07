@@ -99,7 +99,7 @@ rule condor_infer:
         plan_model = rules.export.output
     output:
         directory(
-            OUTPUT_DIR / "infer_condor"
+            OUTPUT_DIR / "infer"
             / "{ifo_mode}/{ana_ver}/{data_ver}"
             / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
         )
