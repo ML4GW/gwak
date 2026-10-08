@@ -10,6 +10,11 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "access"
+version = "0.1.0"
+source = { editable = "../../libs/access" }
+
+[[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -708,6 +713,7 @@ name = "deploy"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "access" },
     { name = "bokeh" },
     { name = "cowsay" },
     { name = "h5py" },
@@ -718,6 +724,7 @@ dependencies = [
     { name = "ml4gw" },
     { name = "ml4gw-hermes" },
     { name = "onnx" },
+    { name = "psutil" },
     { name = "pyrate-limiter" },
     { name = "scipy" },
     { name = "torch" },
@@ -736,6 +743,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "access", editable = "../../libs/access" },
     { name = "bokeh", specifier = ">=3.8.2" },
     { name = "cowsay", specifier = ">=6.1" },
     { name = "h5py", specifier = ">=3.15.1" },
@@ -746,6 +754,7 @@ requires-dist = [
     { name = "ml4gw", editable = "../../ml4gw" },
     { name = "ml4gw-hermes", editable = "../../hermes" },
     { name = "onnx", specifier = ">=1.17.0" },
+    { name = "psutil", specifier = "==7.2.1" },
     { name = "pyrate-limiter", specifier = ">=4.0.2" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "torch", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu128" },

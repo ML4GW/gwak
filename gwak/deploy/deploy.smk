@@ -76,20 +76,24 @@ rule production_export:
         config = GWAK_ROOT / "gwak/deploy/configs/export.yaml"
     output:
         directory(
-            CONTAINER_OUTPUT_DIR / "export"
+            CONTAINER_OUTPUT_DIR / "output/export"
             / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         bind_1 = f"{CONTAINER_OUTPUT_DIR}:/production",
-        bind_2 = f"{OUTPUT_DIR}:/opt/gwak/gwak/output",
+        bind_2 = f"{OUTPUT_DIR}:/production/output",
+        bind_3 = f"{CONTAINER_OUTPUT_DIR}/output/export:/production/output/export",
     shell: 
         "source {params.gwak_env}; set -x; apptainer exec --nv \
-        --bind {params.bind_1},{params.bind_2} \
-        {input.image} \
-        python {input.arg} export  \
-        --config {input.config} \
-        --project combination"
+            --bind {params.bind_1},{params.bind_2},{params.bind_3} {input.image} \
+            python {input.arg} export  \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --data_ver {wildcards.data_ver} \
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config} "
 
 # snakemake -c1 $GWAK_OUTPUT_DIR/infer/{cl_config}_{fm_config}_{ifo_mode}/{run_name}
 rule condor_infer:
@@ -121,6 +125,36 @@ rule condor_infer:
             --fm_config {wildcards.fm_config} \
             --run_name {wildcards.run_name} \
             --Tb {params.timeslide}"
+
+# rule production_condor_infer:
+#     input:
+#         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
+#         image = IMAGE_DIR / "deploy.sif",
+#         config = GWAK_ROOT / "gwak/deploy/configs/infer_condor.yaml",
+#     output:
+#         directory(
+#             CONTAINER_OUTPUT_DIR / "output/infer"
+#             / "{ifo_mode}/{ana_ver}/{data_ver}"
+#             / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
+#         )
+#     params:
+#         gwak_env = GWAK_ROOT / ".gwak/env.sh",
+#         bind_1 = f"{CONTAINER_OUTPUT_DIR}:/production",
+#         bind_2 = f"{OUTPUT_DIR}:/production/output",
+#     shell: 
+#         "source {params.gwak_env}; set -x; apptainer exec --nv \
+#             --bind {params.bind_1},{params.bind_2} {input.image} \
+#             python {input.arg} infer_condor  \
+#             --config {input.config} \
+#             --ifo_mode {wildcards.ifo_mode} \
+#             --ana_ver {wildcards.ana_ver} \
+#             --ana_data {params.ana_data} \
+#             --data_ver {wildcards.data_ver} \
+#             --cl_config {wildcards.cl_config} \
+#             --coh_mode {wildcards.coh_mode} \
+#             --fm_config {wildcards.fm_config} \
+#             --run_name {wildcards.run_name} \
+#             --Tb {params.timeslide}"
 
 
 rule slurm_infer:

@@ -1,6 +1,8 @@
 condor_nodes: 8
 max_concurrent_node: 8
 condor_kwargs:
+  # universe: vanilla
+  universe: container
   request_cpus: 4
   request_memory: 32G
   request_disk: 16G

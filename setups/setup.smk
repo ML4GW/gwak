@@ -263,12 +263,12 @@ wildcard_constraints:
 
 rule build_project_container:
     input:
-        deploy_container = GWAK_ROOT / "gwak/deploy/{project_name}.def"
+        deploy_container = GWAK_ROOT / "gwak/{project_name}/{project_name}.def"
     output:
         deploy_image =  IMAGE_DIR / "{project_name}.sif"
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
-        processors = "--mksquashfs-args '-processors 32'"
+        processors = "--mksquashfs-args '-processors 64'"
     shell:
         "source {params.gwak_env}; set -x; \
         apptainer build {params.processors} \

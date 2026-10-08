@@ -78,29 +78,59 @@ def write_condor_config(
     config
 ):
 
-    condor_config = {}
-    submit_file = job_dir / "condor.sub"
-    job_out = job_dir / "job.out"
-    job_out.touch()
+    if condor_kwargs["universe"] == "vanilla":
+        condor_config = {}
+        submit_file = job_dir / "condor.sub"
+        
+        condor_config["universe"] = "vanilla"
+        condor_config["executable"] = executable
 
-    condor_config["universe"] = "vanilla"
-    condor_config["executable"] = executable
+        condor_config["log"] = job_dir / "job.log"
+        condor_config["output"] = job_dir / "job.out"
+        condor_config["error"] = job_dir / "job.err"
 
-    condor_config["log"] = job_dir / "job.log"
-    condor_config["output"] = job_out
-    condor_config["error"] = job_dir / "job.err"
+        for key in condor_kwargs.keys():
+            condor_config[key] = condor_kwargs[key]
 
-    for key in condor_kwargs.keys():
-        condor_config[key] = condor_kwargs[key]
+        with open(submit_file, "w") as f:
+            for key, value in condor_config.items():
+                f.write(f"{key} = {value}\n")
 
-    with open(submit_file, "w") as f:
-        for key, value in condor_config.items():
-            f.write(f"{key} = {value}\n")
+            f.write("queue")
 
-        f.write("queue")
+        return submit_file
 
-    return submit_file
+    if condor_kwargs["universe"] == "container":
+        condor_config = {}
+        submit_file = job_dir / "condor.sub"
+        username = os.environ.get("USER")
+        condor_config["universe"] = "container"
+        condor_config["container_image"] = f"osdf:///igwn/cit/staging/{username}/Container/GWAK/deploy.sif"
 
+        condor_config["executable"] = "analyse.sh"
+        condor_config["should_transfer_files"] = "YES"
+        condor_config["when_to_transfer_output"] = "ON_EXIT"
+
+        condor_config["use_oauth_services"] = "scitokens"
+        condor_config["requirements"] = "HAS_SINGULARITY && SINGULARITY_CAN_USE_SIF"
+
+        condor_config["log"] = job_dir / "job.log"
+        condor_config["output"] = job_dir / "job.out"
+        condor_config["error"] = job_dir / "job.err"
+
+        condor_config["request_gpus"] = 1
+        condor_config["gpus_minimum_capability"] = 8.0
+        # gpus_maximum_capability = 13
+        condor_config["gpus_minimum_memory"]     = "16GB"
+
+        for key in condor_kwargs.keys():
+            condor_config[key] = condor_kwargs[key]
+
+        with open(submit_file, "w") as f:
+            for key, value in condor_config.items():
+                f.write(f"{key} = {value}\n")
+
+            f.write("queue")
 
 def write_slurm_config(
     kwargs,

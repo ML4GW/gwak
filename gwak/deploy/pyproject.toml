@@ -8,6 +8,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "access",
     "bokeh>=3.8.2",
     "cowsay>=6.1",
     "h5py>=3.15.1",
@@ -15,15 +16,16 @@ dependencies = [
     "matplotlib>=3.10.8",
     "ml4gw",
     "ml4gw-hermes",
-    "machinery",
     "onnx>=1.17.0",
     "pyrate-limiter>=4.0.2",
     "scipy>=1.15.3",
     "torch==2.7.1",
     "torchaudio==2.7.1",
     "tqdm>=4.67.1",
+    "infer_modules",
+    "machinery",
     "transforms",
-    "infer_modules"
+    "psutil==7.2.1",
 ]
 
 [dependency-groups]
@@ -47,9 +49,11 @@ torch = { index = "pytorch-cu128" }
 torchaudio = { index = "pytorch-cu128" }
 ml4gw = { path = "../../ml4gw", editable = true }
 ml4gw-hermes = { path = "../../hermes", editable = true }
+
+access = {path = "../../libs/access", editable = true }
+infer_modules = {path = "../../libs/infer_modules", editable = true }
 machinery = {path = "../../libs/machinery", editable = true }
 transforms = {path = "../../libs/transforms", editable = true }
-infer_modules = {path = "../../libs/infer_modules", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["deploy"]

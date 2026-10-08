@@ -21,7 +21,12 @@ from machinery import (
     O4_bbc_short_0_data_dir,
     O4_bbc_short_1_data_dir
 )
-from machinery.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
+from machinery.cluster_tools import (
+    write_bash_file,
+    write_condor_config,
+    write_infer_core_config,
+    condor_submit_with_rate_limit
+)
 from infer_data import get_shifts_meta_data
 from transforms import cohmode_to_dim
 
@@ -93,7 +98,7 @@ def condor_infer_wrapper(
         cohmode_to_dim(coh_mode),
         1
     ]
-    # File handling     
+    # File handling
     if model_repo_dir is None: 
         model_repo_dir = output_dir(
             append_path=f"export/{ifo_str}/{prefix}/{project}"
@@ -106,15 +111,13 @@ def condor_infer_wrapper(
         shutil.rmtree(result_dir)
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    # Define fname    
+    # Define fname
 
     fname = fname(append_path=f"{ana_data}/{ifo_str}")
     if run_name == "bbc-short-0":
         fname = O4_bbc_short_0_data_dir(suffix=ifo_str)()
     if run_name == "bbc-short-1":
         fname = O4_bbc_short_1_data_dir(suffix=ifo_str)()
-
-
 
     log_file = result_dir / "log.log"
     triton_log = result_dir / "triton.log"
