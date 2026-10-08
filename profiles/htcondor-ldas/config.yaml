@@ -1,0 +1,21 @@
+# Snakemake HTCondor profile for GWAK training on LDAS.
+
+executor: htcondor
+jobs: 1
+cores: 4
+
+# Environment variables passed to the worker.
+default-resources:
+  getenv: "PATH,HOME,WANDB_MODE,WANDB_SILENT"
+  classad_LigoSearchTag: "ligo.dev.o4.burst.explore.test"
+  classad_LigoSearchUser: "$USER"
+
+set-threads:
+  train_cl: 4
+
+set-resources:
+  train_cl:
+    request_gpus: 1
+    request_memory: "32G"
+    request_disk: "32G"
+    htcondor_submit_MY__SGNL_GPU: true
