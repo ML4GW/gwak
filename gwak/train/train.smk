@@ -5,6 +5,7 @@ cl_configs = [
     "ResNet_6d",
     "ResNet_6d_split",
     "ResNet_6d_narrow_band",
+    "ResNet_6d_prior",
     "ResNet_6d.test",
 ]
 coh_modes = [
@@ -35,8 +36,8 @@ rule train_cl:
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         data_dir = lambda wildcards: directory(
             DATA_DIR
-            / wildcards.ifo_mode
             / data_ver_to_path[wildcards.data_ver]
+            / wildcards.ifo_mode
         )
     output:
         model        = Path(
@@ -51,7 +52,7 @@ rule train_cl:
         ),
         # The omicron triggers can only generate on LDG cluster.
         omicron = lambda wildcards: (
-            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+            DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode
         ),
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
