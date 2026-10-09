@@ -8,6 +8,7 @@ from .loggers import (
     gwak_louvre_dir, 
     gwak_logging_dir,
     gwak_timeslide_dir,
+    gwak_container_output_dir,
     ordinal,
     convert_path_to_public_html_link
 )

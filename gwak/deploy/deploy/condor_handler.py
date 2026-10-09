@@ -234,7 +234,7 @@ def condor_infer_wrapper(
 
             condor_submit_with_rate_limit(
                 sub_files=sub_files,
-                rate_limit=max_concurrent_node
+                concurrent_node=max_concurrent_node
             )
 
             run_time = (time.time() - start_time)

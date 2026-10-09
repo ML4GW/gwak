@@ -15,6 +15,10 @@ From: ghcr.io/astral-sh/uv:0.6.11-python3.11-bookworm-slim
             "${APPTAINER_ROOTFS}/opt/gwak/${project}/"
     done
 
+%files
+    $GWAK_ROOT/setups /opt/gwak/setups
+    $GWAK_ROOT/Snakemake /opt/gwak/Snakemake
+
 %post
     apt-get update
     apt-get install -y build-essential

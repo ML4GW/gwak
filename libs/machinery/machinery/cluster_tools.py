@@ -9,6 +9,7 @@ import subprocess
 
 from typing import Union
 from pathlib import Path
+from textwrap import dedent
 from machinery import gwak_logger, gwak_dir
 
 def wait_for_file(path, timeout=6000, interval=1):
@@ -78,59 +79,173 @@ def write_condor_config(
     config
 ):
 
-    if condor_kwargs["universe"] == "vanilla":
-        condor_config = {}
-        submit_file = job_dir / "condor.sub"
-        
-        condor_config["universe"] = "vanilla"
-        condor_config["executable"] = executable
+    condor_config = {}
+    submit_file = job_dir / "condor.sub"
 
-        condor_config["log"] = job_dir / "job.log"
-        condor_config["output"] = job_dir / "job.out"
-        condor_config["error"] = job_dir / "job.err"
+    condor_config["universe"] = "vanilla"
+    condor_config["executable"] = executable
 
-        for key in condor_kwargs.keys():
-            condor_config[key] = condor_kwargs[key]
+    condor_config["log"] = job_dir / "job.log"
+    condor_config["output"] = job_dir / "job.out"
+    condor_config["error"] = job_dir / "job.err"
 
-        with open(submit_file, "w") as f:
-            for key, value in condor_config.items():
-                f.write(f"{key} = {value}\n")
+    for key in condor_kwargs.keys():
+        condor_config[key] = condor_kwargs[key]
 
-            f.write("queue")
+    with open(submit_file, "w") as f:
+        for key, value in condor_config.items():
+            f.write(f"{key} = {value}\n")
 
-        return submit_file
+        f.write("queue")
 
-    if condor_kwargs["universe"] == "container":
-        condor_config = {}
-        submit_file = job_dir / "condor.sub"
-        username = os.environ.get("USER")
-        condor_config["universe"] = "container"
-        condor_config["container_image"] = f"osdf:///igwn/cit/staging/{username}/Container/GWAK/deploy.sif"
+    return submit_file
 
-        condor_config["executable"] = "analyse.sh"
-        condor_config["should_transfer_files"] = "YES"
-        condor_config["when_to_transfer_output"] = "ON_EXIT"
 
-        condor_config["use_oauth_services"] = "scitokens"
-        condor_config["requirements"] = "HAS_SINGULARITY && SINGULARITY_CAN_USE_SIF"
+def write_container_condor_sub(
+    job_dir,
+    image,
+    condor_kwargs,
+    initialdir,
+    executable,
+    transfer_output_files="Outputs",
+):
+    """ Container universe submit file. The image is pulled from
+    osdf:///igwn/cit/staging/$USER/Container/GWAK/{image}, files listed in
+    transfer_output_files land back in job_dir (initialdir). Any key in
+    condor_kwargs overrides the defaults below. """
 
-        condor_config["log"] = job_dir / "job.log"
-        condor_config["output"] = job_dir / "job.out"
-        condor_config["error"] = job_dir / "job.err"
+    condor_config = {}
+    submit_file = job_dir / "condor.sub"
+    username = os.environ.get("USER")
+    condor_config["universe"] = "container"
+    condor_config["container_image"] = image
 
-        condor_config["request_gpus"] = 1
-        condor_config["gpus_minimum_capability"] = 8.0
-        # gpus_maximum_capability = 13
-        condor_config["gpus_minimum_memory"]     = "16GB"
+    condor_config["executable"] = executable
+    condor_config["initialdir"] = initialdir
+    # On the CIT shared filesystem the default (IF_NEEDED) skips transfer,
+    # so the osdf:// image would never be fetched.
+    condor_config["should_transfer_files"] = "YES"
+    condor_config["when_to_transfer_output"] = "ON_EXIT"
+    condor_config["transfer_output_files"] = transfer_output_files
+    # condor_config["transfer_input_files"] = f"/home/{username}/.netrc"
 
-        for key in condor_kwargs.keys():
-            condor_config[key] = condor_kwargs[key]
+    condor_config["use_oauth_services"] = "scitokens"
+    condor_config["requirements"] = "HAS_SINGULARITY && SINGULARITY_CAN_USE_SIF"
 
-        with open(submit_file, "w") as f:
-            for key, value in condor_config.items():
-                f.write(f"{key} = {value}\n")
+    condor_config["log"] = job_dir / "job.log"
+    condor_config["output"] = job_dir / "job.out"
+    condor_config["error"] = job_dir / "job.err"
 
-            f.write("queue")
+    condor_config["request_gpus"] = 1
+    condor_config["gpus_minimum_capability"] = 8.0
+    # gpus_maximum_capability = 13
+    condor_config["gpus_minimum_memory"] = "16GB"
+
+    for key in condor_kwargs.keys():
+        condor_config[key] = condor_kwargs[key]
+
+    with open(submit_file, "w") as f:
+        for key, value in condor_config.items():
+            f.write(f"{key} = {value}\n")
+
+        f.write("queue")
+
+    return submit_file
+
+
+def _symlinks_killer() -> str:
+    """Return a Bash EXIT trap that replaces symlinks with actual files."""
+    return dedent("""\
+        flatten_symlinks() {
+            while IFS= read -r -d '' symlink; do
+                if target=$(readlink -f "$symlink") && [[ -f "$target" ]]; then
+                    cp --remove-destination "$target" "$symlink"
+                else
+                    rm -f "$symlink"
+                fi
+            done < <(find "$CONTAINER_OUTPUT_DIR" -type l -print0)
+        }
+
+        trap flatten_symlinks EXIT
+    """)
+
+def write_trainer_bash_file(
+    job_dir: Path,
+    ifo_mode: str,
+    data_tag: str,
+    prefix: str,
+    osdf_data_root: str,
+    wandb_mode: str = "offline",
+    num_cores: int = 4,
+):
+    """ Bash executable for one condor_train job.
+
+    Arguments:
+        osdf_data_url -- OSDF collection holding {ifo_mode}/{data_tag},
+            pulled into the EP scratch before training.
+        wandb_mode -- WANDB_MODE inside the job; the EP has no wandb key.
+    """
+
+    bash_file = job_dir / "condor_train.sh"
+    # Add the symlinks killer to the bash script
+    header = [
+        "#!/bin/bash",
+        "set -euo pipefail",
+        "",
+        "SCRATCH=${_CONDOR_SCRATCH_DIR:-$PWD}",
+        "GWAK_ROOT=${GWAK_ROOT:-/opt/gwak}",
+        "",
+        "# Update environment variables for GWAK directories",
+        "export GWAK_OUTPUT_DIR=$SCRATCH/muted_dir",
+        "export GWAK_DATA_DIR=$SCRATCH/Data",
+        "export CONTAINER_OUTPUT_DIR=$SCRATCH/Outputs",
+        "export GWAK_LOG_DIR=$CONTAINER_OUTPUT_DIR/logs",
+        "export GWAK_LOUVRE_DIR=$CONTAINER_OUTPUT_DIR/louvre",
+        "export IMAGE_DIR=$SCRATCH/images",
+        f"export WANDB_MODE={wandb_mode}",
+        "",
+        f"OSDF_SRC={osdf_data_root}",
+        f"DEST=$GWAK_DATA_DIR/{ifo_mode}/{data_tag}",
+        "",
+        "# Enforce snakemake to use the correct paths settings.",
+        "cat > \"$SCRATCH/paths.yaml\" <<EOF",
+        "paths:",
+        "    gwak_root: $GWAK_ROOT",
+        "    gwak_output_dir: $GWAK_OUTPUT_DIR",
+        "    gwak_data_dir: $GWAK_DATA_DIR",
+        "    gwak_log_dir: $GWAK_LOG_DIR",
+        "    gwak_louvre_dir: $GWAK_LOUVRE_DIR",
+        "    image_dir: $IMAGE_DIR",
+        "    container_output_dir: $CONTAINER_OUTPUT_DIR",
+        "EOF",
+        "",
+        f"mkdir -p \"$GWAK_DATA_DIR/{ifo_mode}\"",
+        "mkdir -p \"$CONTAINER_OUTPUT_DIR\"",
+    ]
+
+    with bash_file.open("w") as sh_file:
+        sh_file.write("\n".join(header))
+        sh_file.write("\n")
+        sh_file.write("\n")
+        # Register cleanup handler
+        sh_file.write("# Replace symlinks with actual files on exit\n")
+        sh_file.write(_symlinks_killer())
+        sh_file.write("\n")
+        # Transfer data
+        sh_file.write("# Transfer data from OSDF to local scratch\n")
+        sh_file.write('pelican object get -r "$OSDF_SRC" "$DEST"\n')
+        sh_file.write('du -sh "$DEST"\n')
+        sh_file.write("\n")
+        # Run training
+        sh_file.write("# Run snakemake for the condor_train job\n")
+        sh_file.write('cd "$GWAK_ROOT"\n')
+        sh_file.write('snakemake --directory "$CONTAINER_OUTPUT_DIR" \\\n')
+        sh_file.write('    --configfile "$SCRATCH/paths.yaml" \\\n')
+        sh_file.write(f'    --allowed-rules production_train_cl -c{num_cores} \\\n')
+        sh_file.write(f'    "$CONTAINER_OUTPUT_DIR/models/{prefix}/model_JIT.pt"\n')
+
+    bash_file.chmod(0o755)
+    return bash_file
 
 def write_slurm_config(
     kwargs,
@@ -277,7 +392,7 @@ def submit_condor_job(sub_file:Path):
 
 def condor_submit_with_rate_limit(
     sub_files: list,
-    rate_limit: int= 20
+    concurrent_node: int= 10
 ):
 
     job_status = {
@@ -291,7 +406,7 @@ def condor_submit_with_rate_limit(
     while len(job_status["Done"]) < total_jobs :
 
         # Check if we need to submit new jobs
-        if len(job_status["Running"]) < rate_limit:
+        if len(job_status["Running"]) < concurrent_node:
             try: 
                 logging.info(f"Submitting {job_status['Waiting'][0]}")
                 job_id = submit_condor_job(sub_file=job_status["Waiting"][0])

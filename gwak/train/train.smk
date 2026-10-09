@@ -33,13 +33,8 @@ rule train_cl:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli.py",
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
-        data_dir = lambda wildcards: directory(
-            DATA_DIR
-            / wildcards.ifo_mode
-            / data_ver_to_path[wildcards.data_ver]
-        )
     output:
-        model        = Path(
+        model = Path(
             OUTPUT_DIR 
             / "models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt"
         )
@@ -53,13 +48,14 @@ rule train_cl:
         omicron = lambda wildcards: (
             DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
         ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} fit \
             --config {input.config} \
             --trainer.logger.save_dir {params.logger_dir} \
-            --data.init_args.data_dir {input.data_dir} \
+            --data.init_args.data_tag {params.data_tag} \
             --data.ifos {wildcards.ifo_mode} \
             --model.num_ifos {params.num_ifos} \
             --data.init_args.glitch_root {params.omicron}'
@@ -68,13 +64,7 @@ rule train_cl:
 rule production_train_cl:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli.py",
-        image = IMAGE_DIR / "train.sif",
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
-        data_dir = lambda wildcards: directory(
-            DATA_DIR
-            / data_ver_to_path[wildcards.data_ver]
-            / wildcards.ifo_mode
-        )
     output:
         model = Path(
             CONTAINER_OUTPUT_DIR
@@ -88,20 +78,18 @@ rule production_train_cl:
         ),
         # The omicron triggers can only generate on LDG cluster.
         omicron = lambda wildcards: (
-            DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
         ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
-        'source {params.gwak_env}; set -x; apptainer exec --nv \
-            --bind {params.bind} \
-            {input.image} \
-            python {input.arg} fit \
+        "/opt/env/bin/python {input.arg} fit \
             --config {input.config} \
             --trainer.logger.save_dir {params.logger_dir} \
-            --data.init_args.data_dir {input.data_dir} \
+            --data.init_args.data_tag {params.data_tag} \
             --data.ifos {wildcards.ifo_mode} \
             --model.num_ifos {params.num_ifos} \
-            --data.init_args.glitch_root {params.omicron}'
+            --data.init_args.glitch_root {params.omicron}"
 
 rule precompute_embeddings:
     input:
@@ -195,6 +183,31 @@ rule combine_models:
             --coh_mode {wildcards.coh_mode} \
             --config {input.config} \
             --outfile {output.model} '
+
+# snakemake -c1 $CONTAINER_OUTPUT_DIR/condor/train/HL/O4b_cat1-chunked/ResNet_6d.test/Outputs/model_JIT.pt
+rule condor_train_cl:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/condor_handler.py",
+        config = GWAK_ROOT / "gwak/train/configs/train_condor.yaml",
+        cl_config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
+    output:
+        directory(
+            CONTAINER_OUTPUT_DIR
+            / "condor/train/{ifo_mode}/{data_ver}/{cl_config}"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --data_ver {wildcards.data_ver} \
+            --data_tag {params.data_tag} \
+            --cl_config {wildcards.cl_config}"
+
 
 rule make_offline_dataset:
     params:

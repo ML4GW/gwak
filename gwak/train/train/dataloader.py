@@ -37,6 +37,8 @@ from typing import Union
 
 from scipy import signal
 from transforms import TorchBandpassFIR, hrrs_value
+from machinery.loggers import gwak_logger, Pathfinder
+from machinery import gwak_data_dir
 
 def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
     coeffs = []
@@ -341,7 +343,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def __init__(
         self,
-        data_dir: Path,
+        data_tag: str,
         sample_rate: int,
         kernel_length: float, # how many data points
         psd_length: int, # for whitening
@@ -356,6 +358,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         remake_cache: bool = False, # whether to remake the glitch cache file for the h5s
     ):
         super().__init__()
+        data_dir = gwak_data_dir(suffix=f"{ifos}/{data_tag}")()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
         self.sample_rate = sample_rate
         self.kernel_length = kernel_length

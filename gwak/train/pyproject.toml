@@ -12,6 +12,7 @@ dependencies = [
     "jsonargparse[signatures]>=4.27.7",
     "trainer",
     "transforms",
+    "machinery",
     "ml4gw",
     "h5py==3.16.0",
     "scikit-learn>=1.7.2",
@@ -22,6 +23,7 @@ dependencies = [
     "scipy==1.11.4",
     "pandas==2.3.3",
     "nflows>=0.14",
+    "cowsay>=6.1",
 ]
 
 
@@ -42,6 +44,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
+machinery = {path = "../../libs/machinery", editable = true }
 ml4gw = { path = "../../ml4gw", editable = true }
 trainer = {path = "../../libs/trainer", editable = true }
 transforms = {path = "../../libs/transforms", editable = true }

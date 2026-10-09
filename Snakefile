@@ -20,14 +20,14 @@ ana_ver_list = [
 ]
 ifos_list = ["HL"]
 data_ver_list = [
-    # "O4b_cat1-chunked",
-    "O4b_cat12-katya"
+    "O4b_cat1-chunked",
+    # "O4b_cat12-katya"
 ]
 cl_config_list = [
-    "ResNet_6d",
+    # "ResNet_6d",
     # "ResNet_6d_split",
     # "ResNet_6d_narrow_band",
-    # "ResNet_6d.test",
+    "ResNet_6d.test",
 ]
 coh_mode_list = [
     "real",
@@ -38,7 +38,8 @@ coh_mode_list = [
     # "half",
 ]
 fm_config_list = [
-    "NF_from_file",
+    # "NF_from_file",
+    "NF_from_file.test",
 ]
 noise_run_list = ["one_month"]
 foreground_run_list = [
@@ -52,7 +53,11 @@ rule gwak_init:
 rule build_containers:
     input: 
         expand(rules.build_project_container.output,
-            project_name=["train", "deploy"]
+            project_name=[
+                # "data",
+                "train",
+                # "deploy"
+            ]
         )
 
 rule pull_all:

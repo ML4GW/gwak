@@ -1,0 +1,9 @@
+project: train
+image_version: train_test_v4.sif
+wandb_mode: offline
+max_concurrent_node: 1
+condor_kwargs:
+  request_cpus: 16
+  request_memory: 32G
+  request_disk: 64G
+  accounting_group: ligo.dev.o4.burst.explore.test

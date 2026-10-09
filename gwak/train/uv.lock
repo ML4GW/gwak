@@ -622,6 +622,14 @@ wheels = [
 ]
 
 [[package]]
+name = "cowsay"
+version = "6.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/13/63c0a02c44024ee16f664e0b36eefeb22d54e93531630bd99e237986f534/cowsay-6.1-py3-none-any.whl", hash = "sha256:274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a", size = 25560, upload-time = "2023-09-25T16:30:01.619Z" },
+]
+
+[[package]]
 name = "cuda-bindings"
 version = "13.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1839,6 +1847,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/de/0b/cf319595547297bc2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c6/cc/a78f98ed9c3ac814072e4db226a4e2b27a58a62fed8341de2459c70b8036/lscsoft_glue-4.1.1-py3-none-any.whl", hash = "sha256:3e34b0dee5a1e8d2085f701398b184cd4541c4c23baf7f3ae451ee3d8eab4251", size = 51071, upload-time = "2025-07-18T14:52:44.376Z" },
 ]
+
+[[package]]
+name = "machinery"
+version = "0.1.0"
+source = { editable = "../../libs/machinery" }
 
 [[package]]
 name = "markdown"
@@ -3705,11 +3718,13 @@ name = "train"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cowsay" },
     { name = "einops" },
     { name = "h5py" },
     { name = "jsonargparse", extra = ["signatures"] },
     { name = "lalsuite" },
     { name = "lightning" },
+    { name = "machinery" },
     { name = "matplotlib" },
     { name = "ml4gw" },
     { name = "nflows" },
@@ -3730,11 +3745,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cowsay", specifier = ">=6.1" },
     { name = "einops", specifier = "==0.8.2" },
     { name = "h5py", specifier = "==3.16.0" },
     { name = "jsonargparse", extras = ["signatures"], specifier = ">=4.27.7" },
     { name = "lalsuite", specifier = ">=7.26.15" },
     { name = "lightning", specifier = "==2.6.5" },
+    { name = "machinery", editable = "../../libs/machinery" },
     { name = "matplotlib", specifier = "==3.7.5" },
     { name = "ml4gw", editable = "../../ml4gw" },
     { name = "nflows", specifier = ">=0.14" },
