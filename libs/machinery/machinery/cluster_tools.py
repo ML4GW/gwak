@@ -241,8 +241,8 @@ def write_trainer_bash_file(
         sh_file.write('cd "$GWAK_ROOT"\n')
         sh_file.write('snakemake --directory "$CONTAINER_OUTPUT_DIR" \\\n')
         sh_file.write('    --configfile "$SCRATCH/paths.yaml" \\\n')
-        sh_file.write(f'    --allowed-rules production_train_cl -c{num_cores} \\\n')
-        sh_file.write(f'    "$CONTAINER_OUTPUT_DIR/models/{prefix}/model_JIT.pt"\n')
+        sh_file.write(f'    -c{num_cores} \\\n')
+        sh_file.write(f'    "$CONTAINER_OUTPUT_DIR/models/{prefix}/combination/model_JIT.pt"\n')
 
     bash_file.chmod(0o755)
     return bash_file

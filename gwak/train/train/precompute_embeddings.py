@@ -98,7 +98,7 @@ if __name__=='__main__':
 
     parser = argparse.ArgumentParser(description='Process and merge ROOT files into datasets.')
     parser.add_argument('--embedding-model', type=str, default=None)
-    parser.add_argument('--data-dir', type=str)
+    parser.add_argument('--data_tag', type=str)
     parser.add_argument('--config', type=str)
     parser.add_argument('--ifos', type=str)
     parser.add_argument('--embeddings', type=str)
@@ -250,7 +250,7 @@ if __name__=='__main__':
         with torch.no_grad():
             loader = SignalDataloader(
                 signal_classes, priors, waveforms, extra_kwargs,
-                data_dir=args.data_dir,
+                data_tag=args.data_tag,
                 sample_rate=sample_rate,
                 kernel_length=kernel_length,
                 psd_length=psd_length,

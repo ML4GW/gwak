@@ -71,8 +71,6 @@ rule production_train_cl:
             / "models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt"
         )
     params:
-        gwak_env = GWAK_ROOT / ".gwak/env.sh",
-        bind = f"{GWAK_ROOT},{DATA_DIR},{CONTAINER_OUTPUT_DIR}",
         logger_dir = directory(
             CONTAINER_OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
         ),
@@ -101,11 +99,6 @@ rule precompute_embeddings:
             data_ver="{data_ver}",
             cl_config="{cl_config}",
         ),
-        data_dir = lambda wildcards: directory(
-            DATA_DIR
-            / wildcards.ifo_mode
-            / data_ver_to_path[wildcards.data_ver]
-        )
     output:
         precom_data_dir = directory(
             OUTPUT_DIR / "data/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}/noise"
@@ -116,10 +109,11 @@ rule precompute_embeddings:
         omicron = lambda wildcards: (
             DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
         ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
-            --data-dir {input.data_dir} \
+            --data_tag {params.data_tag} \
             --ifos {wildcards.ifo_mode} \
             --config {input.config} \
             --embedding-model {input.embedding_model} \
@@ -131,7 +125,42 @@ rule precompute_embeddings:
             --labels {output.precom_data_dir}/labels.npy \
             --correlations {output.precom_data_dir}/correlations.npy \
             --signal-type noise \
-            --nevents 100000 '
+            --nevents 100000'
+
+rule production_precompute_embeddings:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/precompute_embeddings.py",
+        config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
+        embedding_model = expand(
+            rules.production_train_cl.output.model,
+            ifo_mode="{ifo_mode}",
+            data_ver="{data_ver}",
+            cl_config="{cl_config}",
+        ),
+    output:
+        precom_data_dir = directory(
+            CONTAINER_OUTPUT_DIR / "data/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}/noise"
+        )
+    params:
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+        ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
+    shell:
+        "/opt/env/bin/python {input.arg} \
+            --data_tag {params.data_tag} \
+            --ifos {wildcards.ifo_mode} \
+            --config {input.config} \
+            --embedding-model {input.embedding_model} \
+            --coh_mode {wildcards.coh_mode} \
+            --glitch-root {params.omicron} \
+            --means {output.precom_data_dir}/means.npy \
+            --stds {output.precom_data_dir}/stds.npy \
+            --embeddings {output.precom_data_dir}/embeddings.npy \
+            --labels {output.precom_data_dir}/labels.npy \
+            --correlations {output.precom_data_dir}/correlations.npy \
+            --signal-type noise \
+            --nevents 100000"
 
 rule train_fm:
     input:
@@ -140,7 +169,7 @@ rule train_fm:
         precom_data_dir = rules.precompute_embeddings.output.precom_data_dir
     output:
         model = Path(
-            OUTPUT_DIR / "models" 
+            OUTPUT_DIR / "models"
             / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
             / "model_JIT.pt"
         ),
@@ -159,6 +188,30 @@ rule train_fm:
             --model.coh_mode {wildcards.coh_mode} \
             --data.embedding_path {input.precom_data_dir}/embeddings.npy \
             --data.c_path {input.precom_data_dir}/correlations.npy'
+
+rule production_train_fm:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/cli_fm.py",
+        config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
+        precom_data_dir = rules.production_precompute_embeddings.output.precom_data_dir
+    output:
+        model = Path(
+            CONTAINER_OUTPUT_DIR / "models"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "model_JIT.pt"
+        ),
+    params:
+        logger_dir = directory(
+            CONTAINER_OUTPUT_DIR / "models"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+        ),
+    shell:
+        "/opt/env/bin/python {input.arg} fit \
+            --config {input.config} \
+            --trainer.logger.save_dir {params.logger_dir} \
+            --model.coh_mode {wildcards.coh_mode} \
+            --data.embedding_path {input.precom_data_dir}/embeddings.npy \
+            --data.c_path {input.precom_data_dir}/correlations.npy"
 
 rule combine_models:
     input:
@@ -184,8 +237,28 @@ rule combine_models:
             --config {input.config} \
             --outfile {output.model} '
 
+rule production_combine_models:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/combine_models.py",
+        config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
+        embedding_model = rules.production_train_cl.output.model,
+        fm_model = rules.production_train_fm.output.model
+    output:
+        model = Path(
+            CONTAINER_OUTPUT_DIR / "models"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "combination/model_JIT.pt"
+        ),
+    shell:
+        "/opt/env/bin/python {input.arg} \
+            {input.embedding_model} \
+            {input.fm_model} \
+            --coh_mode {wildcards.coh_mode} \
+            --config {input.config} \
+            --outfile {output.model} "
+
 # snakemake -c1 $CONTAINER_OUTPUT_DIR/condor/train/HL/O4b_cat1-chunked/ResNet_6d.test/Outputs/model_JIT.pt
-rule condor_train_cl:
+rule condor_train_em_fm:
     input:
         arg = GWAK_ROOT / "gwak/train/train/condor_handler.py",
         config = GWAK_ROOT / "gwak/train/configs/train_condor.yaml",
@@ -193,7 +266,7 @@ rule condor_train_cl:
     output:
         directory(
             CONTAINER_OUTPUT_DIR
-            / "condor/train/{ifo_mode}/{data_ver}/{cl_config}"
+            / "condor/train/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
@@ -206,7 +279,9 @@ rule condor_train_cl:
             --ifo_mode {wildcards.ifo_mode} \
             --data_ver {wildcards.data_ver} \
             --data_tag {params.data_tag} \
-            --cl_config {wildcards.cl_config}"
+            --cl_config {wildcards.cl_config} \
+            --coh_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config}"
 
 
 rule make_offline_dataset:

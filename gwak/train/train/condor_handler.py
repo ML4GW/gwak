@@ -23,6 +23,8 @@ def condor_train_wrapper(
     data_ver: str,
     data_tag: str,
     cl_config: str,
+    coh_mode: str,
+    fm_config: str,
     condor_kwargs: dict,
     project: str = "train",
     image_version: Optional[str] = None,
@@ -53,7 +55,7 @@ def condor_train_wrapper(
 
     sub_files = []
     username = os.environ.get("USER")
-    prefix = f"{ifo_mode}/{data_ver}/{cl_config}"
+    prefix = f"{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     osdf_data_root = f"osdf:///igwn/cit/staging/{username}/Data/GWAK/{ifo_mode}/{data_tag}"
     osdf_image_root = f"osdf:///igwn/cit/staging/{username}/Container/GWAK"
     job_dir = gwak_container_output_dir(suffix=f"condor/train/{prefix}")()

@@ -1,7 +1,10 @@
 project: train
-image_version: train_test_v4.sif
+image_version: train_test_v8.sif
 wandb_mode: offline
 max_concurrent_node: 1
+cl_config: null
+coh_mode: null
+fm_config: null
 condor_kwargs:
   request_cpus: 16
   request_memory: 32G

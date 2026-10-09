@@ -24,10 +24,10 @@ data_ver_list = [
     # "O4b_cat12-katya"
 ]
 cl_config_list = [
-    # "ResNet_6d",
+    "ResNet_6d",
     # "ResNet_6d_split",
     # "ResNet_6d_narrow_band",
-    "ResNet_6d.test",
+    # "ResNet_6d.test",
 ]
 coh_mode_list = [
     "real",
@@ -38,8 +38,8 @@ coh_mode_list = [
     # "half",
 ]
 fm_config_list = [
-    # "NF_from_file",
-    "NF_from_file.test",
+    "NF_from_file",
+    # "NF_from_file.test",
 ]
 noise_run_list = ["one_month"]
 foreground_run_list = [
@@ -80,6 +80,17 @@ rule train_all:
             rules.combine_models.output,
             data_ver=data_ver_list,
             ifo_mode=ifos_list,
+            cl_config=cl_config_list,
+            coh_mode=coh_mode_list,
+            fm_config=fm_config_list,
+        )
+
+rule condor_train_all:
+    input:
+        expand(
+            rules.condor_train_em_fm.output,
+            ifo_mode=ifos_list,
+            data_ver=data_ver_list,
             cl_config=cl_config_list,
             coh_mode=coh_mode_list,
             fm_config=fm_config_list,
