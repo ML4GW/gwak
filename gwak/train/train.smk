@@ -258,11 +258,12 @@ rule production_combine_models:
             --outfile {output.model} "
 
 # snakemake -c1 $CONTAINER_OUTPUT_DIR/condor/train/HL/O4b_cat1-chunked/ResNet_6d.test/Outputs/model_JIT.pt
-rule condor_train_em_fm:
+rule condor_train_rules:
     input:
         arg = GWAK_ROOT / "gwak/train/train/condor_handler.py",
         config = GWAK_ROOT / "gwak/train/configs/train_condor.yaml",
         cl_config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
+        image = IMAGE_DIR / "train.sif"
     output:
         directory(
             CONTAINER_OUTPUT_DIR

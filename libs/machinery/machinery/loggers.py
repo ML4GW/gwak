@@ -38,6 +38,7 @@ def gwak_logger(
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("onnxscript").setLevel(logging.WARNING)
     logging.getLogger("onnx_ir").setLevel(logging.WARNING)
+    logging.getLogger("fsspec.pelican").setLevel(logging.WARNING)
     # logging.getLogger("torch.onnx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 

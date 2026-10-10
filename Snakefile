@@ -31,8 +31,8 @@ cl_config_list = [
 ]
 coh_mode_list = [
     "real",
-    # "real_imag",
-    # "abs",
+    "real_imag",
+    "abs",
     # "random",
     # "random2",
     # "half",
@@ -88,7 +88,7 @@ rule train_all:
 rule condor_train_all:
     input:
         expand(
-            rules.condor_train_em_fm.output,
+            rules.condor_train_rules.output,
             ifo_mode=ifos_list,
             data_ver=data_ver_list,
             cl_config=cl_config_list,

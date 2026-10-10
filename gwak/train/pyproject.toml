@@ -8,6 +8,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "access",
     "lightning==2.6.5",
     "jsonargparse[signatures]>=4.27.7",
     "trainer",
@@ -24,6 +25,7 @@ dependencies = [
     "pandas==2.3.3",
     "nflows>=0.14",
     "cowsay>=6.1",
+    "pelicanfs>=1.5.0",
 ]
 
 
@@ -44,6 +46,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
+access = {path = "../../libs/access", editable = true }
 machinery = {path = "../../libs/machinery", editable = true }
 ml4gw = { path = "../../ml4gw", editable = true }
 trainer = {path = "../../libs/trainer", editable = true }

@@ -8,5 +8,5 @@ fm_config: null
 condor_kwargs:
   request_cpus: 16
   request_memory: 32G
-  request_disk: 64G
+  request_disk: 80G
   accounting_group: ligo.dev.o4.burst.explore.test

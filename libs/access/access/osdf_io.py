@@ -1,23 +1,26 @@
+import os
+from typing import Optional
 from pathlib import Path
 from pelicanfs.core import OSDFFileSystem
-from gwpy.timeseries import TimeSeries
 from time import time
 import h5py
 
 
-pelfs = OSDFFileSystem()
 
-exp_file = '/igwn/cit/staging/hongyin.chen/Data/GWAK/HL/O4b_cat1_v2/background-1401696286-3614.h5'
-
-
-def pelican_read(
-    read_dir: Path = exp_file
+def pelican_read_latest_project_image(
+    project_name: str,
+    cit_user_name: Optional[str]=None
 ):
-    data_dir = {}
-    # Open the file via pelicanfs and pass the context to h5py
-    with pelfs.open(file_path, 'rb') as f:
-        with h5py.File(f, 'r') as h5_file:
-            for ifo in list(h5_file.keys()):
-                data_dir[ifo] = h5_file[ifo]
-            return data_dir
+    #ToDo: test if project_name is under ["data", "train", "deploy"]
+    project_images = []
+    pelfs = OSDFFileSystem()
+    if cit_user_name is None:
+        cit_user_name = os.environ['USER']
+    path = f"osdf:///igwn/cit/staging/{cit_user_name}/Container/GWAK/images/{project_name}"
 
+    files = pelfs.ls(path)
+
+    for file in files:
+        project_images.append(file["name"])
+    project_images = sorted(project_images)
+    return f"osdf://{project_images[-1]}"
