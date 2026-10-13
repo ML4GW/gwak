@@ -104,6 +104,8 @@ if __name__=='__main__':
     parser.add_argument('--embeddings', type=str)
     parser.add_argument('--labels', type=str)
     parser.add_argument('--correlations', type=str)
+    parser.add_argument('--latent', type=str, default=None,
+                        help='Optional .npy for the latent vector [embedding | correlations] (needs --correlations).')
     parser.add_argument('--coh_mode', type=str)
     parser.add_argument('--glitch-root', type=str)
     parser.add_argument('--means', type=str, default=None)
@@ -316,6 +318,13 @@ if __name__=='__main__':
     if args.correlations:
         np.save(args.correlations, all_correlations)
         print('Correlation shape', all_correlations.shape)
+
+    if args.latent:
+        if not args.correlations:
+            raise ValueError('--latent needs --correlations')
+        latent = np.concatenate([all_embeddings, all_correlations], axis=1)
+        np.save(args.latent, latent)
+        print('Latent shape', latent.shape)
 
     means = np.mean(all_embeddings, axis=0) if all_embeddings.size else np.array([])
     stds = np.std(all_embeddings, axis=0) if all_embeddings.size else np.array([])

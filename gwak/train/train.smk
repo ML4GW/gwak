@@ -124,6 +124,7 @@ rule precompute_embeddings:
             --embeddings {output.precom_data_dir}/embeddings.npy \
             --labels {output.precom_data_dir}/labels.npy \
             --correlations {output.precom_data_dir}/correlations.npy \
+            --latent {output.precom_data_dir}/latent.npy \
             --signal-type noise \
             --nevents 100000'
 
@@ -159,6 +160,7 @@ rule production_precompute_embeddings:
             --embeddings {output.precom_data_dir}/embeddings.npy \
             --labels {output.precom_data_dir}/labels.npy \
             --correlations {output.precom_data_dir}/correlations.npy \
+            --latent {output.precom_data_dir}/latent.npy \
             --signal-type noise \
             --nevents 100000"
 
@@ -336,6 +338,7 @@ rule make_signal_embeddings:
             --embeddings {output.precom_data_dir}/embeddings.npy \
             --labels {output.precom_data_dir}/labels.npy \
             --correlations {output.precom_data_dir}/correlations.npy \
+            --latent {output.precom_data_dir}/latent.npy \
             --signal-type all \
             --nevents 100000 '
 
