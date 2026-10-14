@@ -1,3 +1,4 @@
+import importlib
 import h5py
 import yaml
 import logging
@@ -34,6 +35,7 @@ from queue import Queue
 import time
 
 from typing import Union
+
 
 from scipy import signal
 from transforms import TorchBandpassFIR, hrrs_value
@@ -343,7 +345,6 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def __init__(
         self,
-        data_tag: str,
         sample_rate: int,
         kernel_length: float, # how many data points
         psd_length: int, # for whitening
@@ -352,13 +353,19 @@ class GwakBaseDataloader(pl.LightningDataModule):
         batch_size: int,
         batches_per_epoch: int,
         num_workers: int,
+        data_tag: Optional[str] = None,
         glitch_root: Path = None,
         data_saving_file: Path = None,
         ifos: str = 'HL',
         remake_cache: bool = False, # whether to remake the glitch cache file for the h5s
+        data_dir: Optional[Union[str, Path]] = None,
     ):
         super().__init__()
-        data_dir = gwak_data_dir(suffix=f"{ifos}/{data_tag}")()
+        if data_dir is None:
+            if data_tag is None:
+                raise ValueError("Either data_tag or data_dir must be provided")
+            data_dir = gwak_data_dir(suffix=f"{ifos}/{data_tag}")()
+        data_dir = Path(data_dir)
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
         self.sample_rate = sample_rate
         self.kernel_length = kernel_length
@@ -565,6 +572,19 @@ class GwakBaseDataloader(pl.LightningDataModule):
         pass
 
 
+def resolve_class_spec(value, label="class spec"):
+    # priors / waveforms can arrive from the yaml as
+    # {"class_path": ..., "init_args": {...}} instead of objects
+    if not isinstance(value, dict):
+        return value
+    class_path = value.get("class_path")
+    if not class_path or "." not in class_path:
+        raise ValueError(f"{label}: invalid class_path in {value}")
+    module_name, class_name = class_path.rsplit(".", 1)
+    cls = getattr(importlib.import_module(module_name), class_name)
+    return cls(**(value.get("init_args") or {}))
+
+
 class SignalDataloader(GwakBaseDataloader):
     def __init__(
         self,
@@ -583,6 +603,9 @@ class SignalDataloader(GwakBaseDataloader):
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         whiten: bool = True,   # make whitening optional
+        gpu_waveforms: Optional[List[str]] = None, # classes to simulate on the GPU, or ["all"]
+        val_num_workers: int = 0, # dataloader workers for validation
+        val_batches_per_epoch: Optional[int] = None, # set to limit_val_batches to avoid reading unused batches
         **kwargs
     ):
 
@@ -599,8 +622,14 @@ class SignalDataloader(GwakBaseDataloader):
         super().__init__(*args, **kwargs)
         self.num_classes = len(signal_classes)
         self.signal_classes = signal_classes
-        self.waveforms = waveforms
-        self.priors = priors
+        self.waveforms = [
+            resolve_class_spec(value, label=f"waveforms[{i}] ({signal_classes[i]})")
+            for i, value in enumerate(waveforms)
+        ]
+        self.priors = [
+            resolve_class_spec(value, label=f"priors[{i}] ({signal_classes[i]})")
+            for i, value in enumerate(priors)
+        ]
         self.extra_kwargs = extra_kwargs
         self.loader_mode = loader_mode
         self.anneal_snr = anneal_snr
@@ -611,6 +640,17 @@ class SignalDataloader(GwakBaseDataloader):
         self.rebalance_classes = rebalance_classes
         self.do_whiten = whiten
         self.num_workers = kwargs["num_workers"]
+        self.val_num_workers = val_num_workers
+        self.val_batches_per_epoch = val_batches_per_epoch
+
+        # waveform classes that are simulated on the GPU
+        self.gpu_waveform_classes = get_gpu_waveform_classes(gpu_waveforms, signal_classes)
+        self.gpu_waveform_device = None
+        if self.gpu_waveform_classes:
+            if not torch.cuda.is_available():
+                raise RuntimeError("gpu_waveforms is set but CUDA is not available")
+            self.gpu_waveform_device = torch.device("cuda", torch.cuda.current_device())
+            self._logger.info(f"simulating {sorted(self.gpu_waveform_classes)} on {self.gpu_waveform_device}")
 
         self.all_signal_labels = {
             "SineGaussian":1,
@@ -660,7 +700,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # CCSN second-derivitive waveform data if using
         file_path = Path(__file__).resolve()
-        # To Do: Change this to absolute path, and perhaps 
+        # To Do: Change this to absolute path, and perhaps
         # make a wapper function to contorl the input yaml and data source
         self.ccsn_dict = load_h5_as_dict(
             chosen_signals=file_path.parents[2] / "data/configs/ccsn.yaml",
@@ -738,12 +778,15 @@ class SignalDataloader(GwakBaseDataloader):
             snr_factor = 1.0
         return snr_factor
 
-    def make_dataset(self, fnames, coincident, mode):
+    def make_dataset(self, fnames, coincident, mode, batches_per_epoch=None):
+        if batches_per_epoch is None:
+            batches_per_epoch = self.batches_per_epoch
         if mode == "glitch":
             batch_size = self.num_per_class[self.signal_classes.index("Glitch")]
         else:
             batch_size = self.batch_size
-        return Hdf5TimeSeriesDataset(
+
+        dataset = Hdf5TimeSeriesDataset(
             fnames,
             channels=self.ifos,
             kernel_length=self.kernel_length,
@@ -751,7 +794,7 @@ class SignalDataloader(GwakBaseDataloader):
             psd_length=self.psd_length,
             sample_rate=self.sample_rate,
             batch_size=batch_size,
-            batches_per_epoch=self.batches_per_epoch,
+            batches_per_epoch=batches_per_epoch,
             coincident=coincident,
             mode=mode,
             glitch_root=self.glitch_root,
@@ -759,6 +802,8 @@ class SignalDataloader(GwakBaseDataloader):
             remake_cache=self.remake_cache,
             cache_dir=self.cache_dir,
         )
+
+        return dataset
 
     def train_dataloader(self):
         train_clean_dataset = self.make_dataset(
@@ -790,7 +835,8 @@ class SignalDataloader(GwakBaseDataloader):
         val_clean_dataset = self.make_dataset(
             self.val_fnames,
             coincident=False,
-            mode=self.loader_mode
+            mode=self.loader_mode,
+            batches_per_epoch=self.val_batches_per_epoch,
         )
 
         val_glitch_dataset = None
@@ -798,16 +844,18 @@ class SignalDataloader(GwakBaseDataloader):
             val_glitch_dataset = self.make_dataset(
                 self.val_fnames,
                 coincident=True,
-                mode="glitch"
+                mode="glitch",
+                batches_per_epoch=self.val_batches_per_epoch,
             )
-            
+
         val_paired_dataset = CleanGlitchPairedDataset(
             val_clean_dataset,
             val_glitch_dataset
         )
         return torch.utils.data.DataLoader(
             val_paired_dataset,
-            batch_size=None
+            batch_size=None,
+            num_workers=self.val_num_workers,
         )
 
     def test_dataloader(self):
@@ -835,6 +883,7 @@ class SignalDataloader(GwakBaseDataloader):
         output_phics = []
         output_hrss_raw = []
         for i, signal_class in enumerate(self.signal_classes):
+            device = self.gpu_waveform_device if signal_class in self.gpu_waveform_classes else None
             if signal_class == 'BBH':
                 responses, params, ra, dec, phic, hrss_raw = generate_waveforms_bbh(
                     self.num_per_class[i],
@@ -845,7 +894,8 @@ class SignalDataloader(GwakBaseDataloader):
                     self.ifos,
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
-                    dec=decs[i] if decs is not None else None
+                    dec=decs[i] if decs is not None else None,
+                    device=device,
                 )
             elif signal_class == "CCSN":
                 responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
@@ -876,7 +926,8 @@ class SignalDataloader(GwakBaseDataloader):
                     self.ifos,
                     parameters=parameters[i] if parameters is not None else None,
                     ra=ras[i] if ras is not None else None,
-                    dec=decs[i] if decs is not None else None
+                    dec=decs[i] if decs is not None else None,
+                    device=device,
                 )
 
             all_responses.append(responses)
@@ -1234,6 +1285,35 @@ class AugmentationSignalDataloader(SignalDataloader):
             return batch, labels
 
 
+# classes that do not go through generate_waveforms_standard / generate_waveforms_bbh
+NON_WAVEFORM_CLASSES = ["CCSN", "Background", "Glitch", "FakeGlitch"]
+
+
+def get_gpu_waveform_classes(gpu_waveforms, signal_classes):
+    if not gpu_waveforms:
+        return set()
+    supported = [c for c in signal_classes if c not in NON_WAVEFORM_CLASSES]
+    if "all" in gpu_waveforms:
+        return set(supported)
+    for c in gpu_waveforms:
+        if c not in supported:
+            raise ValueError(f"gpu_waveforms: {c} is not supported, choose from {supported}")
+    return set(gpu_waveforms)
+
+
+def params_to_device(parameters, device):
+    # f_ref from LAL_BBHPrior is a numpy array, which fails with cuda tensors.
+    # A tensor with the same dtype gives the same result as on the cpu.
+    out = {}
+    for key, value in parameters.items():
+        if isinstance(value, np.ndarray):
+            value = torch.as_tensor(value)
+        if isinstance(value, torch.Tensor):
+            value = value.to(device)
+        out[key] = value
+    return out
+
+
 def generate_waveforms_standard(
     batch_size,
     prior,
@@ -1243,7 +1323,8 @@ def generate_waveforms_standard(
     ifos,
     parameters=None,
     ra=None,
-    dec=None
+    dec=None,
+    device=None,
 ):
     # get detector orientations
     tensors, vertices = get_ifo_geometry(*ifos)
@@ -1259,14 +1340,23 @@ def generate_waveforms_standard(
         dec = loader.dec_prior.sample((batch_size,))
     phic = loader.phic_prior.sample((batch_size,))
 
-    cross, plus = waveform(**parameters)
+    # the sampling above stays on the cpu, so the random numbers are the same
+    run_parameters, run_ra, run_dec, run_phic = parameters, ra, dec, phic
+    if device is not None:
+        waveform.to(device)
+        run_parameters = params_to_device(parameters, device)
+        run_ra, run_dec, run_phic = ra.to(device), dec.to(device), phic.to(device)
+        tensors, vertices = tensors.to(device), vertices.to(device)
+
+    cross, plus = waveform(**run_parameters)
+
     hrss = hrrs_value(plus, cross, dt=1.0/config['sample_rate'])
 
     # compute detector responses
     responses = compute_observed_strain(
-        dec,
-        phic,
-        ra,
+        run_dec,
+        run_phic,
+        run_ra,
         tensors,
         vertices,
         config['sample_rate'],
@@ -1286,7 +1376,8 @@ def generate_waveforms_bbh(
     ifos,
     parameters=None,
     ra=None,
-    dec=None
+    dec=None,
+    device=None,
 ):
     # get detector orientations
     tensors, vertices = get_ifo_geometry(*ifos)
@@ -1299,7 +1390,15 @@ def generate_waveforms_bbh(
     if dec is None:
         dec = loader.dec_prior.sample((batch_size,))
 
-    cross, plus = waveform(**parameters)
+    run_parameters, run_ra, run_dec = parameters, ra, dec
+    if device is not None:
+        waveform.to(device)
+        run_parameters = params_to_device(parameters, device)
+        run_ra, run_dec = ra.to(device), dec.to(device)
+        tensors, vertices = tensors.to(device), vertices.to(device)
+
+
+    cross, plus = waveform(**run_parameters)
     cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)
     # Normalization
     cross *= config['sample_rate']
@@ -1315,10 +1414,10 @@ def generate_waveforms_bbh(
     # compute detector responses
     responses = compute_observed_strain(
         # parameters['dec'],
-        dec,
-        parameters['phic'], # psi
+        run_dec,
+        run_parameters['phic'], # psi
         # parameters['ra'],
-        ra,
+        run_ra,
         tensors,
         vertices,
         config['sample_rate'],

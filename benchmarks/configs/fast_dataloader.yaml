@@ -1,0 +1,6 @@
+# Optional settings for faster waveform generation and validation.
+data:
+  init_args:
+    gpu_waveforms: [all]
+    val_num_workers: 4
+    val_batches_per_epoch: 10
