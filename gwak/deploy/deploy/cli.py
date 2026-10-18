@@ -4,7 +4,6 @@ from jsonargparse import ArgumentParser, ActionConfigFile
 
 subcommands_keys = [
     "export",
-    "condor_client",
     "infer",
     "infer_slurm",
     "infer_condor",
@@ -80,9 +79,6 @@ def main(args=None):
 
     if subcommand == "export":
         from deploy.export import export as main_cli
-
-    if subcommand == "condor_client":
-        from deploy.condor_infer_module import infer as main_cli
 
     if subcommand == "infer":
         from deploy.infer_module import infer as main_cli

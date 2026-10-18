@@ -262,6 +262,22 @@ rule gwak_info:
 wildcard_constraints:
     project_name = '|'.join([x for x in projects]),
 
+# The current requires $USER to the same with LDAS account name
+rule pull_triton_container:
+    output:
+        image = CONTAINER_OUTPUT_DIR / "triton_image/tritonserver_25.06.sif"
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/triton_image"
+    shell:
+        """
+        apptainer pull {output.image} \
+        docker://nvcr.io/nvidia/tritonserver:25.06-py3
+
+        pelican object put {output.image} \
+            {params.osdf_endpoint}/tritonserver_25.06.sif
+        """
+
 rule build_project_container:
     input:
         deploy_container = GWAK_ROOT / "gwak/{project_name}/{project_name}.def"

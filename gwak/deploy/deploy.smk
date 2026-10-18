@@ -100,12 +100,17 @@ rule condor_infer:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/infer_condor.yaml",
-        plan_model = rules.export.output
+        # plan_model = rules.export.output
     output:
-        directory(
+        # directory(
+        #     OUTPUT_DIR / "infer"
+        #     / "{ifo_mode}/{ana_ver}/{data_ver}"
+        #     / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
+        # )
+        Path(
             OUTPUT_DIR / "infer"
             / "{ifo_mode}/{ana_ver}/{data_ver}"
-            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/log.log"
         )
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
@@ -164,7 +169,10 @@ rule slurm_infer:
     output:
             OUTPUT_DIR / "infer"
             / "{ifo_mode}/{ana_ver}/{data_ver}"
-            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/log.log"
+            / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
+            # OUTPUT_DIR / "infer"
+            # / "{ifo_mode}/{ana_ver}/{data_ver}"
+            # / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/log.log"
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/deploy/pyproject.toml",

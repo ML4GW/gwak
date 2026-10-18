@@ -22,7 +22,7 @@ def wait_for_file(path, timeout=6000, interval=1):
 def write_bash_file(
     bash_root: Path,
     files: list,
-    command: str
+    commands: list[str],
 ):
 
     bash_file = bash_root / "condor_cmd.sh"
@@ -40,7 +40,8 @@ def write_bash_file(
 
         sh_file.write(f'source "{gwak_env}"\n')
         sh_file.write(f'source "{deploy_env}"\n')
-        sh_file.write(f"exec {command}\n")
+        for command in commands:
+            sh_file.write(f"{command}\n")
     bash_file.chmod(0o755)
     return bash_file
 
