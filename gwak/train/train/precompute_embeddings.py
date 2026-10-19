@@ -25,7 +25,7 @@ from trainer.prior import (
     KinkkinkBBC,
     WhiteNoiseBurstBBC
 )
-from transforms import frequency_cos_similarity
+from transforms.preprocess import FeatureExtractor
 
 device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 
@@ -132,7 +132,7 @@ if __name__=='__main__':
     batches_per_epoch = 2000000
     num_workers = 0
     data_saving_file = config['data']['init_args']['data_saving_file']
-
+    feature_extractor = FeatureExtractor(mode=args.coh_mode)
     duration = fduration + kernel_length
     if args.signal_type in ['All', 'ALL', 'all']:
         signal_classes = [
@@ -226,9 +226,9 @@ if __name__=='__main__':
 
             embeddings = embed_model(processed).detach().cpu().numpy()
             if args.correlations:
-                correlations = frequency_cos_similarity(
+                correlations = feature_extractor(
                     processed,
-                    mode=args.coh_mode
+                    # mode=args.coh_mode
                 ).cpu().detach().numpy()
 
             if labels_chunk is None:
@@ -286,9 +286,9 @@ if __name__=='__main__':
                     continue
                 embeddings = embed_model(processed).cpu().detach().numpy()
                 if args.correlations:
-                    correlations = frequency_cos_similarity(
+                    correlations = feature_extractor(
                         processed,
-                        mode=args.coh_mode
+                        # mode=args.coh_mode
                     ).cpu().detach().numpy()
 
                 all_labels.append(labels.cpu().detach().numpy())

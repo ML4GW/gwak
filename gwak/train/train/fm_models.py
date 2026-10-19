@@ -34,7 +34,7 @@ from nflows.transforms.autoregressive import (
 from train.losses import SupervisedSimCLRLoss
 from train.schedulers import WarmupCosineAnnealingLR
 from train.cl_models import Crayon
-from transforms import frequency_cos_similarity
+from transforms.preprocess import FeatureExtractor
 
 class GwakBaseModelClass(pl.LightningModule):
 
@@ -488,9 +488,11 @@ class BackgroundFlowModel(GwakBaseModelClass):
         self.learning_rate = learning_rate
 
         self.save_hyperparameters()
-
+        self.feature_extractor = FeatureExtractor(
+            mode=coh_mode
+        )
     def freq_cos_sim(self, batch):
-        sim_score = frequency_cos_similarity(batch, self.coh_mode)
+        sim_score = self.feature_extractor(batch)
         return sim_score
 
     def configure_optimizers(self):

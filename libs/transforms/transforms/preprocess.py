@@ -4,11 +4,108 @@ import numpy as np
 from scipy import signal
 from ml4gw.transforms import SpectralDensity, Whiten
 
+from .arch_conversion import cohmode_to_dim
 
 # precompute_embeddings
 # fm_models
 # combine_model
 # plots
+
+class FeatureExtractor(torch.nn.Module):
+
+    def __init__(self, mode):
+        super().__init__()
+        self.mode = mode
+        self.cos_sim = FrequencyCosSimilarity(mode=mode)
+    
+    def forward(self, batch):
+        return self.cos_sim(batch)
+
+
+class FrequencyCosSimilarity(torch.nn.Module):
+    """
+    Complex cosine similarity between the spectra of two channels.
+
+    Expects `batch` of shape (B, 2, T): channel 0 is H, channel 1 is L.
+    Returns a tensor of shape (B, out_dim).
+    """
+
+    MODES = ("random", "random2", "real", "real_imag", "abs", "half")
+
+    def __init__(
+        self,
+        mode: str = "real",
+        eps: float = 1e-8,
+    ):
+        super().__init__()
+        if mode not in self.MODES:
+            raise ValueError(f"Unknown mode {mode!r}; expected one of {self.MODES}")
+        self.mode = mode
+        self.eps = eps
+
+        _call_fn = {
+            "random": self._random,
+            "random2": self._random2,
+            "real": self._real,
+            "real_imag": self._real_imag,
+            "abs": self._abs,
+            "half": self._half
+        }
+
+        self._foward_fn = _call_fn.get(mode)
+
+    @property
+    def out_dim(self) -> int:
+        return cohmode_to_dim(self.mode)
+
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
+        return self._foward_fn(batch)
+
+    # Testing use
+    def _random(self, batch: torch.Tensor) -> torch.Tensor:
+        n = batch.shape[0]
+        return torch.randn((n, 1), device=batch.device)
+
+    def _random2(self, batch: torch.Tensor) -> torch.Tensor:
+        n = batch.shape[0]
+        return torch.randn((n, 2), device=batch.device)
+
+    def _complex_similarity(
+        self,
+        batch: torch.Tensor,
+    ) -> torch.Tensor:
+
+        H = torch.fft.rfft(batch[:, 0, :], dim=-1)
+        L = torch.fft.rfft(batch[:, 1, :], dim=-1)
+        numerator = torch.sum(H * torch.conj(L), dim=-1)
+        norm_H = torch.linalg.norm(H, dim=-1)
+        norm_L = torch.linalg.norm(L, dim=-1)
+        rho_complex = numerator / (norm_H * norm_L + 1e-8)
+
+        return rho_complex
+
+    def _real(self, batch: torch.Tensor) -> torch.Tensor:
+        rho_complex = self._complex_similarity(batch)
+        return torch.real(rho_complex).unsqueeze(-1)
+
+    def _real_imag(self, batch: torch.Tensor) -> torch.Tensor:
+        rho_complex = self._complex_similarity(batch)
+        score_1 = torch.real(rho_complex).unsqueeze(-1)
+        score_2 = torch.imag(rho_complex).unsqueeze(-1)
+        score = torch.cat([score_1, score_2], dim=1)
+        return score
+
+    def _abs(self, batch: torch.Tensor) -> torch.Tensor:
+        rho_complex = self._complex_similarity(batch)
+        return torch.abs(rho_complex).unsqueeze(-1)
+
+    def _half(self, batch: torch.Tensor) -> torch.Tensor:
+        """Half window size of real _complex_similarity"""
+        batch = batch[..., 1024:-1024]
+        rho_complex = self._complex_similarity(batch)
+        return torch.real(rho_complex).unsqueeze(-1)
+
+
 def frequency_cos_similarity(batch, mode):
 
     if mode == "random":
