@@ -134,7 +134,7 @@ if __name__=='__main__':
     batches_per_epoch = 2000000
     num_workers = 0
     data_saving_file = config['data']['init_args']['data_saving_file']
-    feature_extractor = FeatureExtractor(mode=args.coh_mode)
+    feature_extractor = FeatureExtractor(mode=args.coh_mode).to(device)
     duration = fduration + kernel_length
     if args.signal_type in ['All', 'ALL', 'all']:
         signal_classes = [

@@ -4,7 +4,9 @@ import numpy as np
 from scipy import signal
 from ml4gw.transforms import SpectralDensity, Whiten
 
-from .correlation import FEATURES as CORRELATION_MODES, correlation_features
+# from .correlation import FEATURES as CORRELATION_MODES, correlation_features
+from .correlation import FEATURES
+from .correlation import CorrelationFeatures
 
 from .arch_conversion import cohmode_to_dim
 
@@ -18,10 +20,14 @@ class FeatureExtractor(torch.nn.Module):
     def __init__(self, mode):
         super().__init__()
         self.mode = mode
-        self.cos_sim = FrequencyCosSimilarity(mode=mode)
+        if mode in FrequencyCosSimilarity.MODES:
+            self.feature = FrequencyCosSimilarity(mode=mode)
+        if mode in FEATURES.keys():
+            self.feature = CorrelationFeatures(mode=mode)
+
     
     def forward(self, batch):
-        return self.cos_sim(batch)
+        return self.feature(batch)
 
 
 class FrequencyCosSimilarity(torch.nn.Module):

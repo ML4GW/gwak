@@ -14,6 +14,8 @@ coh_modes = [
     "random",
     "random2",
     "half",
+    "corr15",
+    "corr21"
 ]
 fm_configs = [
     'NF_onlyBkg',

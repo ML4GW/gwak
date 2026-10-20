@@ -82,11 +82,15 @@ def main(
     print("Test inference complete.")
     print(output)
     print(output.sum())
-    coh_size=1
-    if coh_mode == "real_imag": 
-        coh_size=2
-    if coh_mode == "random2": 
-        coh_size=2
+    coh_size = 1
+    if coh_mode == "real_imag":
+        coh_size =2
+    if coh_mode == "random2":
+        coh_size = 2
+    if coh_mode == "corr15":
+        coh_size = 15
+    if coh_mode == "corr21":
+        coh_size = 21
     
     assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
     print(f"Output shape: {output.shape}")
