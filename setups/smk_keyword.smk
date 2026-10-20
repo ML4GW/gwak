@@ -18,6 +18,7 @@ ifos_to_ifo_num = {
 data_ver_to_path = {
     "O4b_cat1": "O4_MDC_background", # Have omicron file
     "O4b_cat1-chunked": "O4_MDC_background-chunked",
+    "O4b_cat1-loud_glitch": "O4_MDC_background_snr-g10",
     "O4b_cat12": "BBC_AnalysisReady_Cat12",
     "O4b_cat12-katya": "BBC_AnalysisReady_Cat12-katya"
 }
