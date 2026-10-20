@@ -37,7 +37,7 @@ from typing import Union
 from scipy import signal
 from transforms import TorchBandpassFIR, hrrs_value, CCSN_Injector, load_h5_as_dict
 from machinery.loggers import gwak_logger, Pathfinder
-from machinery import gwak_data_dir
+from machinery import gwak_data_dir, gwak_dir
 
 def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
     coeffs = []
@@ -658,12 +658,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.phic_prior = Uniform(0, 2 * torch.pi)
 
         # CCSN second-derivitive waveform data if using
-        file_path = Path(__file__).resolve()
-        # To Do: Change this to absolute path, and perhaps 
-        # make a wapper function to contorl the input yaml and data source
         self.ccsn_dict = load_h5_as_dict(
-            chosen_signals=file_path.parents[2] / "data/configs/ccsn.yaml",
-            source_file=Path(file_path.parents[3] / "gwak-dlc/Resampled/")
+            chosen_signals=gwak_dir(suffix="gwak/data/configs")("ccsn.yaml"),
+            source_file=gwak_dir(suffix="gwak-dlc")("Resampled"),
         )
         self.generate_waveforms_ccsn = CCSN_Injector(
             ifos=self.ifos,
