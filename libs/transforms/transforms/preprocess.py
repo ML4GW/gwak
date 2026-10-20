@@ -4,6 +4,8 @@ import numpy as np
 from scipy import signal
 from ml4gw.transforms import SpectralDensity, Whiten
 
+from .correlation import FEATURES as CORRELATION_MODES, correlation_features
+
 from .arch_conversion import cohmode_to_dim
 
 # precompute_embeddings
@@ -107,6 +109,10 @@ class FrequencyCosSimilarity(torch.nn.Module):
 
 
 def frequency_cos_similarity(batch, mode):
+
+    if mode in CORRELATION_MODES:
+        # H1-L1 correlation features (transforms/correlation.py): (B, 15) or (B, 21)
+        return correlation_features(batch, mode=mode)
 
     if mode == "random":
         rand_data = torch.randn(
