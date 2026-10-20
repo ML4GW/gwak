@@ -973,7 +973,7 @@ class SignalDataloader(GwakBaseDataloader):
 
             snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
             # if waveforms is not None:
-            if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
+            if waveform_class not in ["Background", "Glitch", "FakeGlitch"]:
                 snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
 
             if waveform_class in ["Background", "Glitch", "FakeGlitch"]:
