@@ -1,15 +1,15 @@
 condor_nodes: 16
 max_concurrent_node: 16
 condor_kwargs:
-  universe: vanilla
-  # universe: container
+  # universe: vanilla
+  universe: container
   request_gpus: 1
   gpus_minimum_capability: 11.0
   gpus_minimum_memory: 16GB
   request_cpus: 4
-  request_memory: 32G
+  request_memory: 16G
   request_disk: 16G
-  accounting_group: ligo.dev.o4.burst.explore.test
+  accounting_group: ligo.dev.o4.burst.allsky.mlyoffline
 
 run_name: one_test
 ifos: ["H1", "L1"] # export overwrite

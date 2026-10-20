@@ -1,10 +1,10 @@
-from machinery.find_gpus import gpu_selector
+# from machinery.find_gpus import gpu_selector
 import os
 # Force GPU selection in CIT login node
 # Should be retired after Condorizing
 # We will leave it here during the upgrade
-gpu_list = gpu_selector()
-os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
+# gpu_list = gpu_selector()
+# os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
 
 import torch
 import logging
@@ -54,7 +54,10 @@ def export(
     prefix = f"{cl_config}_{coh_mode}_{fm_config}"
 
     # gwak_folder = file_path.parents[2] #gwak/gwak/
-    if model_dir is None: 
+    if model_dir == "model_JIT.pt":
+        SCRATCH_DIR = os.environ["_CONDOR_SCRATCH_DIR"]
+        model_dir = Path(SCRATCH_DIR) / "model_JIT.pt"
+    elif model_dir is None:
         model_dir = gwak_output_dir(
             suffix=f"models/{ifo_str}/{data_ver}/{prefix}/{project}"
         )(append_path="model_JIT.pt")
@@ -71,6 +74,7 @@ def export(
     graph.eval()
 
     gwak_logger(output_dir / "export.log")
+    logging.info(f"Loading model from {model_dir}")
     
     if device != "cpu":
         logging.warning(

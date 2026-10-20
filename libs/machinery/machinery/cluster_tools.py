@@ -7,7 +7,7 @@ import yaml
 import logging
 import subprocess
 
-from typing import Union
+from typing import Union, Optional
 from pathlib import Path
 from textwrap import dedent
 from machinery import gwak_logger, gwak_dir
@@ -19,27 +19,49 @@ def wait_for_file(path, timeout=6000, interval=1):
             raise TimeoutError(f"Timed out waiting for {path}")
         time.sleep(interval)
 
-def write_bash_file(
+def write_infer_bash_file(
     bash_root: Path,
+    ifo_mode: str,
+    data_tag: str,
     files: list,
     commands: list[str],
 ):
 
     bash_file = bash_root / "condor_cmd.sh"
+    header = [
+        "#!/bin/bash",
+        "set -euo pipefail",
+        "",
+        "SCRATCH=${_CONDOR_SCRATCH_DIR:-$PWD}",
+        "GWAK_ROOT=${GWAK_ROOT:-/opt/gwak}",
+        "",
+        "# Update environment variables for GWAK directories",
+        "export GWAK_OUTPUT_DIR=$SCRATCH/muted_dir",
+        "export GWAK_DATA_DIR=$SCRATCH/Data",
+        "export CONTAINER_OUTPUT_DIR=$SCRATCH/Outputs",
+        "export GWAK_LOG_DIR=$CONTAINER_OUTPUT_DIR/logs",
+        "export GWAK_LOUVRE_DIR=$CONTAINER_OUTPUT_DIR/louvre",
+        "export IMAGE_DIR=$SCRATCH/images",
+        "",
+        f"mkdir -p \"$GWAK_DATA_DIR/{ifo_mode}/{data_tag}\"",
+        "mkdir -p \"$CONTAINER_OUTPUT_DIR\"",
+    ]
+
     gwak_root = Path(os.getenv('GWAK_ROOT'))
     gwak_env = gwak_root / ".gwak/env.sh"
     deploy_env = gwak_root / "gwak/deploy/.venv/bin/activate"
 
     with bash_file.open("w") as sh_file:
 
-        sh_file.write("#!/bin/bash\n")
-        sh_file.write("set -euo pipefail\n\n")
+        sh_file.write("\n".join(header))
         sh_file.write("export HDF5_USE_FILE_LOCKING=FALSE\n")
         for file in files:
-            sh_file.write(f'cp "{file}" "$_CONDOR_SCRATCH_DIR/"\n')
-
-        sh_file.write(f'source "{gwak_env}"\n')
-        sh_file.write(f'source "{deploy_env}"\n')
+            sh_file.write(
+                f'pelican object get "{file}" "$GWAK_DATA_DIR/{ifo_mode}/{data_tag}"\n'
+            )
+        # sh_file.write(f'source "{gwak_env}"\n')
+        # sh_file.write(f'source "{deploy_env}"\n')
+        sh_file.write("python --version\n")
         for command in commands:
             sh_file.write(f"{command}\n")
     bash_file.chmod(0o755)
@@ -109,6 +131,7 @@ def write_container_condor_sub(
     initialdir,
     executable,
     transfer_output_files="Outputs",
+    transfer_model: Optional[Union[str, Path]] = None,
 ):
     """ Container universe submit file. The image is pulled from
     osdf:///igwn/cit/staging/$USER/Container/GWAK/{image}, files listed in
@@ -120,12 +143,19 @@ def write_container_condor_sub(
     username = os.environ.get("USER")
     condor_config["universe"] = "container"
     condor_config["container_image"] = image
-
+    initialdir = Path(initialdir)
     condor_config["executable"] = executable
     condor_config["initialdir"] = initialdir
     # On the CIT shared filesystem the default (IF_NEEDED) skips transfer,
     # so the osdf:// image would never be fetched.
     condor_config["should_transfer_files"] = "YES"
+    if transfer_model is not None:
+        condor_config["transfer_input_files"] = transfer_model
+        # condor_config["transfer_input_files"] = f"Outputs/.keep,{transfer_model}"
+        # condor_config["transfer_input_files"] = str(
+        #     Path(transfer_model).relative_to(initialdir)
+        # )
+        # condor_config["preserve_relative_paths"] = True
     condor_config["when_to_transfer_output"] = "ON_EXIT"
     condor_config["transfer_output_files"] = transfer_output_files
     # condor_config["transfer_input_files"] = f"/home/{username}/.netrc"

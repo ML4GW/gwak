@@ -48,7 +48,7 @@ rule train_cl:
         ),
         # The omicron triggers can only generate on LDG cluster.
         omicron = lambda wildcards: (
-            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
         ),
         data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
@@ -78,7 +78,7 @@ rule production_train_cl:
         ),
         # The omicron triggers can only generate on LDG cluster.
         omicron = lambda wildcards: (
-            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
         ),
         data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
@@ -109,7 +109,7 @@ rule precompute_embeddings:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         omicron = lambda wildcards: (
-            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
         ),
         data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
     shell:
@@ -146,7 +146,7 @@ rule production_precompute_embeddings:
         )
     params:
         omicron = lambda wildcards: (
-            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
         ),
         data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
     shell:
@@ -324,7 +324,7 @@ rule make_signal_embeddings:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         omicron = lambda wildcards: (
-            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background"
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
         ),
     shell:
         'source {params.gwak_env}; uv run \
@@ -346,7 +346,7 @@ rule make_signal_embeddings:
 
 # rule compare_embeddings:
 #     input:
-#         data_dir = DATA_DIR / "O4_MDC_background-chunked/HL/"
+#         data_dir = DATA_DIR / "O4_MDC_background_snr-g10-chunked/HL/"
 #     params:
 #         config = GWAK_ROOT / 'gwak/train/configs/resnet_kl1.0_bs512.yaml',
 #         models_to_compare = [OUTPUT_DIR / 'resnet_kl1.0_bs512_HL/model_JIT.pt', OUTPUT_DIR / 's4_kl1.0_bs256_HL/model_JIT.pt'],
@@ -364,7 +364,7 @@ rule make_signal_embeddings:
 #     params:
 #         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
 #         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
-#         data_dir = DATA_DIR / 'O4_MDC_background-chunked/HL/',
+#         data_dir = DATA_DIR / 'O4_MDC_background_snr-g10-chunked/HL/',
 #         config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
 #         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
 #         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
@@ -381,7 +381,7 @@ rule make_signal_embeddings:
 #     params:
 #         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
 #         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
-#         data_dir = DATA_DIR / 'O4_MDC_background-chunked/HL/',
+#         data_dir = DATA_DIR / 'O4_MDC_background_snr-g10-chunked/HL/',
 #         config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
 #         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
 #         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
