@@ -52,27 +52,29 @@ def load_h5_as_dict(
 def get_hp_hc_from_q2ij(
     q2ij,
     theta: np.ndarray,
-    phi: np.ndarray
+    phi: np.ndarray,
+    xp=np,
 ):
 
     '''
     The orientation of GW emition is given by theta, phi
+    xp is np, or torch for tensors on the GPU
     '''
 
     hp =\
-        q2ij[:,0,0]*(np.cos(theta)**2*np.cos(phi)**2 - np.sin(phi)**2).reshape(-1, 1)\
-        + q2ij[:,1,1]*(np.cos(theta)**2*np.sin(phi)**2 - np.cos(phi)**2).reshape(-1, 1)\
-        + q2ij[:,2,2]*(np.sin(theta)**2).reshape(-1, 1)\
-        + q2ij[:,0,1]*(np.cos(theta)**2*np.sin(2*phi) - np.sin(2*phi)).reshape(-1, 1)\
-        - q2ij[:,1,2]*(np.sin(2*theta)*np.sin(phi)).reshape(-1, 1)\
-        - q2ij[:,2,0]*(np.sin(2*theta)*np.cos(phi)).reshape(-1, 1)
+        q2ij[:,0,0]*(xp.cos(theta)**2*xp.cos(phi)**2 - xp.sin(phi)**2).reshape(-1, 1)\
+        + q2ij[:,1,1]*(xp.cos(theta)**2*xp.sin(phi)**2 - xp.cos(phi)**2).reshape(-1, 1)\
+        + q2ij[:,2,2]*(xp.sin(theta)**2).reshape(-1, 1)\
+        + q2ij[:,0,1]*(xp.cos(theta)**2*xp.sin(2*phi) - xp.sin(2*phi)).reshape(-1, 1)\
+        - q2ij[:,1,2]*(xp.sin(2*theta)*xp.sin(phi)).reshape(-1, 1)\
+        - q2ij[:,2,0]*(xp.sin(2*theta)*xp.cos(phi)).reshape(-1, 1)
 
     hc = 2*(
-        - q2ij[:,0,0]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,1,1]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,0,1]*(np.cos(theta)*np.cos(2*phi)).reshape(-1, 1)
-        - q2ij[:,1,2]*(np.sin(theta)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,2,0]*(np.sin(theta)*np.sin(phi)).reshape(-1, 1)
+        - q2ij[:,0,0]*(xp.cos(theta)*xp.sin(phi)*xp.cos(phi)).reshape(-1, 1)
+        + q2ij[:,1,1]*(xp.cos(theta)*xp.sin(phi)*xp.cos(phi)).reshape(-1, 1)
+        + q2ij[:,0,1]*(xp.cos(theta)*xp.cos(2*phi)).reshape(-1, 1)
+        - q2ij[:,1,2]*(xp.sin(theta)*xp.cos(phi)).reshape(-1, 1)
+        + q2ij[:,2,0]*(xp.sin(theta)*xp.sin(phi)).reshape(-1, 1)
     )
 
     return hp, hc
@@ -134,10 +136,67 @@ class CCSN_Injector:
 
             logging.info(f"Core bounce siganl may leak out of sample kernel by {-time_shift - off_set}")
 
+        self.bank = None
+
+    def template_bank(self, device):
+        # quadrupole moments of all waveforms, placed in the buffer
+        # the same way as padding() does it. Shape (n_ccsn, 3, 3, buffer_length)
+        if self.bank is None or self.bank.device != device:
+            bank = np.zeros((len(self.ccsn_list), 3, 3, self.buffer_length))
+            half_kernel_idx = int(self.buffer_duration * self.sample_rate / 2)
+            time_shift_idx = int(self.time_shift * self.sample_rate)
+            for i, name in enumerate(self.ccsn_list):
+                time, quad_moment = self.signals[name]
+                start = half_kernel_idx + int(time[0] * self.sample_rate) + time_shift_idx
+                bank[i, :, :, start:start + time.shape[0]] = np.moveaxis(quad_moment, 0, -1)
+            self.bank = torch.as_tensor(bank, dtype=torch.float32, device=device) * 10
+        return self.bank
+
+    def generate_on_device(self, total_counts, device):
+        # same random numbers, in the same order, as the numpy code in __call__
+        ccsn_num = len(self.ccsn_list)
+        ccsn_sample = np.random.choice(ccsn_num, total_counts)
+        ccsn_counts = np.eye(ccsn_num)[ccsn_sample].sum(0).astype("int")
+        index, theta, phi, distance = [], [], [], []
+        for i, count in enumerate(ccsn_counts):
+            index.append(np.full(count, i))
+            theta.append(np.random.uniform(0, np.pi, count))
+            phi.append(np.random.uniform(0, 2*np.pi, count))
+            distance.append(np.random.uniform(1, 10, count))
+
+        def to_device(x):
+            return torch.as_tensor(np.concatenate(x), dtype=torch.float32, device=device)
+
+        quad_moment = self.template_bank(device)[torch.as_tensor(np.concatenate(index), device=device)]
+        hp, hc = get_hp_hc_from_q2ij(quad_moment, theta=to_device(theta), phi=to_device(phi), xp=torch)
+        distance = to_device(distance).reshape(-1, 1)
+        hp, hc = hp / distance, hc / distance
+
+        dec = Cosine().rsample(total_counts)
+        psi = Uniform(0, np.pi).sample((total_counts,))
+        phi = Uniform(0, 2 * np.pi).sample((total_counts,))
+
+        ht = gw.compute_observed_strain(
+            dec.to(device),
+            psi.to(device),
+            phi.to(device),
+            detector_tensors=self.tensors.to(device),
+            detector_vertices=self.vertices.to(device),
+            sample_rate=self.sample_rate,
+            plus=hp,
+            cross=hc
+        )
+        hrss = hrrs_value(hp, hc)
+
+        return ht, dec, phi, hrss
+
     def __call__(
         self,
-        total_counts # batch_size
+        total_counts, # batch_size
+        device=None,
     ):
+        if device is not None:
+            return self.generate_on_device(total_counts, device)
 
         ccsn_num = len(self.ccsn_list)
         ccsn_sample = np.random.choice(ccsn_num, total_counts)

@@ -582,6 +582,7 @@ class SignalDataloader(GwakBaseDataloader):
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         whiten: bool = True,   # make whitening optional
+        ccsn_on_gpu: bool = False, # simulate CCSN on the GPU instead of with numpy
         **kwargs
     ):
 
@@ -609,6 +610,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.cache_dir = cache_dir
         self.rebalance_classes = rebalance_classes
         self.do_whiten = whiten
+        self.ccsn_on_gpu = ccsn_on_gpu
+        if ccsn_on_gpu and not torch.cuda.is_available():
+            raise RuntimeError("ccsn_on_gpu is set but CUDA is not available")
         self.num_workers = kwargs["num_workers"]
 
         self.all_signal_labels = {
@@ -844,8 +848,11 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             elif signal_class == "CCSN":
+                # the current device, so it also works when each process uses its own GPU
+                device = torch.device("cuda", torch.cuda.current_device()) if self.ccsn_on_gpu else None
                 responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
-                    total_counts=self.num_per_class[i]
+                    total_counts=self.num_per_class[i],
+                    device=device,
                 )
                 params, ra = None, None
             elif signal_class in ["Background", "Glitch"]:
