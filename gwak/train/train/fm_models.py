@@ -62,13 +62,16 @@ class FlowWrapper(nn.Module):
         # condition_on_correlation=False, 
         # standardizer_x=None, 
         # standardizer_c=None
+        context_standardizer=None,
     ):
         super().__init__()
         self.flow = flow
         self.standardizer = standardizer
+        self.context_standardizer = context_standardizer
 
     def forward(self, x, context):
         if self.standardizer: x = self.standardizer(x)
+        if self.context_standardizer: context = self.context_standardizer(context)
         return self.flow.log_prob(inputs=x,context=context)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
@@ -88,8 +91,9 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         use_corr = getattr(module, 'use_correlation', True)
         use_cond = getattr(module, 'condition_on_correlation', False)
         wrapper = FlowWrapper(
-            module.model, 
-            module.standardizer
+            module.model,
+            module.standardizer,
+            context_standardizer=module.context_standardizer
         ).to("cuda:0")
         wrapper.eval()
 
@@ -486,6 +490,15 @@ class BackgroundFlowModel(GwakBaseModelClass):
                 self.embedding_std
             )
 
+        # Context standardization, filled from the datamodule in setup() and
+        # stored with the checkpoint so the exported JIT model applies it too
+        self.context_standardizer = None
+        if self.condition_on_correlation and self.normalize:
+            self.context_standardizer = Standardizer(
+                torch.zeros(self.context_features),
+                torch.ones(self.context_features)
+            )
+
         self.model = self.flow
 
         self.new_shape = new_shape
@@ -495,6 +508,21 @@ class BackgroundFlowModel(GwakBaseModelClass):
         self.feature_extractor = FeatureExtractor(
             mode=coh_mode
         )
+    def setup(self, stage=None):
+        if stage != "fit" or self.context_standardizer is None:
+            return
+        datamodule = getattr(self.trainer, "datamodule", None)
+        c_mean = getattr(datamodule, "c_mean", None)
+        c_std = getattr(datamodule, "c_std", None)
+        if c_mean is None or c_mean.numel() != self.context_features:
+            self.get_logger().warning(
+                "No context statistics from the datamodule, context is not standardized"
+            )
+            return
+
+        self.context_standardizer.mean.copy_(c_mean)
+        self.context_standardizer.std.copy_(c_std)
+
     def freq_cos_sim(self, batch):
         sim_score = self.feature_extractor(batch)
         return sim_score
@@ -513,6 +541,9 @@ class BackgroundFlowModel(GwakBaseModelClass):
 
         if self.standardizer is not None:
             feats = self.standardizer(feats)
+
+        if self.context_standardizer is not None:
+            c = self.context_standardizer(c)
 
         if self.condition_on_correlation:
             log_prob = self.model.log_prob(inputs=feats,context=c)
@@ -534,6 +565,9 @@ class BackgroundFlowModel(GwakBaseModelClass):
 
         if self.standardizer is not None:
             feats = self.standardizer(feats)
+
+        if self.context_standardizer is not None:
+            c_score = self.context_standardizer(c_score)
 
         if self.condition_on_correlation:
 

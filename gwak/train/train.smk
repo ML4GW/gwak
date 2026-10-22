@@ -290,15 +290,21 @@ rule condor_train_rules:
 
 
 rule make_offline_dataset:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/make_offline_dataset.py"
+    output:
     params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         ifo_mode = 'HL',
         num_samples = 100_000,
         dataset = 'train',
-    output:
     shell:
-        'python train/make_offline_dataset.py {params.ifo_mode} \
+        "source {params.gwak_env}; uv run \
+            --project {params.pyproject} python {input.arg} \
+            {params.ifo_mode} \
             {params.num_samples} \
-            {params.dataset}'
+            {params.dataset}"
 
 
 rule make_signal_embeddings:

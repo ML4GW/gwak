@@ -13,21 +13,36 @@ from trainer.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, K
 from pathlib import Path
 
 from tqdm import tqdm
+
 import random
 import h5py
 import os
 
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"   # only old GPU1 is visible as cuda:0
+from machinery import gwak_data_dir, gwak_dir
 DATA_DIR = Path(os.getenv("GWAK_DATA_DIR"))
 
-def main(ifos, num_samples_per_class, dataset,
-         flo=30.0, fhi=2048.0, sample_rate=4096.0, delay_scan=False, tau_max=0.010, n_tau=81,
-         cc_min=None, rho_min=None, scc_min=None, edr_max=None, preselection=False):
+def main(
+    ifos,
+    num_samples_per_class,
+    dataset,
+    flo=30.0,
+    fhi=2048.0,
+    sample_rate=4096.0,
+    delay_scan=False,
+    tau_max=0.010,
+    n_tau=81,
+    cc_min=None,
+    rho_min=None,
+    scc_min=None,
+    edr_max=None,
+    preselection=False
+):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    _device = "cpu"
 
-    data_dir = DATA_DIR / f"BBC_AnalysisReady_Cat12/{ifos}/"
+    data_tag = "O4_MDC_background-chunked"
+    data_dir = DATA_DIR / f"{data_tag}/{ifos}/"
     kernel_length = 1.0
     psd_length = 64
     fduration = 2
@@ -66,13 +81,13 @@ def main(ifos, num_samples_per_class, dataset,
         None
     ]
     waveforms = [
-        SineGaussian(sample_rate=sample_rate, duration=duration),
-        IMRPhenomPv2(),
-        Gaussian(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate, duration=duration),
-        WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
+        SineGaussian(sample_rate=sample_rate, duration=duration).to(_device),
+        IMRPhenomPv2().to(_device),
+        Gaussian(sample_rate=sample_rate, duration=duration).to(_device),
+        GenerateString(sample_rate=sample_rate, duration=duration).to(_device),
+        GenerateString(sample_rate=sample_rate, duration=duration).to(_device),
+        GenerateString(sample_rate=sample_rate, duration=duration).to(_device),
+        WhiteNoiseBurst(sample_rate=sample_rate, duration=duration).to(_device),
         None,
         None,
         None
@@ -105,6 +120,7 @@ def main(ifos, num_samples_per_class, dataset,
         return True
 
     def write_file(filename, data, labels, snrs, hrss, ccs, rhos, sccs, edrs):
+
         with h5py.File(filename, "a") as f:
             uniq_labels = sorted(list(set(labels)))
             for l in uniq_labels:
@@ -152,11 +168,12 @@ def main(ifos, num_samples_per_class, dataset,
                         f.create_dataset(f"{sig_name}_scc", data=class_scc, maxshape=(None,), chunks=True)
                         f.create_dataset(f"{sig_name}_edr", data=class_edr, maxshape=(None,), chunks=True)
 
-    sig_loader = SignalDataloader(signal_classes,
+    sig_loader = SignalDataloader(
+        signal_classes,
         priors,
         waveforms,
         extra_kwargs,
-        data_dir=data_dir,
+        data_tag=data_tag,
         sample_rate=sample_rate,
         kernel_length=kernel_length,
         psd_length=psd_length,
@@ -277,7 +294,10 @@ def main(ifos, num_samples_per_class, dataset,
             else:
                 ccs_cat = rhos_cat = sccs_cat = edrs_cat = None
 
-            write_file(OUTFILE, data, labels, snrs, hrsss, ccs_cat, rhos_cat, sccs_cat, edrs_cat)
+            write_file(
+                OUTFILE, data, labels, snrs, hrsss,
+                ccs_cat, rhos_cat, sccs_cat, edrs_cat
+            )
 
             # clean up
             del data, labels, snrs
