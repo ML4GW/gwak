@@ -753,6 +753,10 @@ class SignalDataloader(SkyPositionMixin, GwakBaseDataloader):
         self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
         self.rescaler = rescaler.to('cuda') if torch.cuda.is_available() else rescaler
 
+    def sample_sky_location(self, batch_size):
+        """Return Earth-relative (phi, declination) in radians, not celestial RA."""
+        return self._sample_sky_location(batch_size)
+
     def get_snr_factor(self,current_epoch):
         f = (1.0/self.snr_init_factor)**(1.0/self.snr_anneal_epochs)
         if current_epoch <= self.snr_anneal_epochs:
@@ -874,7 +878,9 @@ class SignalDataloader(SkyPositionMixin, GwakBaseDataloader):
                 )
             elif signal_class == "CCSN":
                 # the current device, so it also works when each process uses its own GPU
-                device = torch.device("cuda", torch.cuda.current_device()) if self.ccsn_on_gpu else None
+                device = torch.device(
+                    "cuda", torch.cuda.current_device()
+                ) if self.ccsn_on_gpu else None
                 responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i],
                     device=device,
@@ -1217,8 +1223,7 @@ class AugmentationSignalDataloader(SignalDataloader):
             # resample various parameters depending on augmentation settings
             if self.sky_location_augmentation:
                 for i in range(self.num_classes):
-                    ras[i] = self.ra_prior.sample((self.num_per_class[i],))
-                    decs[i] = self.dec_prior.sample((self.num_per_class[i],))
+                    ras[i], decs[i] = self.sample_sky_location(self.num_per_class[i])
             if self.distance_augmentation:
                 for i in range(self.num_classes):
                     params[i]['distance'] = self.priors[i].sample(self.num_per_class[i])['distance']
@@ -1278,13 +1283,11 @@ def generate_waveforms_standard(
 
     # sample from prior and generate waveforms
     if parameters is None:
-        # The type control of this sampling isn't working correctly
-        # Check the type with KinkkinkBBC f_high = Conston(2048)
         parameters = prior.sample(batch_size) # dict[str, torch.tensor]
+    if (ra is None) != (dec is None):
+        raise ValueError("ra and dec must either both be provided or both be None")
     if ra is None:
-        ra = loader.ra_prior.sample((batch_size,))
-    if dec is None:
-        dec = loader.dec_prior.sample((batch_size,))
+        ra, dec = loader.sample_sky_location(batch_size)
     phic = loader.phic_prior.sample((batch_size,))
 
     cross, plus = waveform(**parameters)
@@ -1322,10 +1325,10 @@ def generate_waveforms_bbh(
     if parameters is None:
         # sample from prior and generate waveforms
         parameters = prior.sample(batch_size) # dict[str, torch.tensor]
+    if (ra is None) != (dec is None):
+        raise ValueError("ra and dec must either both be provided or both be None")
     if ra is None:
-        ra = loader.ra_prior.sample((batch_size,))
-    if dec is None:
-        dec = loader.dec_prior.sample((batch_size,))
+        ra, dec = loader.sample_sky_location(batch_size)
 
     cross, plus = waveform(**parameters)
     cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)
