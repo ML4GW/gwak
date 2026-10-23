@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import argparse
 import yaml
-from transforms import frequency_cos_similarity
+from transforms import cohmode_to_dim, frequency_cos_similarity
 from transforms.preprocess import FeatureExtractor
 
 class CombinedModel(nn.Module):
@@ -82,16 +82,8 @@ def main(
     print("Test inference complete.")
     print(output)
     print(output.sum())
-    coh_size = 1
-    if coh_mode == "real_imag":
-        coh_size =2
-    if coh_mode == "random2":
-        coh_size = 2
-    if coh_mode == "corr15":
-        coh_size = 15
-    if coh_mode == "corr21":
-        coh_size = 21
-    
+    coh_size = cohmode_to_dim(coh_mode)
+
     assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
     print(f"Output shape: {output.shape}")
     print(f"Format: {[embedding_size, coh_size, 1]}")

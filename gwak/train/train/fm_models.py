@@ -34,6 +34,7 @@ from nflows.transforms.autoregressive import (
 from train.losses import SupervisedSimCLRLoss
 from train.schedulers import WarmupCosineAnnealingLR
 from train.cl_models import Crayon
+from transforms import cohmode_to_dim
 from transforms.preprocess import FeatureExtractor
 
 class GwakBaseModelClass(pl.LightningModule):
@@ -423,16 +424,7 @@ class BackgroundFlowModel(GwakBaseModelClass):
         self.condition_on_correlation = condition_on_correlation
         self.normalize = normalize
         self.n_dims = n_dims
-
-        context_features = 1
-        if coh_mode == "real_imag":
-            context_features = 2
-        if coh_mode == "random2":
-            context_features = 2
-        if coh_mode == "corr15":
-            context_features = 15
-        if coh_mode == "corr21":
-            context_features = 21
+        self.context_features = cohmode_to_dim(coh_mode)
 
         if condition_on_correlation:
             # flow input = embeddings only
@@ -441,11 +433,11 @@ class BackgroundFlowModel(GwakBaseModelClass):
             # flow input = embedding + xcorr concatenated 
             # (was embedding - xcorr concatenated)
             self.embedding_dims = n_dims + context_features
-            context_features = 0
+            self.context_features = 0
         else:
             self.embedding_dims = n_dims
-            context_features = 0
-        self.context_features = context_features
+            self.context_features = 0
+
         # Define MAF Flow
         transforms = []
         for _ in range(n_flow_steps):

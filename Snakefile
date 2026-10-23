@@ -20,8 +20,9 @@ ana_ver_list = [
 ]
 ifos_list = ["HL"]
 data_ver_list = [
-    "O4b_cat1-chunked",
-    "O4b_cat1-loud_glitch",
+    "pseudo",
+    # "O4b_cat1-chunked",
+    # "O4b_cat1-loud_glitch",
     # "O4b_cat12-katya"
 ]
 cl_config_list = [

@@ -297,14 +297,18 @@ rule make_offline_dataset:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
         ifo_mode = 'HL',
-        num_samples = 100_000,
+        num_samples = 10_000,
         dataset = 'train',
+        # dataset = 'val',
+        # dataset = 'test',
+        data_tag = "pseudo_dataset"
     shell:
         "source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
             {params.ifo_mode} \
             {params.num_samples} \
-            {params.dataset}"
+            {params.dataset} \
+            {params.data_tag}"
 
 
 rule make_signal_embeddings:
