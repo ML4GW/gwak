@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 import argparse
 import yaml
-from transforms import frequency_cos_similarity
+from transforms import cohmode_to_dim, frequency_cos_similarity
+from transforms.preprocess import FeatureExtractor
 
 class CombinedModel(nn.Module):
     def __init__(
@@ -11,18 +12,21 @@ class CombinedModel(nn.Module):
         embedder_model,
         metric_model,
         coh_mode,
-        full_return=False
+        full_return=True
     ):
         super().__init__()
         self.embedder_model = embedder_model
         self.metric_model = metric_model
         self.full_return = full_return
         self.coh_mode = coh_mode
+        self.feature_extractor = FeatureExtractor(
+            mode=coh_mode
+        )
 
     def forward(self, x):
         # Get the embedding from the embedder model.
         embedding = self.embedder_model(x)
-        f_coh = self.freq_cos_sim(x)
+        f_coh = self.feature_extractor(x)
         # Pass the embedding to the metric model to get final classification.
         out = self.metric_model(embedding, f_coh)
 
@@ -30,10 +34,6 @@ class CombinedModel(nn.Module):
             out = torch.cat([embedding, f_coh, out.reshape(-1, 1)], dim=1)
 
         return out
-
-    def freq_cos_sim(self, batch):
-        sim_score = frequency_cos_similarity(batch, mode=self.coh_mode)
-        return sim_score
 
 
 def main(
@@ -82,14 +82,12 @@ def main(
     print("Test inference complete.")
     print(output)
     print(output.sum())
-    coh_size=1
-    if coh_mode == "real_imag": 
-        coh_size=2
-    
-    # assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
-    # print(f"Output shape: {output.shape}")
-    # print(f"Format: {[embedding_size, coh_size, 1]}")
-    # print(f"Output: {output[:,-1]}")
+    coh_size = cohmode_to_dim(coh_mode)
+
+    assert output.shape[-1] == (embedding_size + coh_size + 1), "Unentended output shape"
+    print(f"Output shape: {output.shape}")
+    print(f"Format: {[embedding_size, coh_size, 1]}")
+    print(f"Output: {output[:,-1]}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

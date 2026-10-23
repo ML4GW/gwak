@@ -7,23 +7,23 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 from pathlib import Path
-from deploy.libs import gwak_logger
-from deploy.libs.infer_utils import noise_runs_list
-from deploy.libs.trigger_io import (
+from machinery import gwak_logger
+from infer_modules.infer_utils import noise_runs_list
+from access.trigger_io import (
     lovure_file_handler,
     unpack_timeslide,
     select_threshold,
     find_outlier_by_segmets,
     resolve_oulier_config
 )
-from deploy.libs import (
+from machinery import (
     gwak_output_dir,
     gwak_louvre_dir,
     gwak_logging_dir,
     ordinal,
     convert_path_to_public_html_link
 )
-from deploy.libs.analysis_utils import (
+from access.analysis_utils import (
     get_bbc_inj_names,
     bbc_inj_info,
     find_valid_triggers
@@ -294,6 +294,7 @@ def bbc_benchmark(
 
     # Saving result
     with h5py.File(benchmark_result, "w") as h:
+        h.attrs["err_count"] = err_count
         for name, values in performance.items():
             h.create_dataset(name, data=values)
     logging.info(f"Benchmark_result saved at: {benchmark_result}")

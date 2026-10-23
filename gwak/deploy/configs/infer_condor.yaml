@@ -1,10 +1,16 @@
-condor_nodes: 8
-max_concurrent_node: 8
+condor_nodes: 16
+max_concurrent_node: 16
 condor_kwargs:
+  # universe: vanilla
+  universe: container
+  request_gpus: 1
+  gpus_minimum_capability: 11.0
+  gpus_minimum_memory: 16GB
   request_cpus: 4
-  request_memory: 32G
+  request_memory: 16G
   request_disk: 16G
-  accounting_group: ligo.dev.o4.burst.explore.test
+  accounting_group: ligo.dev.o4.burst.allsky.mlyoffline
+
 run_name: one_test
 ifos: ["H1", "L1"] # export overwrite
 psd_length: 64 # export overwrite
@@ -17,17 +23,21 @@ ana_data: BBC_AnalysisReady_Cat12
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
-grpc_port: 8001
-image: hermes/tritonserver:23.01
+grpc_port: 8301
+# image: hermes/tritonserver:23.01
+image:
+  class_path: gwak_container_output_dir
+  init_args:
+      suffix: triton_image/tritonserver_25.06.sif
 model_repo_dir: null
 result_dir: null
 server_patients: 55
 monitor_patients: 5
 job_rate_limit: 1
 inference_rate: 4 # export overwrite
+singularity_path: null
 ana_ver: O4b_cat1
 data_ver: O4b_cat1
 cl_config: null
 coh_mode: null
 fm_config: null
-dim_split: [0, 0, 1]

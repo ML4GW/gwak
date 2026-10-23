@@ -16,11 +16,11 @@ from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.waveforms import SineGaussian, MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 
 from train.dataloader import SignalDataloader
-from data.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from trainer.prior import SineGaussianBBC, MultiSineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from train.cl_models import Crayon
 
 from train.plotting import make_corner
-from transforms import frequency_cos_similarity
+from transforms.preprocess import FeatureExtractor
 #os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
@@ -156,6 +156,10 @@ if __name__=='__main__':
             print(f"Loading {filepath}...")
             datasets[key] = np.load(filepath)
 
+    feature_extractor = FeatureExtractor(
+        mode="real"
+    )
+
     if datasets:
         all_input = datasets['all_input']
         all_binary_labels = datasets['all_binary_labels']
@@ -192,7 +196,7 @@ if __name__=='__main__':
             embeddings = embed_model(processed)
 
             if args.conditioning:
-                context = frequency_cos_similarity(processed)
+                context = feature_extractor(processed)
                 all_context.append(context.detach().cpu().numpy())
                 scores = metric_model(embeddings, context=context).detach().cpu().numpy() * (-1)
             else:

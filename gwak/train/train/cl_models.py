@@ -332,10 +332,7 @@ class SimCLRBase(GwakBaseModelClass):
             loss_simclr = self.loss_function(z_embd,labels=labels)
             if self.use_classifier:
                 logits = self.classifier(x_embd)
-                #self.get_logger().info(f"Logits dtype: {logits.dtype}")
-                #self.get_logger().info(f"labels dtype: {labels.dtype}")
-                #self.get_logger().info(f"Logits shape: {logits.shape}")
-                #self.get_logger().info(f"labels shape: {labels.shape}")
+
                 if getattr(self, 'binary_classifier', False):
                     clf_labels = (labels > self.n_signal_classes).long()
                 else:
@@ -358,32 +355,49 @@ class SimCLRBase(GwakBaseModelClass):
             loss = loss_simclr
 
         self.log(
-            'val/loss',
-            loss,
-            sync_dist=True)
+            'val/loss', loss,
+            sync_dist=True
+        )
         self.log(
-            'val/loss_simclr',
-            loss_simclr,
-            sync_dist=True)
+            'val/loss_simclr', loss_simclr,
+            sync_dist=True
+        )
         if self.use_classifier:
             self.log(
-                'val/loss_classifier',
-                loss_class,
-                sync_dist=True)
+                'val/loss_classifier', loss_class,
+                sync_dist=True
+            )
 
         if self.supervised_simclr:
-            self.val_outputs.append((loss.item(), x_embd.cpu().numpy(), labels.cpu().numpy()))
+            self.val_outputs.append((
+                loss.item(), 
+                x_embd.cpu().numpy(), 
+                labels.cpu().numpy()
+            ))
         else:
             return loss
 
     def on_validation_epoch_end(self):
+
         if self.supervised_simclr:
-            preds = np.concatenate([o[1] for o in self.val_outputs],axis=0)
-            labels = np.concatenate([o[2] for o in self.val_outputs],axis=0)
-            #sig_classes = self.trainer.datamodule.signal_classes
-            #label_names = {i+1:c for i,c in enumerate(sig_classes)}
             label_names = self.trainer.datamodule.all_signal_label_names
-            fig = make_corner(preds,labels,return_fig=True,label_names=label_names)
+            embd = np.concatenate(
+                [o[1] for o in self.val_outputs],
+                axis=0
+            )
+            labels = np.concatenate(
+                [o[2] for o in self.val_outputs], 
+                axis=0
+            )
+            label_name_list = [label_names[int(label)] for label in labels]
+            fig = make_corner(
+                embd, 
+                label_name_list,
+                hist_bar=self.trainer.datamodule.noise_type,
+                contour_bins=50,
+                dpi=300,
+                return_fig=True,
+            )
 
             buf = BytesIO()
             fig.savefig(buf,format='jpg',dpi=200)

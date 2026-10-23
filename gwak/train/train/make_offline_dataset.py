@@ -6,28 +6,58 @@ from dataloader import SignalDataloader
 import torch
 
 from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
-from train.preselection import cwb_stats_2ifo, cwb_cc_rho_max_over_delay_2ifo
 from ml4gw.distributions import PowerLaw
 
-from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from trainer.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
 from pathlib import Path
 
 from tqdm import tqdm
+
 import random
 import h5py
 import os
 
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"   # only old GPU1 is visible as cuda:0
+from machinery import gwak_data_dir, gwak_dir
 DATA_DIR = Path(os.getenv("GWAK_DATA_DIR"))
 
-def main(ifos, num_samples_per_class, dataset,
-         flo=30.0, fhi=2048.0, sample_rate=4096.0, delay_scan=False, tau_max=0.010, n_tau=81,
-         cc_min=None, rho_min=None, scc_min=None, edr_max=None, preselection=False):
+def write_file(filename, signal_classes, data, labels, snrs, hrss):
+    with h5py.File(filename, "a") as f:
+        for label in np.unique(labels):
+            mask = labels == label
+            group = f.require_group(signal_classes[int(label) - 1])
+
+            for name, arr in [("data", data[mask]), ("snrs", snrs[mask]), ("hrss", hrss[mask])]:
+                if name not in group:
+                    group.create_dataset(name, data=arr, maxshape=(None, *arr.shape[1:]), chunks=True)
+                else:
+                    ds = group[name]
+                    n = ds.shape[0]
+                    ds.resize(n + len(arr), axis=0)
+                    ds[n:] = arr
+
+def main(
+    ifos,
+    num_samples_per_class,
+    dataset,
+    data_tag,
+    flo=30.0,
+    fhi=2048.0,
+    sample_rate=4096.0,
+    delay_scan=False,
+    tau_max=0.010,
+    n_tau=81,
+    cc_min=None,
+    rho_min=None,
+    scc_min=None,
+    edr_max=None,
+    preselection=False
+):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    _device = "cpu"
 
-    data_dir = DATA_DIR / f"BBC_AnalysisReady_Cat12/{ifos}/"
+    # data_tag = "O4_MDC_background-chunked"
+    data_dir = DATA_DIR / f"{data_tag}/{ifos}/"
     kernel_length = 1.0
     psd_length = 64
     fduration = 2
@@ -50,7 +80,8 @@ def main(ifos, num_samples_per_class, dataset,
         "WhiteNoiseBurst",
         "CCSN",
         "Background",
-        "Glitch"]
+        "Glitch"
+    ]
 
     priors = [
         SineGaussianBBC(),
@@ -65,13 +96,13 @@ def main(ifos, num_samples_per_class, dataset,
         None
     ]
     waveforms = [
-        SineGaussian(sample_rate=sample_rate, duration=duration),
-        IMRPhenomPv2(),
-        Gaussian(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate, duration=duration),
-        GenerateString(sample_rate=sample_rate, duration=duration),
-        WhiteNoiseBurst(sample_rate=sample_rate, duration=duration),
+        SineGaussian(sample_rate=sample_rate, duration=duration).to(_device),
+        IMRPhenomPv2().to(_device),
+        Gaussian(sample_rate=sample_rate, duration=duration).to(_device),
+        GenerateString(sample_rate=sample_rate, duration=duration).to(_device),
+        GenerateString(sample_rate=sample_rate, duration=duration).to(_device),
+        GenerateString(sample_rate=sample_rate, duration=duration).to(_device),
+        WhiteNoiseBurst(sample_rate=sample_rate, duration=duration).to(_device),
         None,
         None,
         None
@@ -96,66 +127,13 @@ def main(ifos, num_samples_per_class, dataset,
     num_samples = num_classes * num_samples_per_class
     batches_per_epoch = num_samples // batch_size + 1
 
-    def _passes_cuts(cls_name, cc, rho, scc, edr):
-        if (cc_min is not None and cc < cc_min):   return False
-        if (rho_min is not None and rho < rho_min): return False
-        if (scc_min is not None and scc < scc_min): return False
-        if (edr_max is not None and edr > edr_max): return False
-        return True
 
-    def write_file(filename, data, labels, snrs, hrss, ccs, rhos, sccs, edrs):
-        with h5py.File(filename, "a") as f:
-            uniq_labels = sorted(list(set(labels)))
-            for l in uniq_labels:
-                sig_name = signal_classes[int(l-1)]
-                indices = labels == l
-                class_data = data[indices]
-                class_snrs = snrs[indices]
-                class_hrss = hrss[indices]
-
-                # If stats are provided, slice them; otherwise keep as None
-                class_cc  = ccs[indices]  if ccs  is not None else None
-                class_rho = rhos[indices] if rhos is not None else None
-                class_scc = sccs[indices] if sccs is not None else None
-                class_edr = edrs[indices] if edrs is not None else None
-
-                if f"{sig_name}_data" in f.keys():
-                    # data
-                    f[f"{sig_name}_data"].resize(f[f"{sig_name}_data"].shape[0] + class_data.shape[0], axis=0)
-                    f[f"{sig_name}_data"][-class_data.shape[0]:] = class_data
-                    # snr
-                    f[f"{sig_name}_snrs"].resize(f[f"{sig_name}_snrs"].shape[0] + class_snrs.shape[0], axis=0)
-                    f[f"{sig_name}_snrs"][-class_snrs.shape[0]:] = class_snrs
-
-                    f[f"{sig_name}_hrss"].resize(f[f"{sig_name}_hrss"].shape[0] + class_hrss.shape[0], axis=0)
-                    f[f"{sig_name}_hrss"][-class_hrss.shape[0]:] = class_hrss
-
-                    # stats (only if provided)
-                    if class_cc is not None:
-                        for name, arr in [("cc", class_cc), ("rho", class_rho), ("scc", class_scc), ("edr", class_edr)]:
-                            ds = f[f"{sig_name}_{name}"]
-                            ds.resize(ds.shape[0] + arr.shape[0], axis=0)
-                            ds[-arr.shape[0]:] = arr
-                else:
-                    f.create_dataset(f"{sig_name}_data", data=class_data,
-                                        maxshape=(None,class_data.shape[1],class_data.shape[2]), chunks=True)
-                    f.create_dataset(f"{sig_name}_snrs", data=class_snrs,
-                                        maxshape=(None,), chunks=True)
-                    f.create_dataset(f"{sig_name}_hrss", data=class_hrss,
-                                        maxshape=(None,), chunks=True)
-
-                    # stats datasets (only if provided)
-                    if class_cc is not None:
-                        f.create_dataset(f"{sig_name}_cc",  data=class_cc,  maxshape=(None,), chunks=True)
-                        f.create_dataset(f"{sig_name}_rho", data=class_rho, maxshape=(None,), chunks=True)
-                        f.create_dataset(f"{sig_name}_scc", data=class_scc, maxshape=(None,), chunks=True)
-                        f.create_dataset(f"{sig_name}_edr", data=class_edr, maxshape=(None,), chunks=True)
-
-    sig_loader = SignalDataloader(signal_classes,
+    sig_loader = SignalDataloader(
+        signal_classes,
         priors,
         waveforms,
         extra_kwargs,
-        data_dir=data_dir,
+        data_tag=data_tag,
         sample_rate=sample_rate,
         kernel_length=kernel_length,
         psd_length=psd_length,
@@ -186,75 +164,26 @@ def main(ifos, num_samples_per_class, dataset,
     labels = []
     snrs = []
     hrsss = []
-    ccs  = []
-    rhos = []
-    sccs = []
-    edrs = []
 
     num_loaded = 0
     max_in_memory = 5_000
-
+    # breakpoint()
     for _ in tqdm(range(num_batches)):
         clean_batch, glitch_batch = next(data_iter)
         clean_batch = clean_batch.to(device)
         glitch_batch = glitch_batch.to(device)
-        batch, indexed_labels, snr, hrss = sig_loader.on_after_batch_transfer([clean_batch,glitch_batch], None, local_test=True)
+        batch, indexed_labels, snr, hrss = sig_loader.on_after_batch_transfer(
+            [clean_batch, glitch_batch],
+            None,
+            local_test=True
+        )
         # batch: (B, 2, T)
         batch_np = batch.cpu().numpy().astype(np.float32)
         labels_np = indexed_labels.cpu().numpy().astype(np.int32)
         snr_np = snr.cpu().numpy().astype(np.float32)
 
-        B = batch_np.shape[0]
-
-        if preselection:
-            # === compute stats per sample, apply cuts class-wise ===
-            cc_list, rho_list, scc_list, edr_list = [], [], [], []
-            keep = np.ones(B, dtype=bool)
-            for i in range(B):
-                h = batch_np[i, 0, :]
-                l = batch_np[i, 1, :]
-                if delay_scan:
-                    cc, rho, scc_v, edr = cwb_cc_rho_max_over_delay_2ifo(
-                        h, l, sample_rate, flo, fhi,
-                        max_tau=tau_max, n_tau=n_tau
-                    )
-                else:
-                    st = cwb_stats_2ifo(
-                        h, l, sample_rate, flo, fhi
-                    )
-                    cc, rho, scc_v, edr = st["cc"], st["rho"], st["scc"], st["edr"]
-                cc_list.append(cc); rho_list.append(rho); scc_list.append(scc_v); edr_list.append(edr)
-
-                cls_name = signal_classes[int(labels_np[i]-1)]
-                if not _passes_cuts(cls_name, cc, rho, scc_v, edr):
-                    keep[i] = False
-
-            cc_arr  = np.asarray(cc_list,  dtype=np.float32)
-            rho_arr = np.asarray(rho_list, dtype=np.float32)
-            scc_arr = np.asarray(scc_list, dtype=np.float32)
-            edr_arr = np.asarray(edr_list, dtype=np.float32)
-
-            # keep only passing samples
-            batch_np  = batch_np[keep]
-            labels_np = labels_np[keep]
-            snr_np    = snr_np[keep]
-            cc_arr    = cc_arr[keep]
-            rho_arr   = rho_arr[keep]
-            scc_arr   = scc_arr[keep]
-            edr_arr   = edr_arr[keep]
-
-            if batch_np.shape[0] == 0:
-                continue
-
-            # accumulate in RAM
-            ccs.append(cc_arr)
-            rhos.append(rho_arr)
-            sccs.append(scc_arr)
-            edrs.append(edr_arr)
-        else:
-            # No preselection: keep everything; do not compute or store stats
-            if batch_np.shape[0] == 0:
-                continue
+        if batch_np.shape[0] == 0:
+            continue
 
         data.append(batch_np)
         labels.append(labels_np)
@@ -262,26 +191,21 @@ def main(ifos, num_samples_per_class, dataset,
         hrsss.append(hrss.cpu().numpy().astype(np.float32))
 
         num_loaded += batch_np.shape[0]
+
         if num_loaded >= max_in_memory:
+
             data = np.concatenate(data, axis=0)
             labels = np.concatenate(labels, axis=0)
             snrs = np.concatenate(snrs, axis=0)
             hrsss = np.concatenate(hrsss, axis=0)
 
-            if preselection:
-                ccs_cat  = np.concatenate(ccs, axis=0)
-                rhos_cat = np.concatenate(rhos, axis=0)
-                sccs_cat = np.concatenate(sccs, axis=0)
-                edrs_cat = np.concatenate(edrs, axis=0)
-            else:
-                ccs_cat = rhos_cat = sccs_cat = edrs_cat = None
-
-            write_file(OUTFILE, data, labels, snrs, hrsss, ccs_cat, rhos_cat, sccs_cat, edrs_cat)
+            write_file(
+                OUTFILE, signal_classes, data, labels, snrs, hrsss,
+            )
 
             # clean up
             del data, labels, snrs
-            if preselection:
-                del ccs, rhos, sccs, edrs
+
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
@@ -298,24 +222,21 @@ def main(ifos, num_samples_per_class, dataset,
         snrs = np.concatenate(snrs, axis=0)
         hrsss = np.concatenate(hrsss, axis=0)
 
-        if preselection and len(ccs) > 0:
-            ccs_cat  = np.concatenate(ccs, axis=0)
-            rhos_cat = np.concatenate(rhos, axis=0)
-            sccs_cat = np.concatenate(sccs, axis=0)
-            edrs_cat = np.concatenate(edrs, axis=0)
-        else:
-            ccs_cat = rhos_cat = sccs_cat = edrs_cat = None
-
-        write_file(OUTFILE, data, labels, snrs, hrsss, ccs_cat, rhos_cat, sccs_cat, edrs_cat)
+        write_file(
+            OUTFILE, signal_classes, data, labels, snrs, hrsss,
+        )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Create offline dataset.')
     parser.add_argument('ifos', type=str, help='(HL,HV,LV)')
     parser.add_argument('num_samples', type=int, help='per class')
     parser.add_argument('dataset', type=str, help='(train,val,test)')
+    parser.add_argument('data_tag', type=str, help='(data_version)')
 
-    parser.add_argument('--preselection', action='store_true', default=False,
-                        help='If set, compute stats, apply cuts, and store cc/rho/scc/edr.')
+    parser.add_argument(
+        '--preselection', action='store_true', default=False,
+        help='If set, compute stats, apply cuts, and store cc/rho/scc/edr.'
+    )
 
     # === NEW: stats config & cuts (signals and background separately) ===
     parser.add_argument('--flo', type=float, default=30.0)
@@ -333,7 +254,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(
-        args.ifos, args.num_samples, args.dataset,
+        args.ifos, args.num_samples, args.dataset, args.data_tag,
         flo=args.flo, fhi=args.fhi, sample_rate=args.fs,
         delay_scan=args.delay_scan, tau_max=args.tau_max, n_tau=args.n_tau,
         cc_min=args.cc_min, rho_min=args.rho_min,

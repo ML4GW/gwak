@@ -7,7 +7,7 @@ GWAK_ROOT = Path(workflow.basedir).resolve()
 DEFAULT_CONFIG = GWAK_ROOT / "setups" / "config.yaml"
 LOCAL_SETUP_CONFIG_FILE = GWAK_ROOT / "setups" / "config.local.yaml"
 
-include: GWAK_ROOT / "setups/converter.smk"
+include: GWAK_ROOT / "setups/smk_keyword.smk"
 include: GWAK_ROOT / "setups/setup.smk"
 include: GWAK_ROOT / "gwak/data/data.smk"
 include: GWAK_ROOT / "gwak/train/train.smk"
@@ -18,23 +18,34 @@ include: GWAK_ROOT / "gwak/postselection/postselection.smk"
 ana_ver_list = [
     "O4b_gwak_cat12"
 ]
-data_ver_list = [
-    "O4b_cat1-chunked",
-    "O4b_cat12-katya"
-]
 ifos_list = ["HL"]
+data_ver_list = [
+    "pseudo",
+    # "O4b_cat1-chunked",
+    # "O4b_cat1-loud_glitch",
+    # "O4b_cat12-katya"
+]
 cl_config_list = [
-    "ResNet_6d",
+    # "ResNet_6d",
+    # "ResNet_6d_split",
+    "ResNet_6d_narrow_band",
+    # "ResNet_6d.test",
 ]
 coh_mode_list = [
-    # "real",
+    "real",
     # "real_imag",
-    "abs"
+    # "abs",
+    # "random",
+    # "random2",
+    # "half",
+    "corr15",
+    "corr21",
 ]
 fm_config_list = [
     "NF_from_file",
+    # "NF_from_file.test",
 ]
-noise_run_list = ["one_month"]
+noise_run_list = ["one_year"]
 foreground_run_list = [
     "bbc-short-0", "bbc-short-1"
 ]
@@ -42,20 +53,37 @@ run_name_list = noise_run_list + foreground_run_list
 
 rule gwak_init:
     input: rules.bootstrap_complete.output
+    shell:
+        """
+        echo "Get scitoken..."
+        echo " "
+        echo "    Check if any window pops up automatically."
+        echo " "
+        htgettoken -a vault.ligo.org -i igwn
+        """
 
 rule build_containers:
-    input: rules.build_deploy_containers.output
+    input: 
+        expand(rules.build_project_container.output,
+            project_name=[
+                # "data",
+                "train",
+                "deploy"
+            ]
+        )
 
 rule pull_all:
     input:
-        expand(rules.pull_data.output,
+        expand(rules.pull_data_from_segments.output,
             segment_type=[
-                'short-0.o4b-2', 
-                'short-1.o4b-2', 
-                'short-0.o4b-0', 
-                'short-1.o4b-0'
+                "o4.strain",
+                # 'o4b.bbc-background-2',
+                # 'o4b.short-0-2', 
+                # 'o4b.short-1-2', 
+                # 'o4b.short-0-0', 
+                # 'o4b.short-1-0'
             ],
-            ifos=['hl', 'hv', 'lv', 'hlv']
+            ifos=ifos_list
         )
 
 rule train_all:
@@ -64,6 +92,17 @@ rule train_all:
             rules.combine_models.output,
             data_ver=data_ver_list,
             ifo_mode=ifos_list,
+            cl_config=cl_config_list,
+            coh_mode=coh_mode_list,
+            fm_config=fm_config_list,
+        )
+
+rule condor_train_all:
+    input:
+        expand(
+            rules.condor_train_rules.output,
+            ifo_mode=ifos_list,
+            data_ver=data_ver_list,
             cl_config=cl_config_list,
             coh_mode=coh_mode_list,
             fm_config=fm_config_list,
@@ -85,7 +124,9 @@ rule scan_all:
 rule benchmark:
     input:
         expand(
-            rules.scan_outlier.output + rules.find_outlier_segs.output + rules.plot_bbc_benchmark.output,
+            rules.scan_outlier.output \
+            + rules.find_outlier_segs.output \
+            + rules.plot_bbc_benchmark.output,
             ifo_mode=ifos_list,
             ana_ver=ana_ver_list,
             data_ver=data_ver_list,
@@ -94,4 +135,14 @@ rule benchmark:
             fm_config=fm_config_list,
             noise_run=noise_run_list,
             run_name=run_name_list,
+        )
+
+rule save_all_embd: 
+    input:
+        expand(
+            rules.make_signal_embeddings.output,
+            ifo_mode=ifos_list,
+            data_ver=data_ver_list,
+            cl_config=cl_config_list,
+            coh_mode=coh_mode_list
         )

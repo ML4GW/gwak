@@ -3,9 +3,7 @@ import re
 import subprocess
 
 import gwdatafind.utils
-import torch
 import time
-from torch.nn import functional as F 
 import math
 import h5py
 import shutil
@@ -35,6 +33,13 @@ glitch_keys = [
 ]
 
 
+def run_omicron_bash_file(bash_file):
+
+    subprocess.run(
+        ["bash", f"{bash_file}"], 
+        cwd=PYOMICRON_PATH, 
+    )
+
 ########################
 ### File level utils ###
 ########################
@@ -44,7 +49,7 @@ def get_conincident_segs(
     start:int,
     stop:int,
     state_flag:list,
-    host:str="datafind.ldas.cit:80"
+    # host:str="datafind.ldas.cit:80"
 ):
 
     query_flag = []
@@ -55,7 +60,8 @@ def get_conincident_segs(
         query_flag,
         start,
         stop,
-        host=host,
+        # host=host,
+        host="https://segments.igwn.org",
     )
     segs = []
 
@@ -108,7 +114,9 @@ def get_background(
     verbose:bool=True,
     host:str="datafind.ldas.cit:80"
 ): 
-    
+    urltype = "file"
+    if host == "datafind.igwn.org":
+        urltype = "osdf"
     strains = {}
     print(f"Fetching data from {host}")
     logging.info(f"Collecting strain data from {seg_start} to {seg_end} at {channels}")
@@ -120,7 +128,7 @@ def get_background(
                 frametype=f"{frame_type[num]}",
                 gpsstart=seg_start,
                 gpsend=seg_end,
-                urltype="file",
+                urltype=urltype,
                 host=host,
             )
 
@@ -131,20 +139,23 @@ def get_background(
                 frametype=f"{ifo}_{frame_type[num]}",
                 gpsstart=seg_start,
                 gpsend=seg_end,
-                urltype="file",
+                urltype=urltype,
                 host=host,
             )
-
+        
         print(f"Found {len(files)} files for {ifo}")
         if len(files) == 0:
             raise ValueError(f"No files found for {ifo} between {seg_start} and {seg_end}")
 
         print(f"Reading strain data betweeen {seg_start} and {seg_end}.")
+        print(files)
+        breakpoint()
         strains[ifo] = TimeSeries.read(
             files, 
             f"{ifo}:{channels[num]}", 
             start=seg_start, 
             end=seg_end, 
+            format="gwf",
             nproc=8, 
             verbose=verbose
         ).resample(sample_rate).value

@@ -1,0 +1,65 @@
+Bootstrap: docker
+From: ghcr.io/astral-sh/uv:0.6.11-python3.11-bookworm-slim
+
+%setup
+    for project in gwak/train ml4gw hermes libs; do
+        mkdir -p "${APPTAINER_ROOTFS}/opt/gwak/${project}"
+
+        rsync -a \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude '.pytest_cache' \
+            --exclude '.git' \
+            --exclude '*.pyc' \
+            "$GWAK_ROOT/${project}/" \
+            "${APPTAINER_ROOTFS}/opt/gwak/${project}/"
+    done
+
+%files
+    $GWAK_ROOT/setups /opt/gwak/setups
+    $GWAK_ROOT/Snakefile /opt/gwak/Snakefile
+    $GWAK_ROOT/gwak-dlc/ /opt/gwak/
+    $GWAK_ROOT/gwak/data/data.smk /opt/gwak/gwak/data/data.smk
+    $GWAK_ROOT/gwak/data/configs/ccsn.yaml /opt/gwak/gwak/data/configs/ccsn.yaml
+    $GWAK_ROOT/gwak/deploy/deploy.smk /opt/gwak/gwak/deploy/deploy.smk
+    $GWAK_ROOT/gwak/postselection/postselection.smk /opt/gwak/gwak/postselection/postselection.smk
+
+%post
+    apt-get update
+    apt-get install -y build-essential wget
+    apt-get clean
+    # Install Pelican
+    mkdir -p /opt/bin
+    wget -O - "https://dl.pelicanplatform.org/7.26.3/pelican_$(uname -s)_$(uname -m).tar.gz" | tar zx -C /opt/bin/ --strip-components=1
+    # Install Snakemake
+    export UV_TOOL_DIR=/opt/uv-tools
+    export UV_TOOL_BIN_DIR=/opt/bin
+    export PATH="/opt/bin:$PATH"
+
+    uv tool install snakemake
+
+    # Install GWAK environment
+    export UV_PROJECT_ENVIRONMENT=/opt/env
+    cd /opt/gwak/gwak/train
+    uv sync --frozen --no-dev
+
+%environment
+    # Append venv dir to PATH so the 
+    # environment is active by default
+    export UV_TOOL_DIR=/opt/uv-tools
+    export UV_TOOL_BIN_DIR=/opt/bin
+    export UV_PROJECT_ENVIRONMENT=/opt/env
+    export PATH="/opt/bin:/opt/env/bin:$PATH"
+    
+    export GWAK_ROOT=/opt/gwak
+
+    export GWAK_LOG_DIR=/production/logs
+    export GWAK_DATA_DIR=/production/data
+    export GWAK_OUTPUT_DIR=/production/output
+
+
+%runscript
+    echo "Environment Check!"
+    echo "    GWAK_LOG_DIR: $GWAK_LOG_DIR"
+    echo "    GWAK_DATA_DIR: $GWAK_DATA_DIR"
+    echo "    GWAK_OUTPUT_DIR: $GWAK_OUTPUT_DIR"

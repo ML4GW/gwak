@@ -7,8 +7,8 @@ import numpy as np
 
 from pathlib import Path
 from pyrate_limiter import Duration, Rate, Limiter
-from libs.time_slides import segments_from_paths, get_num_shifts_from_Tb
-from deploy.libs.infer_utils import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
+from infer_modules.time_slides import segments_from_paths, get_num_shifts_from_Tb
+from infer_modules import load_h5_as_dict, get_hp_hc_from_q2ij, on_grid_pol_to_sim, padding
 
 from ml4gw import gw
 from ml4gw.transforms import SnrRescaler
@@ -86,17 +86,16 @@ class Sequence:
 
         self.size = len(self.strain_dict[ifo])
 
-        self._started = {"state": False}
-        self._done = {"state": False}
-        result_size = len(self) * self.stride_batch_size
-        self._sequences = {"result": np.zeros(result_size)}
-
         # self._started = {"state": False}
         # self._done = {"state": False}
-        # result_size = (len(self) * self.stride_batch_size,)
-        # print(f"{result_size = }")
+        # result_size = len(self) * self.stride_batch_size
         # self._sequences = {"result": np.zeros(result_size)}
-        # # self.limiter = Limiter(Rate(50, Duration.SECOND))
+
+        self._started = {"state": False}
+        self._done = {"state": False}
+        result_size = (len(self) * self.stride_batch_size, dim_sum)
+        self._sequences = {"result": np.zeros(result_size)}
+        # self.limiter = Limiter(Rate(50, Duration.SECOND))
 
     @property
     def started(self):
@@ -173,13 +172,13 @@ class Sequence:
     def __call__(self, y, request_id, sequence_id):
         # insert the response at the appropriate
         # spot in the corresponding output array
-        start = request_id * self.stride_batch_size
-        stop = (request_id + 1) * self.stride_batch_size
-        self._sequences["result"][start:stop] = y
-
         # start = request_id * self.stride_batch_size
         # stop = (request_id + 1) * self.stride_batch_size
-        # self._sequences["result"][start:stop, :] = y
+        # self._sequences["result"][start:stop] = y
+
+        start = request_id * self.stride_batch_size
+        stop = (request_id + 1) * self.stride_batch_size
+        self._sequences["result"][start:stop, :] = y
 
         # indicate that the first response for
         # this sequence has returned, and possibly

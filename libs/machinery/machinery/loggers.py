@@ -38,6 +38,7 @@ def gwak_logger(
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("onnxscript").setLevel(logging.WARNING)
     logging.getLogger("onnx_ir").setLevel(logging.WARNING)
+    logging.getLogger("fsspec.pelican").setLevel(logging.WARNING)
     # logging.getLogger("torch.onnx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
@@ -198,6 +199,18 @@ class gwak_image_dir(Pathfinder):
         super().__init__(
             dir_var="GWAK_IMAGE_DIR",
             path_function_name="image directory",
+            suffix=suffix
+        )
+
+class gwak_container_output_dir(Pathfinder):
+
+    def __init__(
+        self,
+        suffix: Optional[str]=None,
+    ):
+        super().__init__(
+            dir_var="CONTAINER_OUTPUT_DIR",
+            path_function_name="container output directory",
             suffix=suffix
         )
 

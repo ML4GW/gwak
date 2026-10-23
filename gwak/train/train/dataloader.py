@@ -1,5 +1,4 @@
 import h5py
-import yaml
 import logging
 import argparse
 import numpy as np
@@ -24,8 +23,7 @@ from torch.distributions.uniform import Uniform
 from torch.distributions import TransformedDistribution, Distribution
 from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 from ml4gw.waveforms import GenerateString
-import data
-from data.prior import FakeGlitchPrior
+from trainer.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
@@ -37,7 +35,9 @@ import time
 from typing import Union
 
 from scipy import signal
-from transforms import TorchBandpassFIR, hrrs_value
+from transforms import TorchBandpassFIR, hrrs_value, CCSN_Injector, load_h5_as_dict
+from machinery.loggers import gwak_logger, Pathfinder
+from machinery import gwak_data_dir, gwak_dir
 
 def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
     coeffs = []
@@ -155,8 +155,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
         bandpass = TorchBandpassFIR(
-            lowcut=30,
-            highcut=2047,
+            highpass=30,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
 
@@ -342,7 +342,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def __init__(
         self,
-        data_dir: Path,
+        data_tag: str,
         sample_rate: int,
         kernel_length: float, # how many data points
         psd_length: int, # for whitening
@@ -357,6 +357,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         remake_cache: bool = False, # whether to remake the glitch cache file for the h5s
     ):
         super().__init__()
+        data_dir = gwak_data_dir(suffix=f"{ifos}/{data_tag}")()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
         self.sample_rate = sample_rate
         self.kernel_length = kernel_length
@@ -396,9 +397,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
         }
 
         bandpass = TorchBandpassFIR(
-                    lowcut=30,
-                    highcut=2047,
-                    sample_rate=self.sample_rate
+            highpass=30,
+            lowpass=2047,
+            sample_rate=self.sample_rate
         )
 
         whitener = Whiten(
@@ -581,14 +582,26 @@ class SignalDataloader(GwakBaseDataloader):
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         whiten: bool = True,   # make whitening optional
+        ccsn_on_gpu: bool = False, # simulate CCSN on the GPU instead of with numpy
         **kwargs
     ):
+
+        for name, value in {
+            "signal_classes": signal_classes,
+            "waveforms": waveforms,
+            "priors": priors,
+            "extra_kwargs": extra_kwargs,
+        }.items():
+            if not isinstance(value, list):
+                raise TypeError(
+                    f"{name} must be a list, got {type(value).__name__}"
+                )
         super().__init__(*args, **kwargs)
-        self.signal_classes = signal_classes if type(signal_classes) == list else [signal_classes]
         self.num_classes = len(signal_classes)
-        self.waveforms = waveforms if type(waveforms) == list else [waveforms]
-        self.priors = priors if type(priors) == list else [priors]
-        self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
+        self.signal_classes = signal_classes
+        self.waveforms = waveforms
+        self.priors = priors
+        self.extra_kwargs = extra_kwargs
         self.loader_mode = loader_mode
         self.anneal_snr = anneal_snr
         self.snr_init_factor = snr_init_factor
@@ -597,6 +610,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.cache_dir = cache_dir
         self.rebalance_classes = rebalance_classes
         self.do_whiten = whiten
+        self.ccsn_on_gpu = ccsn_on_gpu
+        if ccsn_on_gpu and not torch.cuda.is_available():
+            raise RuntimeError("ccsn_on_gpu is set but CUDA is not available")
         self.num_workers = kwargs["num_workers"]
 
         self.all_signal_labels = {
@@ -609,9 +625,12 @@ class SignalDataloader(GwakBaseDataloader):
             "WhiteNoiseBurst":5,
             "CCSN":6,
             "Background":7,
-            "Glitch":7,
-            "FakeGlitch":8,
-            "MultiSineGaussian":9
+            # "Glitch":7,
+            # "FakeGlitch":8,
+            # "MultiSineGaussian":9
+            "Glitch":8,
+            "FakeGlitch":9,
+            "MultiSineGaussian":10
         }
         self.all_signal_label_names = {
             1:"SineGaussian",
@@ -620,11 +639,16 @@ class SignalDataloader(GwakBaseDataloader):
             4:"Strings (Cusp/Kink/2Kink)",
             5:"WhiteNoiseBurst",
             6:"CCSN",
-            7:"Bkg/Glitch",
-            8:"FakeGlitch",
-            9:"MultiSineGaussian"
+            # 7:"Bkg/Glitch",
+            # 8:"FakeGlitch",
+            # 9:"MultiSineGaussian"
+            7: "Background",
+            8: "Glitch",
+            9: "FakeGlitch",
+            10: "MultiSineGaussian"
         }
-
+        # self.noise_type = ["Bkg/Glitch"]
+        self.noise_type = ["Glitch", "Background"]
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
@@ -638,12 +662,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.phic_prior = Uniform(0, 2 * torch.pi)
 
         # CCSN second-derivitive waveform data if using
-        file_path = Path(__file__).resolve()
-        # To Do: Change this to absolute path, and perhaps 
-        # make a wapper function to contorl the input yaml and data source
         self.ccsn_dict = load_h5_as_dict(
-            chosen_signals=file_path.parents[2] / "data/configs/ccsn.yaml",
-            source_file=Path(file_path.parents[3] / "gwak-dlc/Resampled/")
+            chosen_signals=gwak_dir(suffix="gwak/data/configs")("ccsn.yaml"),
+            source_file=gwak_dir(suffix="gwak-dlc")("Resampled"),
         )
         self.generate_waveforms_ccsn = CCSN_Injector(
             ifos=self.ifos,
@@ -661,7 +682,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # new computation for when several classes have the same label (e.g. merging strings)
         if self.rebalance_classes:
-            uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
+            uniq, counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
             frac_per_label = 1.0/len(uniq)
             counts_per_label = {}
             for label,ct in zip(uniq,counts):
@@ -678,13 +699,6 @@ class SignalDataloader(GwakBaseDataloader):
                     for i in range(deficit):
                         self.num_per_class[i] += 1
 
-        # save correspondence between numerical labels and signal names
-        # convention is label 1 = first signal, label 2 = second signal, etc.
-        #class_labels = [i+1 for i in range(self.num_classes)]
-        #if self.data_saving_file is not None:
-        #    self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
-        #    self.data_group["class_label_names"] = self.signal_classes
-
         # make a list of signals we can use for "fake" glitch generation
         # i.e. where we populate one ifo with a signal and the other with nothing
         # use only signals for which waveforms/priors are easy
@@ -696,8 +710,8 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_prior = snr_prior
         highpass = 30
         bandpass = TorchBandpassFIR(
-            lowcut=highpass,
-            highcut=2047,
+            highpass=highpass,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
         rescaler = SnrRescaler_Online(
@@ -752,14 +766,14 @@ class SignalDataloader(GwakBaseDataloader):
             coincident=False,
             mode=self.loader_mode
         )
+
+        train_glitch_dataset = None
         if self.has_glitch:
             train_glitch_dataset = self.make_dataset(
                 self.train_fnames,
                 coincident=True,
                 mode="glitch"
             )
-        else:
-            train_glitch_dataset = None
 
         train_paired_dataset = CleanGlitchPairedDataset(
             train_clean_dataset,
@@ -767,8 +781,8 @@ class SignalDataloader(GwakBaseDataloader):
         )
 
         return torch.utils.data.DataLoader(
-            train_paired_dataset, 
-            batch_size=None, 
+            train_paired_dataset,
+            batch_size=None,
             num_workers=self.num_workers,
         )
 
@@ -778,16 +792,23 @@ class SignalDataloader(GwakBaseDataloader):
             coincident=False,
             mode=self.loader_mode
         )
+
+        val_glitch_dataset = None
         if self.has_glitch:
             val_glitch_dataset = self.make_dataset(
                 self.val_fnames,
                 coincident=True,
                 mode="glitch"
             )
-        else:
-            val_glitch_dataset = None
-        val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset, val_glitch_dataset)
-        return torch.utils.data.DataLoader(val_paired_dataset, batch_size=None)
+            
+        val_paired_dataset = CleanGlitchPairedDataset(
+            val_clean_dataset,
+            val_glitch_dataset
+        )
+        return torch.utils.data.DataLoader(
+            val_paired_dataset,
+            batch_size=None
+        )
 
     def test_dataloader(self):
         test_clean_dataset = self.make_dataset(
@@ -827,8 +848,11 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             elif signal_class == "CCSN":
+                # the current device, so it also works when each process uses its own GPU
+                device = torch.device("cuda", torch.cuda.current_device()) if self.ccsn_on_gpu else None
                 responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
-                    total_counts=self.num_per_class[i]
+                    total_counts=self.num_per_class[i],
+                    device=device,
                 )
                 params, ra = None, None
             elif signal_class in ["Background", "Glitch"]:
@@ -949,7 +973,7 @@ class SignalDataloader(GwakBaseDataloader):
 
             snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
             # if waveforms is not None:
-            if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
+            if waveform_class not in ["Background", "Glitch", "FakeGlitch"]:
                 snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
 
             if waveform_class in ["Background", "Glitch", "FakeGlitch"]:
@@ -1041,7 +1065,6 @@ class SignalDataloader(GwakBaseDataloader):
         hrss_raw = torch.tensor(hrss_raw, device=snr_scaling.device, dtype=snr_scaling.dtype)
         hrss = hrss_raw * snr_scaling
         return batch, snrs, hrss
-
 
     def on_after_batch_transfer(self, batch, dataloader_idx, local_test=False):
 
@@ -1309,194 +1332,6 @@ def generate_waveforms_bbh(
 
     return responses, parameters, ra, dec, parameters['phic'], hrss
 
-
-def load_h5_as_dict(
-    chosen_signals: Path,
-    source_file: Path
-)-> dict:
-    """Open up a buffer to load in different CCSN wavefroms.
-
-    Args:
-        chosen_signals (Path): A file with names of each wavefrom.
-        source_file (Path): The path that contains reasmpled raw waveform.
-
-    Returns:
-        dict: Time and resampled SQDM of Each waveform
-    """
-    with open(chosen_signals) as f:
-        selected_ccsn = yaml.load(f, Loader=yaml.SafeLoader)
-
-    source_file = Path(source_file)
-
-    grand_dict = {}
-    ccsn_list = []
-
-    for key in selected_ccsn.keys():
-
-        for name in selected_ccsn[key]:
-            ccsn_list.append(f"{key}/{name}")
-
-    for name in ccsn_list:
-
-        with h5py.File(source_file/ f'{name}.h5', 'r', locking=False) as h:
-
-            time = np.array(h['time'][:])
-            quad_moment = h['quad_moment'][:]
-
-        grand_dict[name] =  [time, quad_moment]
-
-    return grand_dict
-
-def get_hp_hc_from_q2ij(
-    q2ij,
-    theta: np.ndarray,
-    phi: np.ndarray
-):
-
-    '''
-    The orientation of GW emition is given by theta, phi
-    '''
-
-    hp =\
-        q2ij[:,0,0]*(np.cos(theta)**2*np.cos(phi)**2 - np.sin(phi)**2).reshape(-1, 1)\
-        + q2ij[:,1,1]*(np.cos(theta)**2*np.sin(phi)**2 - np.cos(phi)**2).reshape(-1, 1)\
-        + q2ij[:,2,2]*(np.sin(theta)**2).reshape(-1, 1)\
-        + q2ij[:,0,1]*(np.cos(theta)**2*np.sin(2*phi) - np.sin(2*phi)).reshape(-1, 1)\
-        - q2ij[:,1,2]*(np.sin(2*theta)*np.sin(phi)).reshape(-1, 1)\
-        - q2ij[:,2,0]*(np.sin(2*theta)*np.cos(phi)).reshape(-1, 1)
-
-    hc = 2*(
-        - q2ij[:,0,0]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,1,1]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,0,1]*(np.cos(theta)*np.cos(2*phi)).reshape(-1, 1)
-        - q2ij[:,1,2]*(np.sin(theta)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,2,0]*(np.sin(theta)*np.sin(phi)).reshape(-1, 1)
-    )
-
-    return hp, hc
-
-def padding(
-    time,
-    hp,
-    hc,
-    distance,
-    sample_kernel = 3,
-    sample_rate = 4096,
-    time_shift = -0.15, # shift zero to distination time
-):
-
-    # Two polarization
-    signal = np.zeros([hp.shape[0], 2, int(sample_kernel * sample_rate)])
-
-    half_kernel_idx = int(sample_kernel * sample_rate/2)
-    time_shift_idx = int(time_shift * sample_rate)
-    t0_idx = int(time[0] * sample_rate)
-
-    start = half_kernel_idx + t0_idx + time_shift_idx
-    end = half_kernel_idx + t0_idx + time.shape[0] + time_shift_idx
-
-    signal[:, 0, start:end] = hp / distance.reshape(-1, 1)
-    signal[:, 1, start:end] = hc / distance.reshape(-1, 1)
-
-    return signal
-
-from ml4gw import gw
-from ml4gw.distributions import PowerLaw
-from ml4gw.transforms import SnrRescaler
-class CCSN_Injector:
-
-    def __init__(
-        self,
-        ifos,
-        signals_dict,
-        sample_rate,
-        sample_duration,
-        buffer_duration = 4,
-        off_set = 0.0,
-        time_shift = -0.15
-    ):
-
-        self.tensors, self.vertices = gw.get_ifo_geometry(*ifos)
-
-        self.signals = signals_dict
-        self.ccsn_list = list(self.signals.keys())
-
-        self.sample_rate = sample_rate
-        self.sample_duration = sample_duration
-        self.buffer_duration = buffer_duration
-        self.off_set = off_set
-        self.time_shift = time_shift
-        self.kernel_length = int(sample_duration * sample_rate)
-        self.buffer_length = int(buffer_duration * sample_rate)
-        self.max_center_offset = int((buffer_duration/2 - sample_duration - off_set) * sample_rate)
-
-        if off_set <= -time_shift:
-
-            logging.info(f"Core bounce siganl may leak out of sample kernel by {-time_shift - off_set}")
-
-    def __call__(
-        self,
-        total_counts # batch_size
-    ):
-
-        ccsn_num = len(self.ccsn_list)
-        ccsn_sample = np.random.choice(ccsn_num, total_counts)
-        ccsn_counts = np.eye(ccsn_num)[ccsn_sample].sum(0).astype("int")
-        X = torch.empty((total_counts, 2, self.buffer_length))
-        ccsne_agg_count = 0
-
-        for name, count in zip(self.ccsn_list, ccsn_counts):
-
-            time = self.signals[name][0]
-            quad_moment = torch.Tensor(self.signals[name][1]) * 10
-
-            theta = torch.Tensor(np.random.uniform(0, np.pi, count))
-            phi = torch.Tensor(np.random.uniform(0, 2*np.pi, count))
-
-            hp, hc = get_hp_hc_from_q2ij(
-                quad_moment,
-                theta=theta,
-                phi=phi
-            )
-
-            hp_hc = padding(
-                time,
-                hp,
-                hc,
-                np.random.uniform(1, 10, count),
-                sample_kernel = self.buffer_duration,
-                sample_rate = self.sample_rate,
-                time_shift = self.time_shift, # Core-bounce will be at here
-            )
-
-            X[ccsne_agg_count:ccsne_agg_count+count, :, :] = torch.Tensor(hp_hc)
-
-
-            ccsne_agg_count += count
-        # X = X[:, :, 2048:-2048]
-        dec_distro = Cosine()
-        psi_distro = Uniform(0, np.pi)
-        phi_distro = Uniform(0, 2 * np.pi)
-
-        dec = dec_distro.rsample(total_counts)
-        psi = psi_distro.sample((total_counts,))
-        phi = phi_distro.sample((total_counts,))
-
-        ht = gw.compute_observed_strain(
-            dec,
-            psi,
-            phi,
-            detector_tensors=self.tensors,
-            detector_vertices=self.vertices,
-            sample_rate=self.sample_rate,
-            plus=X[:,0,:],
-            cross=X[:,1,:]
-        )
-
-        ht = ht.to('cuda') if torch.cuda.is_available() else ht
-        hrss = hrrs_value(X[:,0,:], X[:,1,:])
-
-        return ht, dec, phi, hrss
 
 from ml4gw.waveforms import MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 class FakeGlitchWaveform:

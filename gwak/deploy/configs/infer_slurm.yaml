@@ -1,47 +1,51 @@
-# The configuration values defined here will override corresponding entries in export.yaml.
 slurm_batch: 5
 # Slurm arguments
 slurm_kwargs:
   job-name: null
   output: null
   error: null
-  partition: milan # Sever dependent
+  partition: gpu_requeue # Sever dependent
   nodes: 1
   tmp: 10G
   gpu_card: null
   gpu_per_node: 1 
-  cpus-per-task: 4
+  # Triton 23.01 (CUDA 12.0) cannot JIT for Blackwell (sm_120), keep to cc <= 9.0
+  constraint: "cc8.0|cc8.6|cc9.0" # Sever dependent # This can be arbsorbed by the gpu_card/gpu_per_node setting
+  cpus-per-task: 16
   mem: 64G
-  time: 0-02:00:00
+  time: 0-03:00:00
 
-  cmd: # null
-    - module load apptainer # Sever dependent
+  cmd: 
+    # - module load apptainer # Sever dependent
   deploy_cmd:
     export: 
-      - poetry run python deploy/cli.py export
+      - uv run python deploy/cli.py export
     infer:
-      - poetry run python deploy/cli.py infer
-
+      - uv run python deploy/cli.py infer
 run_name: null
-# Data arguments
-ifos: ["H1", "L1"]
-Tb: 31557600 # Tb = 0 will run zero-lag
-fname: /fred/oz016/Andy/Data/gwak/HL # Sever dependent
-psd_length: 64
-stride_batch_size: 256
-sample_rate: 4096
-shifts: [0, 1]
+ifos: ["H1", "L1"] # export overwrite
+psd_length: 64 # export overwrite
+Tb: 0
+stride_batch_size: 256 # export overwrite
+sample_rate: 4096 # export overwrite
+fname:
+  class_path: gwak_data_dir
+ana_data: BBC_AnalysisReady_Cat12
 data_format: h5 # gwf
-inference_sampling_rate: 4
-
-# Triton and Model arguments
-result_dir: /fred/oz016/Andy/Output/gwak-bbc/
+shifts: [0, 1]
 project: combination
 grpc_port: 8001
-image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent
-job_rate_limit: 4
-patients: 30
-cl_config: null
-fm_config: null
+image: hermes/tritonserver:23.01
+# image: /fred/oz016/Andy/tritonserver_23.01.sif # Sever dependent
 model_repo_dir: null
-singularity_path: /apps/system/software/apptainer/latest/bin/apptainer # Sever dependent
+result_dir: null
+patients: 600 # Max seconds to wait for Triton to load models
+job_rate_limit: 4
+inference_rate: 4 # export overwrite
+singularity_path: null
+# singularity_path: /apps/system/software/apptainer/latest/bin/apptainer # Sever dependent
+ana_ver: O4b_cat1
+data_ver: O4b_cat1
+cl_config: null
+coh_mode: null
+fm_config: null

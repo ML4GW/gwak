@@ -1,3 +1,4 @@
+import os
 import json
 import shlex
 from copy import deepcopy
@@ -64,7 +65,6 @@ PATH_DEFAULTS = {
     "GWAK_LOG_DIR": lambda paths: paths["GWAK_OUTPUT_DIR"],
     "GWAK_BBC_SHORT_0_DATA_DIR": lambda paths: paths["GWAK_DATA_DIR"] / "O4_MDC_short-0",
     "GWAK_BBC_SHORT_1_DATA_DIR": lambda paths: paths["GWAK_DATA_DIR"] / "O4_MDC_short-1",
-    "GWAK_BENCHMAKR_DIR": lambda paths: Path.home() / "Outputs" / "GWAK" / "gwak-internal-benchmark", # The future output dir
     "IMAGE_DIR": lambda paths: Path.home() / "Container" / "GWAK",
     "CONTAINER_OUTPUT_DIR": lambda paths: Path.home() / "Container" / "GWAK",
 }
@@ -119,13 +119,11 @@ LOUVRE_DIR                = Path(GWAK_PATHS["GWAK_LOUVRE_DIR"])
 LOG_DIR                   = Path(GWAK_PATHS["GWAK_LOG_DIR"])
 BBC_SHORT_0_DATA_DIR      = Path(GWAK_PATHS["GWAK_BBC_SHORT_0_DATA_DIR"])
 BBC_SHORT_1_DATA_DIR      = Path(GWAK_PATHS["GWAK_BBC_SHORT_1_DATA_DIR"])
-BENCHMAKR_DIR             = Path(GWAK_PATHS["GWAK_BENCHMAKR_DIR"])
 IMAGE_DIR                 = Path(GWAK_PATHS["IMAGE_DIR"])
 CONTAINER_OUTPUT_DIR      = Path(GWAK_PATHS["CONTAINER_OUTPUT_DIR"])
 CONDA_ENV_NAME = config.get("conda_env_name", "gwak-data")
 
 # Make file
-BENCHMAKR_DIR.mkdir(parents=True, exist_ok=True)
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 localrules:
@@ -133,6 +131,20 @@ localrules:
     bootstrap_paths,
     bootstrap_conda_data_env,
     bootstrap_complete
+
+rule get_token:
+    shell:
+        """
+        echo " "
+        echo " "
+        echo "Get scitoken..."
+        echo " "
+        echo "    Check if any window pops up automatically."
+        echo " "
+        htgettoken -a vault.ligo.org -i igwn
+        echo " "
+        echo " "
+        """
 
 rule bootstrap_submodules:
     output:
@@ -247,15 +259,47 @@ rule gwak_info:
 
         print("=" * 80)
 
-rule build_deploy_containers:
-    input:
-        deploy_container = GWAK_ROOT / "gwak/deploy/deploy.def"
+wildcard_constraints:
+    project_name = '|'.join([x for x in projects]),
+
+# The current requires $USER to the same with LDAS account name
+rule pull_triton_container:
     output:
-        deploy_image =  IMAGE_DIR / "deploy.sif"
+        image = CONTAINER_OUTPUT_DIR / "triton_image/tritonserver_25.06.sif"
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
-        processors = "--mksquashfs-args '-processors 32'"
+        osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/triton_image"
     shell:
-        "source {params.gwak_env}; set -x; \
+        """
+        htgettoken -a vault.ligo.org -i igwn
+
+        apptainer pull {output.image} \
+        docker://nvcr.io/nvidia/tritonserver:25.06-py3
+
+        pelican object put {output.image} \
+            {params.osdf_endpoint}/tritonserver_25.06.sif
+        """
+
+rule build_project_container:
+    input:
+        deploy_container = GWAK_ROOT / "gwak/{project_name}/{project_name}.def"
+    output:
+        deploy_image =  IMAGE_DIR / "{project_name}.sif"
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        processors = "--mksquashfs-args '-processors 64'",
+        osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/images"
+    shell:
+        """
+        htgettoken -a vault.ligo.org -i igwn
+
+        source {params.gwak_env}
+        set -x
+
         apptainer build {params.processors} \
-        {output.deploy_image} {input.deploy_container}"
+            {output.deploy_image} {input.deploy_container}
+
+        pelican object put \
+            {output.deploy_image} \
+            {params.osdf_endpoint}/{wildcards.project_name}/image_$(date +%s).sif
+        """
