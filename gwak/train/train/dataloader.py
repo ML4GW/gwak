@@ -647,8 +647,12 @@ class SignalDataloader(GwakBaseDataloader):
             9: "FakeGlitch",
             10: "MultiSineGaussian"
         }
-        # self.noise_type = ["Bkg/Glitch"]
-        self.noise_type = ["Glitch", "Background"]
+
+        self.noise_type = []
+        noise_type = ["Bkg/Glitch", "Glitch", "Background"]
+        for _sig_cls in self.signal_classes:
+            if _sig_cls in noise_type:
+                self.noise_type.append(_sig_cls)
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)

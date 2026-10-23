@@ -5,6 +5,7 @@ cl_configs = [
     "ResNet_6d",
     "ResNet_6d_split",
     "ResNet_6d_narrow_band",
+    "ResNet_6d_directional",
     "ResNet_6d.test",
 ]
 coh_modes = [

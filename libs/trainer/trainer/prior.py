@@ -128,6 +128,24 @@ class SineGaussianBBC(BasePrior):
             eccentricity = Uniform(0, 1)
         )
 
+class FixedSineGaussianPrior(SineGaussianBBC):
+    def __init__(self, frequency: float = 100.0, quality: float = 10.0):
+        super().__init__()
+        if not np.isfinite(frequency) or not 0 < frequency < 2048:
+            raise ValueError('frequency must be between 0 and 2048 Hz')
+        if not np.isfinite(quality) or quality <= 0:
+            raise ValueError('quality must be positive and finite')
+        self.frequency = float(frequency)
+        self.quality = float(quality)
+
+    def sample(self, batch_size):
+        params = super().sample(batch_size)
+        # BasePrior's Constant handling returns scalars; the generator needs vectors.
+        params['frequency'] = torch.full((batch_size,), self.frequency)
+        params['quality'] = torch.full((batch_size,), self.quality)
+        return params
+
+
 class MultiSineGaussianBBC(BasePrior):
     def __init__(self):
         super().__init__()

@@ -28,7 +28,8 @@ data_ver_list = [
 cl_config_list = [
     # "ResNet_6d",
     # "ResNet_6d_split",
-    "ResNet_6d_narrow_band",
+    # "ResNet_6d_narrow_band",
+    "ResNet_6d_directional",
     # "ResNet_6d.test",
 ]
 coh_mode_list = [
