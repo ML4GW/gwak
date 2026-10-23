@@ -36,6 +36,7 @@ from typing import Union
 
 from scipy import signal
 from transforms import TorchBandpassFIR, hrrs_value, CCSN_Injector, load_h5_as_dict
+from transforms.antenna_patterns import SkyPositionMixin
 from machinery.loggers import gwak_logger, Pathfinder
 from machinery import gwak_data_dir, gwak_dir
 
@@ -564,7 +565,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         pass
 
 
-class SignalDataloader(GwakBaseDataloader):
+class SignalDataloader(SkyPositionMixin, GwakBaseDataloader):
     def __init__(
         self,
         signal_classes, # string names of signal class(es) desired
@@ -583,6 +584,15 @@ class SignalDataloader(GwakBaseDataloader):
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         whiten: bool = True,   # make whitening optional
         ccsn_on_gpu: bool = False, # simulate CCSN on the GPU instead of with numpy
+        # Canonical Earth-relative angles are radians; event coordinates are degrees.
+        fixed_phi_rad: Optional[float] = None,
+        fixed_declination_rad: Optional[float] = None,
+        event_ra_deg: Optional[float] = None,
+        event_dec_deg: Optional[float] = None,
+        event_time_utc: Optional[str] = None,
+        sky_window_deg: float = 1.0,  # full box width: +/-0.5 deg by default
+        fixed_ra: Optional[float] = None,  # deprecated Earth-phi alias, NOT celestial RA
+        fixed_dec: Optional[float] = None,  # deprecated Earth-declination alias
         **kwargs
     ):
 
@@ -596,6 +606,17 @@ class SignalDataloader(GwakBaseDataloader):
                 raise TypeError(
                     f"{name} must be a list, got {type(value).__name__}"
                 )
+        # Resolve once at initialization, before data/GPU access; never use noise times.
+        self.configure_sky_position(
+            fixed_phi_rad=fixed_phi_rad,
+            fixed_declination_rad=fixed_declination_rad,
+            event_ra_deg=event_ra_deg,
+            event_dec_deg=event_dec_deg,
+            event_time_utc=event_time_utc,
+            sky_window_deg=sky_window_deg,
+            fixed_ra=fixed_ra,
+            fixed_dec=fixed_dec
+        )
         super().__init__(*args, **kwargs)
         self.num_classes = len(signal_classes)
         self.signal_classes = signal_classes

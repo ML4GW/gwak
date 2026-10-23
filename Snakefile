@@ -30,7 +30,7 @@ cl_config_list = [
     # "ResNet_6d_split",
     # "ResNet_6d_narrow_band",
     "ResNet_6d_directional",
-    # "ResNet_6d.test",
+    "ResNet_6d.test",
 ]
 coh_mode_list = [
     "real",
@@ -39,12 +39,12 @@ coh_mode_list = [
     # "random",
     # "random2",
     # "half",
-    "corr15",
-    "corr21",
+    # "corr15",
+    # "corr21",
 ]
 fm_config_list = [
-    "NF_from_file",
-    # "NF_from_file.test",
+    # "NF_from_file",
+    "NF_from_file.test",
 ]
 noise_run_list = ["one_year"]
 foreground_run_list = [

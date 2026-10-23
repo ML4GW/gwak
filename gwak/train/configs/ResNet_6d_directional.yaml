@@ -15,7 +15,7 @@ trainer:
       name: sg150_q9_IC110514A
       # entity: gwak
   log_every_n_steps: 1
-  max_epochs: 5
+  max_epochs: 2
   limit_val_batches: 10
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -61,7 +61,7 @@ data:
     fduration: 2
     fftlength: 3
     batch_size: 32
-    batches_per_epoch: 8
+    batches_per_epoch: 4
     num_workers: 4
     data_saving_file: null
     loader_mode: "raw"
@@ -74,7 +74,7 @@ data:
       init_args:
         low: 4.0
         high: 30.0
-    # event_ra_deg: 138.47
-    # event_dec_deg: -1.94
-    # event_time_utc: "2011-05-14T01:32:22.654109"
-    # sky_window_deg: 1.0
+    event_ra_deg: 138.47
+    event_dec_deg: -1.94
+    event_time_utc: "2011-05-14T01:32:22.654109"
+    sky_window_deg: 1.0
