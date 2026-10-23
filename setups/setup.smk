@@ -271,6 +271,8 @@ rule pull_triton_container:
         osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/triton_image"
     shell:
         """
+        htgettoken -a vault.ligo.org -i igwn
+
         apptainer pull {output.image} \
         docker://nvcr.io/nvidia/tritonserver:25.06-py3
 
@@ -289,6 +291,8 @@ rule build_project_container:
         osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/images"
     shell:
         """
+        htgettoken -a vault.ligo.org -i igwn
+
         source {params.gwak_env}
         set -x
 

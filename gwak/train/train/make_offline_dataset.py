@@ -166,7 +166,7 @@ def main(
     hrsss = []
 
     num_loaded = 0
-    max_in_memory = 500
+    max_in_memory = 5_000
     # breakpoint()
     for _ in tqdm(range(num_batches)):
         clean_batch, glitch_batch = next(data_iter)

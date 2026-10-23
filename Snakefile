@@ -53,6 +53,14 @@ run_name_list = noise_run_list + foreground_run_list
 
 rule gwak_init:
     input: rules.bootstrap_complete.output
+    shell:
+        """
+        echo "Get scitoken..."
+        echo " "
+        echo "    Check if any window pops up automatically."
+        echo " "
+        htgettoken -a vault.ligo.org -i igwn
+        """
 
 rule build_containers:
     input: 
