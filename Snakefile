@@ -20,15 +20,16 @@ ana_ver_list = [
 ]
 ifos_list = ["HL"]
 data_ver_list = [
-    "pseudo",
-    # "O4b_cat1-chunked",
+    # "pseudo",
+    "O4b_cat1-chunked",
     # "O4b_cat1-loud_glitch",
     # "O4b_cat12-katya"
 ]
 cl_config_list = [
-    # "ResNet_6d",
+    "ResNet_6d",
     # "ResNet_6d_split",
-    "ResNet_6d_narrow_band",
+    # "ResNet_6d_narrow_band",
+    "ResNet_6d_directional",
     # "ResNet_6d.test",
 ]
 coh_mode_list = [
@@ -38,8 +39,8 @@ coh_mode_list = [
     # "random",
     # "random2",
     # "half",
-    "corr15",
-    "corr21",
+    # "corr15",
+    # "corr21",
 ]
 fm_config_list = [
     "NF_from_file",

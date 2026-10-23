@@ -36,6 +36,7 @@ from typing import Union
 
 from scipy import signal
 from transforms import TorchBandpassFIR, hrrs_value, CCSN_Injector, load_h5_as_dict
+from transforms.antenna_patterns import SkyPositionMixin
 from machinery.loggers import gwak_logger, Pathfinder
 from machinery import gwak_data_dir, gwak_dir
 
@@ -564,7 +565,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         pass
 
 
-class SignalDataloader(GwakBaseDataloader):
+class SignalDataloader(SkyPositionMixin, GwakBaseDataloader):
     def __init__(
         self,
         signal_classes, # string names of signal class(es) desired
@@ -583,6 +584,15 @@ class SignalDataloader(GwakBaseDataloader):
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         whiten: bool = True,   # make whitening optional
         ccsn_on_gpu: bool = False, # simulate CCSN on the GPU instead of with numpy
+        # Canonical Earth-relative angles are radians; event coordinates are degrees.
+        fixed_phi_rad: Optional[float] = None,
+        fixed_declination_rad: Optional[float] = None,
+        event_ra_deg: Optional[float] = None,
+        event_dec_deg: Optional[float] = None,
+        event_time_utc: Optional[str] = None,
+        sky_window_deg: float = 1.0,  # full box width: +/-0.5 deg by default
+        fixed_ra: Optional[float] = None,  # deprecated Earth-phi alias, NOT celestial RA
+        fixed_dec: Optional[float] = None,  # deprecated Earth-declination alias
         **kwargs
     ):
 
@@ -596,6 +606,17 @@ class SignalDataloader(GwakBaseDataloader):
                 raise TypeError(
                     f"{name} must be a list, got {type(value).__name__}"
                 )
+        # Resolve once at initialization, before data/GPU access; never use noise times.
+        self.configure_sky_position(
+            fixed_phi_rad=fixed_phi_rad,
+            fixed_declination_rad=fixed_declination_rad,
+            event_ra_deg=event_ra_deg,
+            event_dec_deg=event_dec_deg,
+            event_time_utc=event_time_utc,
+            sky_window_deg=sky_window_deg,
+            fixed_ra=fixed_ra,
+            fixed_dec=fixed_dec
+        )
         super().__init__(*args, **kwargs)
         self.num_classes = len(signal_classes)
         self.signal_classes = signal_classes
@@ -647,8 +668,12 @@ class SignalDataloader(GwakBaseDataloader):
             9: "FakeGlitch",
             10: "MultiSineGaussian"
         }
-        # self.noise_type = ["Bkg/Glitch"]
-        self.noise_type = ["Glitch", "Background"]
+
+        self.noise_type = []
+        noise_type = ["Bkg/Glitch", "Glitch", "Background"]
+        for _sig_cls in self.signal_classes:
+            if _sig_cls in noise_type:
+                self.noise_type.append(_sig_cls)
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
@@ -727,6 +752,10 @@ class SignalDataloader(GwakBaseDataloader):
         self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
         self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
         self.rescaler = rescaler.to('cuda') if torch.cuda.is_available() else rescaler
+
+    def sample_sky_location(self, batch_size):
+        """Return Earth-relative (phi, declination) in radians, not celestial RA."""
+        return self._sample_sky_location(batch_size)
 
     def get_snr_factor(self,current_epoch):
         f = (1.0/self.snr_init_factor)**(1.0/self.snr_anneal_epochs)
@@ -849,7 +878,9 @@ class SignalDataloader(GwakBaseDataloader):
                 )
             elif signal_class == "CCSN":
                 # the current device, so it also works when each process uses its own GPU
-                device = torch.device("cuda", torch.cuda.current_device()) if self.ccsn_on_gpu else None
+                device = torch.device(
+                    "cuda", torch.cuda.current_device()
+                ) if self.ccsn_on_gpu else None
                 responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
                     total_counts=self.num_per_class[i],
                     device=device,
@@ -1192,8 +1223,7 @@ class AugmentationSignalDataloader(SignalDataloader):
             # resample various parameters depending on augmentation settings
             if self.sky_location_augmentation:
                 for i in range(self.num_classes):
-                    ras[i] = self.ra_prior.sample((self.num_per_class[i],))
-                    decs[i] = self.dec_prior.sample((self.num_per_class[i],))
+                    ras[i], decs[i] = self.sample_sky_location(self.num_per_class[i])
             if self.distance_augmentation:
                 for i in range(self.num_classes):
                     params[i]['distance'] = self.priors[i].sample(self.num_per_class[i])['distance']
@@ -1253,13 +1283,11 @@ def generate_waveforms_standard(
 
     # sample from prior and generate waveforms
     if parameters is None:
-        # The type control of this sampling isn't working correctly
-        # Check the type with KinkkinkBBC f_high = Conston(2048)
         parameters = prior.sample(batch_size) # dict[str, torch.tensor]
+    if (ra is None) != (dec is None):
+        raise ValueError("ra and dec must either both be provided or both be None")
     if ra is None:
-        ra = loader.ra_prior.sample((batch_size,))
-    if dec is None:
-        dec = loader.dec_prior.sample((batch_size,))
+        ra, dec = loader.sample_sky_location(batch_size)
     phic = loader.phic_prior.sample((batch_size,))
 
     cross, plus = waveform(**parameters)
@@ -1297,10 +1325,10 @@ def generate_waveforms_bbh(
     if parameters is None:
         # sample from prior and generate waveforms
         parameters = prior.sample(batch_size) # dict[str, torch.tensor]
+    if (ra is None) != (dec is None):
+        raise ValueError("ra and dec must either both be provided or both be None")
     if ra is None:
-        ra = loader.ra_prior.sample((batch_size,))
-    if dec is None:
-        dec = loader.dec_prior.sample((batch_size,))
+        ra, dec = loader.sample_sky_location(batch_size)
 
     cross, plus = waveform(**parameters)
     cross, plus = torch.fft.irfft(cross), torch.fft.irfft(plus)
