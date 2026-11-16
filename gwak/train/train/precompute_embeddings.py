@@ -128,9 +128,11 @@ if __name__=='__main__':
     sample_rate = config['data']['init_args']['sample_rate']
     kernel_length = config['data']['init_args']['kernel_length']
     psd_length = config['data']['init_args']['psd_length']
+    psd_length = 16
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
     batch_size = config['data']['init_args']['batch_size']
+    batch_size = 3072
     batches_per_epoch = 2000000
     num_workers = 0
     data_saving_file = config['data']['init_args']['data_saving_file']
@@ -280,7 +282,7 @@ if __name__=='__main__':
                 clean_batch = clean_batch.to(device)
                 glitch_batch = glitch_batch.to(device)
 
-                processed, labels, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
+                processed, labels, _, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
 
                 if processed.shape[0] == 0:
                     del clean_batch, glitch_batch

@@ -139,7 +139,7 @@ def gwak_background(
 
         chunks = None
         if compression is not None:
-            chunks = (4096*32,)
+            chunks = (sample_rate*8,)
 
         # Write to a temporary file and rename, so a killed job never
         # leaves a partial file that would be skipped on resubmission.

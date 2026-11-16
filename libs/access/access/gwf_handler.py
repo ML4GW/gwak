@@ -196,7 +196,8 @@ def get_conincident_segs(
 
     segs = []
     query_flag = []
-
+    mini_dur = 128
+    skipped_short_segs_count = 0
     if open_state_flag is not None:
 
         flags = DataQualityDict({
@@ -226,7 +227,14 @@ def get_conincident_segs(
         return segs
 
     for contents in active_table:
+
+        if contents["duration"] < mini_dur:
+            skipped_short_segs_count += 1
+            continue
         segs.append((contents["start"], contents["end"]))
+
+    logging.info(f"Skipping {skipped_short_segs_count} segments")
+    logging.info(f"    Reason: Segment duration shorter than {mini_dur} seconds")
 
     return segs
     

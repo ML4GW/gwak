@@ -29,9 +29,9 @@ coh_mode_list = [
     "selected-9",
 ]
 fm_config_list = [
-    "NF_em-feature_context",
-    "NF_features-no_context",
-    "NF_features-em_context",
+    # "NF_em-feature_context",
+    "NF_features-no_context.test",
+    # "NF_features-em_context",
 ]
 noise_run_list = [
     "one_decade"
@@ -43,14 +43,6 @@ run_name_list = noise_run_list + foreground_run_list
 
 rule gwak_init:
     input: rules.bootstrap_complete.output
-    shell:
-        """
-        echo "Get scitoken..."
-        echo " "
-        echo "    Check if any window pops up automatically."
-        echo " "
-        htgettoken -a vault.ligo.org -i igwn
-        """
 
 rule build_containers:
     input: 

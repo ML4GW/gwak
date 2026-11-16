@@ -23,13 +23,13 @@ fm_configs = [
     "NF_from_file",
 
     "NF_em-no_context",
-    "NF_em-no_context_v2",
+    "NF_em-no_context.test",
     "NF_em-feature_context",
-    "NF_em-feature_context_v2",
+    "NF_em-feature_context.test",
     "NF_features-no_context",
-    "NF_features-no_context_v2",
+    "NF_features-no_context.test",
     "NF_features-em_context",
-    "NF_features-em_context_v2",
+    "NF_features-em_context.test",
 
     "NF_from_file.test",
     'FM_multiSignalAndBkg',
@@ -139,7 +139,7 @@ rule precompute_embeddings:
             --correlations {output.precom_data_dir}/correlations.npy \
             --latent {output.precom_data_dir}/latent.npy \
             --signal-type noise \
-            --nevents 100000'
+            --nevents 1209600'
 
 rule production_precompute_embeddings:
     input:
