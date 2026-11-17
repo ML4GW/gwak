@@ -1,6 +1,7 @@
 import os
 import json
 import shlex
+import shutil
 from copy import deepcopy
 from pathlib import Path
 import yaml
@@ -111,6 +112,13 @@ def build_shell_exports(paths):
         lines.append(f"export {key}={shlex.quote(value)}")
     return lines
 
+
+def find_container_runtime():
+
+    for tool in ("singularity", "apptainer"):
+        if shutil.which(tool):
+            return tool
+    raise RuntimeError("Neither apptainer nor singularity found on PATH")
 
 GWAK_PATHS = build_paths()
 OUTPUT_DIR                = Path(GWAK_PATHS["GWAK_OUTPUT_DIR"])
@@ -273,7 +281,7 @@ rule pull_triton_container:
         """
         htgettoken -a vault.ligo.org -i igwn
 
-        apptainer pull {output.image} \
+        singularity pull {output.image} \
         docker://nvcr.io/nvidia/tritonserver:25.06-py3
 
         pelican object put {output.image} \
@@ -287,8 +295,9 @@ rule build_project_container:
         deploy_image =  IMAGE_DIR / "{project_name}.sif"
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
-        processors = "--mksquashfs-args '-processors 64'",
-        osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/images"
+        processors = "--fakeroot",
+        osdf_endpoint = "osdf:///igwn/cit/staging/$USER/Container/GWAK/images",
+        container_runtime = find_container_runtime()
     shell:
         """
         htgettoken -a vault.ligo.org -i igwn
@@ -296,10 +305,10 @@ rule build_project_container:
         source {params.gwak_env}
         set -x
 
-        apptainer build {params.processors} \
+        {params.container_runtime} build {params.processors} \
             {output.deploy_image} {input.deploy_container}
-
-        pelican object put \
-            {output.deploy_image} \
-            {params.osdf_endpoint}/{wildcards.project_name}/image_$(date +%s).sif
         """
+        # pelican object put \
+        #     {output.deploy_image} \
+        #     {params.osdf_endpoint}/{wildcards.project_name}/image_$(date +%s).sif
+
