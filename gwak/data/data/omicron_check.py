@@ -1,14 +1,16 @@
 '''
 run example:
+cd <gwak_dir>
+source .gwak/env.sh
 uv run --project /home/shihhong.hsu/gwak/gwak/data/pyproject.toml \
     python /home/shihhong.hsu/gwak/gwak/data/data/omicron_check.py \
         --project-name omicron_check_test \
-            --outlier-config ResNet_6d_narrow_band_corr15_NF_from_file=\
-                /home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-loud_glitch/ResNet_6d_narrow_band_selected-9_NF_features-no_context/one_decade/outlier_config.h5
+            --outlier-config ResNet_6d_narrow_band_corr15_NF_from_file=/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-loud_glitch/ResNet_6d_narrow_band_selected-9_NF_features-no_context/one_decade/outlier_config.h5
 '''
 
 import argparse
 import re
+import os
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -164,7 +166,7 @@ def plot_trigger_comparison(
 
 def run_omicron_check(
     outlier_configs: Mapping[str, Path | str],
-    plot_dir: Path | str,
+    out_dir: Path | str,
     project_name: str,
     trigger_root: Path | str = "/home/detchar/triggers",
     ifos: Iterable[str] = ("H1", "L1"),
@@ -173,10 +175,10 @@ def run_omicron_check(
     correction: float = -1.25,
 ) -> None:
     """Compare GWAK outlier windows against archived Omicron triggers."""
-    plot_dir = Path(plot_dir)
+    out_dir = Path(out_dir)
     for outlier_name, outlier_path in outlier_configs.items():
         outlier_result = load_outlier_config(outlier_path)
-        output_dir = plot_dir / project_name / outlier_name
+        output_dir = out_dir / "omicron_check" / project_name / outlier_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for ifo in ifos:
@@ -257,7 +259,7 @@ def parse_args():
         help="NAME=/path/to/outlier_config.h5 (repeatable)",
     )
     parser.add_argument("--project-name", default="omicron_check")
-    parser.add_argument("--plot-dir", type=Path, default=Path("/home/shihhong.hsu/gwak_local/plot"))
+    parser.add_argument("--out-dir", type=Path, default=Path(os.environ["GWAK_OUTPUT_DIR"]))
     parser.add_argument("--trigger-root", type=Path, default=Path("/home/detchar/triggers"))
     parser.add_argument("--ifos", nargs="+", default=["H1", "L1"])
     parser.add_argument("--channel", default="GDS_CALIB_STRAIN_NOLINES")
@@ -272,7 +274,7 @@ def main():
     args = parse_args()
     run_omicron_check(
         outlier_configs=args.outlier_configs,
-        plot_dir=args.plot_dir,
+        out_dir=args.out_dir,
         project_name=args.project_name,
         trigger_root=args.trigger_root,
         ifos=args.ifos,
