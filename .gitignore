@@ -174,3 +174,5 @@ cython_debug/
 lightning_logs/
 wandb/
 slurm_logs/
+*.h5
+*.root
