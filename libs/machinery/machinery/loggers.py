@@ -38,6 +38,7 @@ def gwak_logger(
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("onnxscript").setLevel(logging.WARNING)
     logging.getLogger("onnx_ir").setLevel(logging.WARNING)
+    logging.getLogger("fsspec.pelican").setLevel(logging.WARNING)
     # logging.getLogger("torch.onnx").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
@@ -189,6 +190,18 @@ class gwak_timeslide_dir(Pathfinder):
             suffix=suffix
         )
 
+class gwak_louvre_dir(Pathfinder):
+
+    def __init__(
+        self,
+        suffix: Optional[str]=None,
+    ):
+        super().__init__(
+            dir_var="GWAK_LOUVRE_DIR",
+            path_function_name="figure directory",
+            suffix=suffix
+        )
+
 class gwak_image_dir(Pathfinder):
 
     def __init__(
@@ -201,15 +214,27 @@ class gwak_image_dir(Pathfinder):
             suffix=suffix
         )
 
-class gwak_louvre_dir(Pathfinder):
+class gwak_container_output_dir(Pathfinder):
 
     def __init__(
         self,
         suffix: Optional[str]=None,
     ):
         super().__init__(
-            dir_var="GWAK_LOUVRE_DIR",
-            path_function_name="figure directory",
+            dir_var="CONTAINER_OUTPUT_DIR",
+            path_function_name="container output directory",
+            suffix=suffix
+        )
+
+class gwak_condor_stratch_dir(Pathfinder):
+
+    def __init__(
+        self,
+        suffix: Optional[str]=None,
+    ):
+        super().__init__(
+            dir_var="SCRATCH",
+            path_function_name="Stratch directory of the condor node",
             suffix=suffix
         )
 

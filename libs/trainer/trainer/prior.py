@@ -122,8 +122,8 @@ class SineGaussianBBC(BasePrior):
         super().__init__()
         self.params = OrderedDict(
             hrss = LogUniform(1.1e-23, 1.0e-21), 
-            quality = Uniform(3, 700),
-            frequency = Uniform(30, 2048),
+            quality = Uniform(3, 100),
+            frequency = Uniform(40, 1615),
             phase = Uniform(0, torch.pi),
             eccentricity = Uniform(0, 1)
         )
@@ -158,9 +158,9 @@ class WhiteNoiseBurstBBC(BasePrior):
     def __init__(self):
         super().__init__()
         self.params = OrderedDict(
-            time_envelope = Uniform(5e-2,2),
-            frequency = Uniform(55, 1500),
-            bandwidth = Uniform(30, 200),
+            time_envelope = Uniform(1e-1,0.5),
+            frequency = Uniform(100, 750),
+            bandwidth = Uniform(90, 100),
             eccentricity = Uniform(0, 1),
             phase = Uniform(0, torch.pi),
             int_hdot_squared = LogUniform(3.0e-40, 2.5e-34),

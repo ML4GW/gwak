@@ -7,11 +7,25 @@ import h5py
 import torch
 
 from ml4gw.distributions import PowerLaw
-from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
+from ml4gw.waveforms import (
+    SineGaussian,
+    IMRPhenomPv2,
+    Gaussian,
+    GenerateString,
+    WhiteNoiseBurst
+)
 
 from train.dataloader import SignalDataloader
-from data.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
-from transforms import frequency_cos_similarity
+from trainer.prior import (
+    SineGaussianBBC,
+    LAL_BBHPrior,
+    GaussianBBC,
+    CuspBBC,
+    KinkBBC,
+    KinkkinkBBC,
+    WhiteNoiseBurstBBC
+)
+from transforms.preprocess import FeatureExtractor
 
 device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
 
@@ -84,13 +98,15 @@ if __name__=='__main__':
 
     parser = argparse.ArgumentParser(description='Process and merge ROOT files into datasets.')
     parser.add_argument('--embedding-model', type=str, default=None)
-    parser.add_argument('--data-dir', type=str)
+    parser.add_argument('--data_tag', type=str)
     parser.add_argument('--config', type=str)
     parser.add_argument('--ifos', type=str)
     parser.add_argument('--embeddings', type=str)
     parser.add_argument('--labels', type=str)
     parser.add_argument('--correlations', type=str)
-    parser.add_argument('--coh_mode', type=str)
+    parser.add_argument('--latent', type=str, default=None,
+                        help='Optional .npy for the latent vector [embedding | correlations] (needs --correlations).')
+    parser.add_argument('--feature_mode', type=str)
     parser.add_argument('--glitch-root', type=str)
     parser.add_argument('--means', type=str, default=None)
     parser.add_argument('--stds', type=str, default=None)
@@ -112,13 +128,15 @@ if __name__=='__main__':
     sample_rate = config['data']['init_args']['sample_rate']
     kernel_length = config['data']['init_args']['kernel_length']
     psd_length = config['data']['init_args']['psd_length']
+    psd_length = 16
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
     batch_size = config['data']['init_args']['batch_size']
+    batch_size = 3072
     batches_per_epoch = 2000000
     num_workers = 0
     data_saving_file = config['data']['init_args']['data_saving_file']
-
+    feature_extractor = FeatureExtractor(mode=args.feature_mode).to(device)
     duration = fduration + kernel_length
     if args.signal_type in ['All', 'ALL', 'all']:
         signal_classes = [
@@ -211,10 +229,10 @@ if __name__=='__main__':
             labels_chunk = labels_arr[start:end] if labels_arr is not None else None
 
             embeddings = embed_model(processed).detach().cpu().numpy()
+            embeddings = np.random.rand(*embeddings.shape)
             if args.correlations:
-                correlations = frequency_cos_similarity(
+                correlations = feature_extractor(
                     processed,
-                    mode=args.coh_mode
                 ).cpu().detach().numpy()
 
             if labels_chunk is None:
@@ -236,7 +254,7 @@ if __name__=='__main__':
         with torch.no_grad():
             loader = SignalDataloader(
                 signal_classes, priors, waveforms, extra_kwargs,
-                data_dir=args.data_dir,
+                data_tag=args.data_tag,
                 sample_rate=sample_rate,
                 kernel_length=kernel_length,
                 psd_length=psd_length,
@@ -264,17 +282,17 @@ if __name__=='__main__':
                 clean_batch = clean_batch.to(device)
                 glitch_batch = glitch_batch.to(device)
 
-                processed, labels, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
+                processed, labels, _, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
 
                 if processed.shape[0] == 0:
                     del clean_batch, glitch_batch
                     torch.cuda.empty_cache()
                     continue
                 embeddings = embed_model(processed).cpu().detach().numpy()
+                embeddings = np.random.rand(*embeddings.shape)
                 if args.correlations:
-                    correlations = frequency_cos_similarity(
+                    correlations = feature_extractor(
                         processed,
-                        mode=args.coh_mode
                     ).cpu().detach().numpy()
 
                 all_labels.append(labels.cpu().detach().numpy())
@@ -302,6 +320,13 @@ if __name__=='__main__':
     if args.correlations:
         np.save(args.correlations, all_correlations)
         print('Correlation shape', all_correlations.shape)
+
+    if args.latent:
+        if not args.correlations:
+            raise ValueError('--latent needs --correlations')
+        latent = np.concatenate([all_embeddings, all_correlations], axis=1)
+        np.save(args.latent, latent)
+        print('Latent shape', latent.shape)
 
     means = np.mean(all_embeddings, axis=0) if all_embeddings.size else np.array([])
     stds = np.std(all_embeddings, axis=0) if all_embeddings.size else np.array([])

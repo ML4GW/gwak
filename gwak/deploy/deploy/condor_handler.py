@@ -1,29 +1,35 @@
-from deploy.libs.find_gpus import gpu_selector
+from machinery.find_gpus import gpu_selector
 import os 
-
-gpu_list = gpu_selector(free_mem=10000)
-os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list[0]["uuid"]
 
 import time
 import shutil
 import logging
+
+from access.osdf_io import pelican_read_latest_project_image
 
 from typing import Optional
 from contextlib import nullcontext
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
-from deploy.libs import get_ip_address 
-from deploy.libs import gwak_logger, Pathfinder
-from deploy.libs import (
+from infer_modules import get_ip_address 
+from machinery import gwak_logger, Pathfinder
+from machinery import (
     gwak_dir,
+    gwak_container_output_dir,
     gwak_output_dir,
     O4_bbc_short_0_data_dir,
     O4_bbc_short_1_data_dir
 )
-from deploy.libs.cluster_tools import write_bash_file, write_condor_config, write_infer_core_config, condor_submit_with_rate_limit
+from machinery.condor_tools import (
+    submit_condor_job,
+    write_deploy_bash_file,
+    write_export_config,
+    write_infer_core_config,
+    write_container_condor_sub
+)
 from infer_data import get_shifts_meta_data
-
+from transforms import cohmode_to_dim
 
 def condor_infer_wrapper(
     condor_nodes: int,
@@ -37,8 +43,8 @@ def condor_infer_wrapper(
     data_format: str,
     shifts: list[float], 
     project: str,
-    image: str,
     grpc_port: int = 8001,
+    image: str = None,
     fname: Optional[Pathfinder] = None, 
     ana_data: Optional[str] = None,
     model_repo_dir: Optional[Pathfinder] = None,
@@ -49,12 +55,13 @@ def condor_infer_wrapper(
     job_rate_limit: int = 1,
     inference_rate: float = 2,
     inj_type: Optional[str]=None,
+    singularity_path: Optional[str]=None,
     ana_ver: str="O4b_cat1",
     data_ver: str="O4b_cat12",
     cl_config: str='S4_SimCLR_multiSignalAndBkg',
     coh_mode: str="real",
     fm_config: str='NF_onlyBkg',
-    dim_split: list=[6, 1, 1],
+
     **kwargs,
 ):
     """ Timeslide and Hermes(Triton) handeler to generate test result for GWAK model. 
@@ -82,37 +89,63 @@ def condor_infer_wrapper(
         inference_sampling_rate -- Numbers of kernel to run in one second. (default: {2})
         inj_type -- Class of wavform to inject on timeslide. (default: {None})
     """
+    patients = 5
     Tb = int(Tb)
-    output_dir = gwak_output_dir()
+    output_dir = gwak_container_output_dir(suffix=f"condor")
     deploy_dir = gwak_dir(suffix="gwak/deploy")()
-    
-    ifo_str = ''.join(ifo[0] for ifo in ifos)
+    export_config_file = deploy_dir / "configs/export.yaml"
+
+    # Shell commnands
+    cli = "$GWAK_ROOT/gwak/deploy/deploy/cli.py"
+    cmds = [
+        f"python {cli} export --config $SCRATCH/export.yaml",
+        f"python {cli} infer --config $SCRATCH/infer.yaml"
+    ]
+    ifo_mode = ''.join(ifo[0] for ifo in ifos)
     prefix = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
-    # File handling     
-    if model_repo_dir is None: 
-        model_repo_dir = output_dir(
-            append_path=f"export/{ifo_str}/{prefix}/{project}"
-        )
+    username = os.environ.get("USER")
+    osdf_image_root = f"osdf:///igwn/cit/staging/{username}/Container/GWAK"
+    osdf_triton_image = f"{osdf_image_root}/triton_image/{image}"
+    job_dir = gwak_container_output_dir(
+        suffix=f"condor/deploy/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
+    )()
+    initialdir = gwak_container_output_dir()()
+    job_dir.mkdir(parents=True, exist_ok=True)
+    model_to_transfer = gwak_container_output_dir(
+        suffix=f"Outputs/models/{ifo_mode}/{prefix}/{project}"
+    )(append_path="model_JIT.pt")
+
+    dim_split = [
+        6, # Embedding dimension
+        cohmode_to_dim(coh_mode),
+        1
+    ]
+    # File handling
     if result_dir is None:
-        result_dir = output_dir(
-            append_path=f"infer/{ifo_str}/{ana_ver}/{prefix}/{run_name}"
-        )
-    if result_dir.exists():
-        shutil.rmtree(result_dir)
-    result_dir.mkdir(parents=True, exist_ok=True)
+        export_result_dir = gwak_container_output_dir(
+            suffix=f"Outputs/export/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
+        )()
+        infer_result_dir = gwak_container_output_dir(
+            suffix=f"Outputs/infer/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
+        )()
+    if infer_result_dir.exists():
+        shutil.rmtree(infer_result_dir)
+    infer_result_dir.mkdir(parents=True, exist_ok=True)
 
-    # Define fname    
-
-    fname = fname(append_path=f"{ana_data}/{ifo_str}")
+    # Define fname
+    fname = fname(append_path=f"{ifo_mode}/{ana_data}")
     if run_name == "bbc-short-0":
-        fname = O4_bbc_short_0_data_dir(suffix=ifo_str)()
+        fname = O4_bbc_short_0_data_dir(suffix=ifo_mode)()
     if run_name == "bbc-short-1":
-        fname = O4_bbc_short_1_data_dir(suffix=ifo_str)()
+        fname = O4_bbc_short_1_data_dir(suffix=ifo_mode)()
+    # The OSDF mirror must be the same folder the file list is built from,
+    # bbc-short dirs are laid out as {data_tag}/{ifo_mode} instead
+    # ToDo: The data_tag should be resolve upfront not in here.
+    # Better to resolve at snakemake level.
+    data_tag = fname.parent.name if fname.name == ifo_mode else fname.name
+    osdf_data_root = f"osdf:///igwn/cit/staging/{username}/Data/GWAK/{ifo_mode}/{data_tag}"
 
-
-
-    log_file = result_dir / "log.log"
-    triton_log = result_dir / "triton.log"
+    log_file = job_dir / "log.log"
     gwak_logger(log_file)
 
     logging.info(f"")
@@ -125,7 +158,7 @@ def condor_infer_wrapper(
     num_shifts, fnames, segments = get_shifts_meta_data(
         fname, Tb, shifts, data_format
     )
-    fnames = [str(p) for p in fnames]
+    fnames = [f"{osdf_data_root}/{p.name}" for p in fnames]
 
     if condor_nodes > len(fnames):
         condor_nodes = len(fnames)
@@ -137,109 +170,109 @@ def condor_infer_wrapper(
     width = len(str(condor_nodes))
     node_job_dir, node_fnames, node_segments = [], [], []
     for i in range(condor_nodes):
-        job_dir = result_dir / f"Node_{i:0{width}d}"
-        job_dir.mkdir(parents=True, exist_ok=True)
-        node_job_dir.append(job_dir)
+        _job_dir = job_dir / f"Node_{i:0{width}d}"
+        _job_dir.mkdir(parents=True, exist_ok=True)
+        node_job_dir.append(_job_dir)
         size = files_per_node + (1 if i < extra else 0)
         node_fnames.append(fnames[idx:idx+size])
         node_segments.append(segments[idx:idx+size])
         idx += size
 
-    # Triton server setup
-    ip = get_ip_address()
-    cli = deploy_dir / "deploy/cli.py"
-    gwak_streamer = f"gwak-{project}-streamer"
-    serve_context = serve(
-        model_repo_dir,
-        image,
-        grpc_port,
-        log_file=triton_log, 
-        wait=False,
-    )
+    # HTCondor job submission
+    for node in range(condor_nodes):
 
-    # The Triton excution to run
-    with serve_context:
-        logging.info(
-            f"Waiting {server_patients} seconds "
-            f"to receive connection to port {grpc_port}!"
+        _job_dir = node_job_dir[node]
+        export_job_dir = _job_dir / "export"
+        infer_job_dir = _job_dir / "infer"
+        export_job_dir.mkdir(parents=True, exist_ok=True)
+        infer_job_dir.mkdir(parents=True, exist_ok=True)
+
+        # Each node exports to its own repo to avoid racing on a shared one
+        export_dir = {
+            "class_path": "gwak_container_output_dir",
+            "init_args": {"suffix": "Ouputs/export"},
+        }
+        triton_image_condor_loc = {
+            "class_path": "gwak_condor_stratch_dir",
+            "init_args": {"suffix": f'{image}'},
+        }
+        # Resolve on the condor node to where export_dir writes the model,
+        # a submit host path doesn't exist there and can't be bind mounted
+        node_model_repo_dir = model_repo_dir or {
+            "class_path": "gwak_container_output_dir",
+            "init_args": {"suffix": f"Ouputs/export/{ifo_mode}/{prefix}/{project}"},
+        }
+
+        export_config = write_export_config(
+            export_config_file=export_config_file,
+            model_dir="model_JIT.pt", # This design lacks of arg passing verification 
+            # The condor node will transfer the model named with the name "model_JIT.pt",
+            # and the funtion it will accept whatever model that condor transferd. 
+            export_job_dir=export_job_dir,
+            project=project,
+            export_dir=export_dir,
+            stride_batch_size=stride_batch_size,
+            ifos=ifos,
+            psd_length=psd_length,
+            sample_rate=sample_rate,
+            inference_rate=inference_rate,
+            data_ver=data_ver,
+            cl_config=cl_config,
+            coh_mode=coh_mode,
+            fm_config=fm_config,
         )
-        logging.info(f"Triton logs saved at {triton_log}")
-        time.sleep(server_patients)
 
-        monitor = nullcontext()
-        if monitor_patients:
-            monitor = ServerMonitor(
-                model_name=gwak_streamer,
-                ips="localhost",
-                filename=result_dir / f"server-stats.csv",
-                grpc_port=grpc_port,
-                model_version=-1,
-                name="monitor",
-                max_request_rate=1,
-            )
-            logging.info(
-                f"Waiting {monitor_patients} seconds "
-                f"to receive connection to monitor!"
-            )
-            time.sleep(monitor_patients)
-        with monitor:
-            start_time = time.time()
-            sub_files = []
-            for node in range(condor_nodes):
+        # Keys must match deploy.infer_module.infer()
+        infer_config = write_infer_core_config(
+            run_name=run_name,
+            job_dir=infer_job_dir,
+            result_dir=infer_result_dir,
+            project=project,
+            model_repo_dir=node_model_repo_dir,
+            image=triton_image_condor_loc, # Watch out this.
+            grpc_port=grpc_port,
+            patients=server_patients,
+            ifos=ifos,
+            fnames=node_fnames[node],
+            num_shifts=num_shifts,
+            data_format=data_format,
+            segments=node_segments[node],
+            shifts=shifts,
+            Tb=Tb,
+            psd_length=psd_length,
+            stride_batch_size=stride_batch_size,
+            kernel_size=kernel_size,
+            sample_rate=sample_rate,
+            inference_sampling_rate=int(inference_rate),
+            dim_split=dim_split,
+            job_rate_limit=job_rate_limit,
+            singularity_path=singularity_path,
+            keep_fname_dir=True, # Slurm reads strain in place, no scratch copy
+        )
 
-                infer_config = write_infer_core_config(
-                    run_name=run_name,
-                    job_dir=node_job_dir[node],
-                    result_dir=result_dir,
-                    project=project,
-                    ip=ip,
-                    grpc_port=grpc_port,
-                    ifos=ifos,
-                    fnames=node_fnames[node],
-                    num_shifts=num_shifts,
-                    data_format=data_format,
-                    segments=node_segments[node],
-                    shifts=shifts,
-                    Tb=Tb,
-                    psd_length=psd_length,
-                    stride_batch_size=stride_batch_size,
-                    kernel_size=kernel_size,
-                    sample_rate=sample_rate,
-                    inference_sampling_rate=int(inference_rate),
-                    dim_split=dim_split,
-                    job_rate_limit=job_rate_limit,
-                )
 
-                cmd = f"python {cli} condor_client --config {infer_config}"
-                bash_file = write_bash_file(
-                    bash_root=node_job_dir[node],
-                    files=node_fnames[node],
-                    command=cmd
-                )
-                condor_subs = write_condor_config(
-                    condor_kwargs=condor_kwargs,
-                    job_dir=node_job_dir[node],
-                    executable=bash_file,
-                    config=infer_config
-                )
-                sub_files.append(condor_subs)
+        bash_file = write_deploy_bash_file(
+            bash_root=node_job_dir[node],
+            ifo_mode=ifo_mode,
+            data_tag=data_tag,
+            image=image,
+            osdf_triton_image=osdf_triton_image,
+            files=node_fnames[node],
+            commands=cmds
+        )
 
-            condor_submit_with_rate_limit(
-                sub_files=sub_files,
-                rate_limit=max_concurrent_node
-            )
+        condor_subs = write_container_condor_sub(
+            job_dir=node_job_dir[node],
+            image=pelican_read_latest_project_image(project_name="deploy"),
+            transfer_model=model_to_transfer,
+            export_config=export_config,
+            infer_config=infer_config,
+            condor_kwargs=condor_kwargs,
+            initialdir=initialdir,
+            executable=bash_file,
+        )
 
-            run_time = (time.time() - start_time)
-
-    days, rem = divmod(run_time, 86400)
-    hrs, rem = divmod(rem, 3600)
-    mins, secs = divmod(rem, 60)
-    logging.info(
-        f"Infer result at: {result_dir}/inference_result"
-    )
-    logging.info(
-        f"Time spent for inference: "
-        f"{int(days)}--{int(hrs):02d}:{int(mins):02d}:{int(secs):02d}"
-    )
-
- 
+        logging.info(f"Submitting Condor job with submit file:")
+        logging.info(f"    {condor_subs}")
+        submit_condor_job(condor_subs)
+        grpc_port += 3

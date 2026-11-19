@@ -7,23 +7,25 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 from pathlib import Path
-from deploy.libs import gwak_logger
-from deploy.libs.infer_utils import noise_runs_list
-from deploy.libs.trigger_io import (
+from machinery import gwak_logger
+from infer_modules.infer_utils import noise_runs_list
+from transforms import cohmode_to_dim
+from access.trigger_io import (
     lovure_file_handler,
     unpack_timeslide,
     select_threshold,
     find_outlier_by_segmets,
     resolve_oulier_config
 )
-from deploy.libs import (
+from machinery import (
     gwak_output_dir,
     gwak_louvre_dir,
     gwak_logging_dir,
     ordinal,
+    gwak_container_output_dir,
     convert_path_to_public_html_link
 )
-from deploy.libs.analysis_utils import (
+from access.analysis_utils import (
     get_bbc_inj_names,
     bbc_inj_info,
     find_valid_triggers
@@ -61,19 +63,19 @@ def threshold_lock(
         model_louvre_dir=louvre_dir, model=model
     )
 
-    tslide_data_dir = gwak_output_dir(
-        suffix=f"infer/{ana_mode}/{model}/{run_name}/inference_result"
+    tslide_data_dir = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}/{run_name}/inference_result"
     )()
-
-    threshold_file = gwak_output_dir(
-        suffix=f"infer/{ana_mode}/{model}"
+    threshold_file = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}"
     )(append_path="threshold.h5")
 
     # Main operation
     tslide_dict, tslide_data = unpack_timeslide(
         psd_length=psd_length,
         infer_sample_rate=infer_sample_rate,
-        tslide_data_dir=tslide_data_dir
+        tslide_data_dir=tslide_data_dir,
+        full_return=True,
     )
 
     threshold = select_threshold(
@@ -88,8 +90,10 @@ def threshold_lock(
     with h5py.File(threshold_file, "a") as h:
 
         h.pop(run_name, None)
-        h.create_dataset(run_name, data=threshold)
-
+        if isinstance(threshold, float):
+            h.create_dataset(run_name, data=np.array([threshold]))
+        else:
+            h.create_dataset(run_name, data=threshold)
     logging.info(f"Therehold generated at: {threshold_file}.")
 
     # Plotting
@@ -143,15 +147,16 @@ def scan_outlier(
     log_dir.mkdir(parents=True, exist_ok=True)
     gwak_logger(log_dir / "scan_outlier.log")
 
-    threshold_file = gwak_output_dir(
-        suffix=f"infer/{ana_mode}/{model}"
+    threshold_file = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}"
     )(append_path="threshold.h5")
 
-    tslide_data_dir = gwak_output_dir(
-        suffix=f"infer/{ana_mode}/{model}/{run_name}/inference_result"
+    tslide_data_dir = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}/{run_name}/inference_result"
     )()
-    outlier_file = gwak_output_dir(
-        suffix=f"infer/{ana_mode}/{model}/{run_name}"
+
+    outlier_file = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}/{run_name}"
     )(append_path="outlier_config.h5")
 
     # Determine threshold
@@ -160,14 +165,20 @@ def scan_outlier(
     else:
         logging.info(f"{threshold_file}")
         with h5py.File(threshold_file, "r") as h5:
-            threshold = float(h5[f"{threshold_setting}"][()])
+            threshold = float(h5[f"{threshold_setting}"][-1])
 
     # Main operation
     tslide_dict, tslide_data = unpack_timeslide(
         infer_sample_rate=infer_sample_rate,
         psd_length=psd_length,
         tslide_data_dir=tslide_data_dir,
+        full_return=True,
+        gwak_min_value=None
     )
+
+    if isinstance(threshold, np.ndarray):
+        tslide_data = tslide_data[:, -1]
+        threshold = threshold[-1]
 
     outlier_dict = find_outlier_by_segmets(
         tslide_dict=tslide_dict,
@@ -230,7 +241,8 @@ def bbc_benchmark(
     unblind_file = unbind_file_dict[foreground]
     signal_groups = get_bbc_inj_names(unblind_file)
 
-    outlier_config = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}")(
+    outlier_config = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}")(
         append_path=f"{foreground}/{outlier_cfg_name}"
     )
     # threshold_file = gwak_output_dir(suffix=f"infer/{model}")(
@@ -241,7 +253,8 @@ def bbc_benchmark(
 
     # Output setting
     louvre_dir = gwak_louvre_dir(suffix=f"{ana_mode}/{model}/{foreground}")()
-    output_dir = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}/{foreground}")()
+    output_dir = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}/{foreground}")()
     model_louvre_dir, model_snapshot_dir = lovure_file_handler(
         model_louvre_dir=louvre_dir,
         model=model,
@@ -294,6 +307,7 @@ def bbc_benchmark(
 
     # Saving result
     with h5py.File(benchmark_result, "w") as h:
+        h.attrs["err_count"] = err_count
         for name, values in performance.items():
             h.create_dataset(name, data=values)
     logging.info(f"Benchmark_result saved at: {benchmark_result}")

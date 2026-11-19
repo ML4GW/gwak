@@ -52,13 +52,13 @@ data:
       - "Background"
       - "Glitch"
     priors:
-      - class_path: data.prior.SineGaussianBBC # SineGaussian
-      - class_path: data.prior.LAL_BBHPrior # BBH
-      # - class_path: data.prior.GaussianBBC # Gaussian
-      - class_path: data.prior.CuspBBC # Cusp
-      - class_path: data.prior.KinkBBC # Kink
-      - class_path: data.prior.KinkkinkBBC # KinkKink
-      - class_path: data.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
+      - class_path: trainer.prior.SineGaussianBBC # SineGaussian
+      - class_path: trainer.prior.LAL_BBHPrior # BBH
+      # - class_path: trainer.prior.GaussianBBC # Gaussian
+      - class_path: trainer.prior.CuspBBC # Cusp
+      - class_path: trainer.prior.KinkBBC # Kink
+      - class_path: trainer.prior.KinkkinkBBC # KinkKink
+      - class_path: trainer.prior.WhiteNoiseBurstBBC # WhiteNoiseBurst
       - null # CCSN
       - null # Background
       - null # Glitch

@@ -10,7 +10,7 @@ from jsonargparse import ArgumentParser, ActionConfigFile
 
 from hermes.aeriel.client import InferenceClient
 from infer_data import Sequence, CCSN_Waveform_Projector, load_h5_as_dict
-from deploy.libs import gwak_logger
+from machinery import gwak_logger
 
 gwak_logger("log.log")
 

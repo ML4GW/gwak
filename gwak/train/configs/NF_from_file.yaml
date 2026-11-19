@@ -10,6 +10,9 @@ trainer:
   strategy: ddp_find_unused_parameters_true
   logger:
     class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: gwak2_NF
+      entity: gwak
   max_epochs: 25
   check_val_every_n_epoch: 1
   accumulate_grad_batches: 1
@@ -17,7 +20,7 @@ ckpt_path: null
 model:
   class_path: fm_models.BackgroundFlowModel
   init_args:
-    n_dims: 6
+    embedding_dim: 9
     coh_mode: real
     use_correlation: false
     condition_on_correlation: true
@@ -26,4 +29,4 @@ model:
 data:
   class_path: dataloader.EmbeddingLoader
   init_args:
-    batch_size: 32
+    batch_size: 2048

@@ -3,36 +3,51 @@ cl_configs = [
     'iTransformer',
     'ResNet',
     "ResNet_6d",
+    "ResNet_6d_split",
+    "ResNet_6d_narrow_band",
+    "Random_6d",
     "ResNet_6d.test",
 ]
-coh_modes = [
-    "real", "real_imag", "abs",
+feature_modes = [
+    "real",
+    "real_imag",
+    "abs",
+    "random",
+    "random2",
+    "corr15",
+    "corr21",
+    "selected-9",
 ]
 fm_configs = [
     'NF_onlyBkg',
     "NF_from_file",
+
+    "NF_em-no_context",
+    "NF_em-no_context.test",
+    "NF_em-feature_context",
+    "NF_em-feature_context.test",
+    "NF_features-no_context",
+    "NF_features-no_context.test",
+    "NF_features-em_context",
+    "NF_features-em_context.test",
+
     "NF_from_file.test",
     'FM_multiSignalAndBkg',
 ]
-signal_type = "noise"
+
 wildcard_constraints:
     ifo_mode   = '|'.join([x for x in ifo_modes]),
     data_ver   = '|'.join([x for x in data_ver_to_path.keys()]),
     cl_config  = '|'.join([x for x in cl_configs]),
-    coh_mode   = '|'.join([x for x in coh_modes]),
+    coh_mode = '|'.join([x for x in feature_modes]),
     fm_config  = '|'.join([x for x in fm_configs]),
 
 rule train_cl:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli.py",
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
-        data_dir = lambda wildcards: directory(
-            DATA_DIR
-            / data_ver_to_path[wildcards.data_ver]
-            / wildcards.ifo_mode
-        )
     output:
-        model        = Path(
+        model = Path(
             OUTPUT_DIR 
             / "models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt"
         )
@@ -43,17 +58,49 @@ rule train_cl:
             OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
         ),
         # The omicron triggers can only generate on LDG cluster.
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
+        ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
         num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} fit \
             --config {input.config} \
             --trainer.logger.save_dir {params.logger_dir} \
-            --data.init_args.data_dir {input.data_dir} \
+            --data.init_args.data_tag {params.data_tag} \
             --data.ifos {wildcards.ifo_mode} \
             --model.num_ifos {params.num_ifos} \
             --data.init_args.glitch_root {params.omicron}'
+
+# Same as train_cl, but runs inside the train.sif container
+rule production_train_cl:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/cli.py",
+        config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
+    output:
+        model = Path(
+            CONTAINER_OUTPUT_DIR
+            / "models/{ifo_mode}/{data_ver}/{cl_config}/model_JIT.pt"
+        )
+    params:
+        logger_dir = directory(
+            CONTAINER_OUTPUT_DIR / "models/{ifo_mode}/{data_ver}/{cl_config}"
+        ),
+        # The omicron triggers can only generate on LDG cluster.
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
+        ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
+        num_ifos = lambda wildcards: ifos_to_ifo_num[wildcards.ifo_mode],
+    shell:
+        "/opt/env/bin/python {input.arg} fit \
+            --config {input.config} \
+            --trainer.logger.save_dir {params.logger_dir} \
+            --data.init_args.data_tag {params.data_tag} \
+            --data.ifos {wildcards.ifo_mode} \
+            --model.num_ifos {params.num_ifos} \
+            --data.init_args.glitch_root {params.omicron}"
 
 rule precompute_embeddings:
     input:
@@ -65,11 +112,6 @@ rule precompute_embeddings:
             data_ver="{data_ver}",
             cl_config="{cl_config}",
         ),
-        data_dir = lambda wildcards: directory(
-            DATA_DIR 
-            / data_ver_to_path[wildcards.data_ver]
-            / wildcards.ifo_mode
-        )
     output:
         precom_data_dir = directory(
             OUTPUT_DIR / "data/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}/noise"
@@ -77,33 +119,72 @@ rule precompute_embeddings:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
+        ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
-            --data-dir {input.data_dir} \
+            --data_tag {params.data_tag} \
             --ifos {wildcards.ifo_mode} \
             --config {input.config} \
             --embedding-model {input.embedding_model} \
-            --coh_mode {wildcards.coh_mode} \
+            --feature_mode {wildcards.coh_mode} \
             --glitch-root {params.omicron} \
             --means {output.precom_data_dir}/means.npy \
             --stds {output.precom_data_dir}/stds.npy \
             --embeddings {output.precom_data_dir}/embeddings.npy \
             --labels {output.precom_data_dir}/labels.npy \
             --correlations {output.precom_data_dir}/correlations.npy \
+            --latent {output.precom_data_dir}/latent.npy \
             --signal-type noise \
-            --nevents 100000 '
+            --nevents 1209600'
+
+rule production_precompute_embeddings:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/precompute_embeddings.py",
+        config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
+        embedding_model = expand(
+            rules.production_train_cl.output.model,
+            ifo_mode="{ifo_mode}",
+            data_ver="{data_ver}",
+            cl_config="{cl_config}",
+        ),
+    output:
+        precom_data_dir = directory(
+            CONTAINER_OUTPUT_DIR / "data/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}/noise"
+        )
+    params:
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
+        ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
+    shell:
+        "/opt/env/bin/python {input.arg} \
+            --data_tag {params.data_tag} \
+            --ifos {wildcards.ifo_mode} \
+            --config {input.config} \
+            --embedding-model {input.embedding_model} \
+            --feature_mode {wildcards.coh_mode} \
+            --glitch-root {params.omicron} \
+            --means {output.precom_data_dir}/means.npy \
+            --stds {output.precom_data_dir}/stds.npy \
+            --embeddings {output.precom_data_dir}/embeddings.npy \
+            --labels {output.precom_data_dir}/labels.npy \
+            --correlations {output.precom_data_dir}/correlations.npy \
+            --latent {output.precom_data_dir}/latent.npy \
+            --signal-type noise \
+            --nevents 100000"
 
 rule train_fm:
     input:
         arg = GWAK_ROOT / "gwak/train/train/cli_fm.py",
-        main = GWAK_ROOT / "gwak/train/train/fm_models.py",
         config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
         precom_data_dir = rules.precompute_embeddings.output.precom_data_dir
     output:
         model = Path(
-            OUTPUT_DIR / "models" 
+            OUTPUT_DIR / "models"
             / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
             / "model_JIT.pt"
         ),
@@ -119,16 +200,42 @@ rule train_fm:
             --project {params.pyproject} python {input.arg} fit \
             --config {input.config} \
             --trainer.logger.save_dir {params.logger_dir} \
-            --model.coh_mode {wildcards.coh_mode} \
+            --model.feature_mode {wildcards.coh_mode} \
             --data.embedding_path {input.precom_data_dir}/embeddings.npy \
-            --data.c_path {input.precom_data_dir}/correlations.npy'
+            --data.features_path {input.precom_data_dir}/correlations.npy'
+
+rule production_train_fm:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/cli_fm.py",
+        config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
+        precom_data_dir = rules.production_precompute_embeddings.output.precom_data_dir
+    output:
+        model = Path(
+            CONTAINER_OUTPUT_DIR / "models"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "model_JIT.pt"
+        ),
+    params:
+        logger_dir = directory(
+            CONTAINER_OUTPUT_DIR / "models"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+        ),
+    shell:
+        "/opt/env/bin/python {input.arg} fit \
+            --config {input.config} \
+            --trainer.logger.save_dir {params.logger_dir} \
+            --model.feature_mode {wildcards.coh_mode} \
+            --data.embedding_path {input.precom_data_dir}/embeddings.npy \
+            --data.features_path {input.precom_data_dir}/correlations.npy"
 
 rule combine_models:
     input:
         arg = GWAK_ROOT / "gwak/train/train/combine_models.py",
         config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
         embedding_model = rules.train_cl.output.model,
-        fm_model = rules.train_fm.output.model
+        fm_model = rules.train_fm.output.model,
+        embd_config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
+        fm_config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
     output:
         model = Path(
             OUTPUT_DIR / "models" 
@@ -143,20 +250,82 @@ rule combine_models:
             --project {params.pyproject} python {input.arg} \
             {input.embedding_model} \
             {input.fm_model} \
-            --coh_mode {wildcards.coh_mode} \
-            --config {input.config} \
+            --feature_mode {wildcards.coh_mode} \
+            --embd_config {input.embd_config} \
+            --fm_config {input.fm_config} \
             --outfile {output.model} '
 
-rule make_offline_dataset:
-    params:
-        ifo_mode = 'HL',
-        num_samples = 100_000,
-        dataset = 'train',
+rule production_combine_models:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/combine_models.py",
+        embd_config = GWAK_ROOT / 'gwak/train/configs/{cl_config}.yaml',
+        fm_config = GWAK_ROOT / "gwak/train/configs/{fm_config}.yaml",
+        embedding_model = rules.production_train_cl.output.model,
+        fm_model = rules.production_train_fm.output.model,
     output:
+        model = Path(
+            CONTAINER_OUTPUT_DIR / "models"
+            / "{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+            / "combination/model_JIT.pt"
+        ),
     shell:
-        'python train/make_offline_dataset.py {params.ifo_mode} \
+        "/opt/env/bin/python {input.arg} \
+            {input.embedding_model} \
+            {input.fm_model} \
+            --feature_mode {wildcards.coh_mode} \
+            --embd_config {input.embd_config} \
+            --fm_config {input.fm_config} \
+            --outfile {output.model} "
+
+# snakemake -c1 $CONTAINER_OUTPUT_DIR/condor/train/HL/O4b_cat1-chunked/ResNet_6d.test/Outputs/model_JIT.pt
+rule condor_train_rules:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/condor_handler.py",
+        config = GWAK_ROOT / "gwak/train/configs/train_condor.yaml",
+        cl_config = GWAK_ROOT / "gwak/train/configs/{cl_config}.yaml",
+        image = IMAGE_DIR / "train.sif"
+    output:
+        directory(
+            CONTAINER_OUTPUT_DIR
+            / "condor/train/{ifo_mode}/{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
+        )
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
+    shell:
+        "source {params.gwak_env}; set -x; uv run \
+            --project {params.pyproject} python {input.arg} \
+            --config {input.config} \
+            --ifo_mode {wildcards.ifo_mode} \
+            --data_ver {wildcards.data_ver} \
+            --data_tag {params.data_tag} \
+            --cl_config {wildcards.cl_config} \
+            --feature_mode {wildcards.coh_mode} \
+            --fm_config {wildcards.fm_config}"
+
+
+rule make_offline_dataset:
+    input:
+        arg = GWAK_ROOT / "gwak/train/train/make_offline_dataset.py"
+    output:
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
+        ifo_mode = 'HL',
+        num_samples = 5_000,
+        # dataset = 'train',
+        # dataset = 'val',
+        dataset = 'test',
+        # data_tag = "O4b_cat1-loud_glitch"
+        data_tag = lambda wildcards: data_ver_to_path["O4b_cat1-loud_glitch"],
+    shell:
+        "source {params.gwak_env}; uv run \
+            --project {params.pyproject} python {input.arg} \
+            {params.ifo_mode} \
             {params.num_samples} \
-            {params.dataset}'
+            {params.dataset} \
+            {params.data_tag}"
 
 
 rule make_signal_embeddings:
@@ -171,8 +340,8 @@ rule make_signal_embeddings:
         ),
         data_dir = lambda wildcards: directory(
             DATA_DIR
-            / data_ver_to_path[wildcards.data_ver]
             / wildcards.ifo_mode
+            / data_ver_to_path[wildcards.data_ver]
         )
     output:
         precom_data_dir = directory(
@@ -181,28 +350,31 @@ rule make_signal_embeddings:
     params:
         gwak_env = GWAK_ROOT / ".gwak/env.sh",
         pyproject = GWAK_ROOT / "gwak/train/pyproject.toml",
-        omicron = lambda wildcards: (DATA_DIR / "O4_MDC_background" / "omicron" / wildcards.ifo_mode),
+        omicron = lambda wildcards: (
+            DATA_DIR / wildcards.ifo_mode / "omicron" / "O4_MDC_background_snr-g10"
+        ),
+        data_tag = lambda wildcards: data_ver_to_path[wildcards.data_ver],
     shell:
         'source {params.gwak_env}; uv run \
             --project {params.pyproject} python {input.arg} \
-            --data-dir {input.data_dir} \
+            --data_tag {params.data_tag} \
             --ifos {wildcards.ifo_mode} \
             --config {input.config} \
             --embedding-model {input.embedding_model} \
-            --coh_mode {wildcards.coh_mode} \
+            --feature_mode {wildcards.coh_mode} \
             --glitch-root {params.omicron} \
             --means {output.precom_data_dir}/means.npy \
             --stds {output.precom_data_dir}/stds.npy \
             --embeddings {output.precom_data_dir}/embeddings.npy \
             --labels {output.precom_data_dir}/labels.npy \
             --correlations {output.precom_data_dir}/correlations.npy \
+            --latent {output.precom_data_dir}/latent.npy \
             --signal-type all \
             --nevents 100000 '
 
-
 # rule compare_embeddings:
 #     input:
-#         data_dir = DATA_DIR / "O4_MDC_background-chunked/HL/"
+#         data_dir = DATA_DIR / "O4_MDC_background_snr-g10-chunked/HL/"
 #     params:
 #         config = GWAK_ROOT / 'gwak/train/configs/resnet_kl1.0_bs512.yaml',
 #         models_to_compare = [OUTPUT_DIR / 'resnet_kl1.0_bs512_HL/model_JIT.pt', OUTPUT_DIR / 's4_kl1.0_bs256_HL/model_JIT.pt'],
@@ -220,7 +392,7 @@ rule make_signal_embeddings:
 #     params:
 #         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
 #         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
-#         data_dir = DATA_DIR / 'O4_MDC_background-chunked/HL/',
+#         data_dir = DATA_DIR / 'O4_MDC_background_snr-g10-chunked/HL/',
 #         config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
 #         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
 #         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',
@@ -237,7 +409,7 @@ rule make_signal_embeddings:
 #     params:
 #         artefact = directory(OUTPUT_DIR / 'ResNet_HL_FM_multiSignalAndBkg/'),
 #         embeddings = OUTPUT_DIR / 'ResNet_signals_HL/embeddings.npy',
-#         data_dir = DATA_DIR / 'O4_MDC_background-chunked/HL/',
+#         data_dir = DATA_DIR / 'O4_MDC_background_snr-g10-chunked/HL/',
 #         config = GWAK_ROOT / 'gwak/train/configsFM_multiSignalAndBkg.yaml',
 #         means = OUTPUT_DIR / 'ResNet_signals_HL/means.npy',
 #         stds = OUTPUT_DIR / 'ResNet_signals_HL/stds.npy',

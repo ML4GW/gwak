@@ -1,5 +1,4 @@
 import h5py
-import yaml
 import logging
 import argparse
 import numpy as np
@@ -24,8 +23,7 @@ from torch.distributions.uniform import Uniform
 from torch.distributions import TransformedDistribution, Distribution
 from ml4gw.distributions import Cosine, PowerLaw, LogNormal, LogUniform
 from ml4gw.waveforms import GenerateString
-import data
-from data.prior import FakeGlitchPrior
+from trainer.prior import FakeGlitchPrior
 from abc import ABC
 import copy
 import sys
@@ -37,7 +35,9 @@ import time
 from typing import Union
 
 from scipy import signal
-from transforms import TorchBandpassFIR, hrrs_value
+from transforms import TorchBandpassFIR, hrrs_value, CCSN_Injector, load_h5_as_dict
+from machinery.loggers import gwak_logger, Pathfinder
+from machinery import gwak_data_dir, gwak_dir
 
 def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
     coeffs = []
@@ -50,46 +50,73 @@ def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
 
 
 class EmbeddingLoader(pl.LightningDataModule):
-    def __init__(self, embedding_path, labels_path=None, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
+    def __init__(
+        self,
+        embedding_path,
+        labels_path=None,
+        features_path=None,
+        val_split=0.2,
+        batch_size=32,
+        num_workers=0
+    ):
         super().__init__()
         self.embedding_path = Path(embedding_path)
         self.labels_path = Path(labels_path) if labels_path else None
-        self.c_path = Path(c_path) if c_path else None
+        self.features_path = Path(features_path) if features_path else None
         self.val_split = val_split
         self.batch_size = batch_size
         self.num_workers = num_workers
 
     def setup(self, stage=None):
-        x = torch.tensor(np.load(self.embedding_path), dtype=torch.float32)
-        self.x_mean = x.mean(0)
-        self.x_std = x.std(0).clamp(min=1e-8)
 
-        if self.c_path and self.c_path.exists():
-            c = torch.tensor(np.load(self.c_path), dtype=torch.float32)
-            assert len(x) == len(c), "x and c must have the same number of samples"
-            self.c_mean = c.mean(0)
-            self.c_std = c.std(0).clamp(min=1e-8)
-            dataset = TensorDataset(x, c)
-        elif self.labels_path and self.labels_path.exists():
-            self.c_mean = torch.zeros(1)
-            self.c_std = torch.ones(1)
-            l = torch.tensor(np.load(self.labels_path), dtype=torch.float32)
-            assert len(x) == len(l), "x and l must have the same number of samples"
-            dataset = TensorDataset(x, l)
+        if self.trainer.lightning_module.feats_mode == "embedding":
+            self.inputs_data_path = self.embedding_path
+            self.contexts_data_path = self.features_path
         else:
-            self.c_mean = torch.zeros(1)
-            self.c_std = torch.ones(1)
-            dataset = TensorDataset(x)
+            self.inputs_data_path = self.features_path
+            self.contexts_data_path = self.embedding_path
+
+        inputs = torch.tensor(np.load(self.inputs_data_path), dtype=torch.float32)
+        contexts = torch.tensor(np.load(self.contexts_data_path), dtype=torch.float32)
+        assert len(inputs) == len(contexts), "x and c must have the same number of samples"
+        dataset = TensorDataset(inputs, contexts)
+        self.inputs_mean = inputs.mean(0)
+        self.inputs_std = inputs.std(0).clamp(min=1e-8)
+        self.contexts_mean = contexts.mean(0)
+        self.contexts_std = contexts.std(0).clamp(min=1e-8)
+
+        if self.features_path and self.features_path.exists():
+            pass
+        elif self.labels_path and self.labels_path.exists():
+            self.features_mean = torch.zeros(1)
+            self.features_std = torch.ones(1)
+            labels = torch.tensor(np.load(self.labels_path), dtype=torch.float32)
+            assert len(embd) == len(labels), "x and l must have the same number of samples"
+            dataset = TensorDataset(embd, labels)
+        else:
+            self.features_mean = torch.zeros(1)
+            self.features_std = torch.ones(1)
+            dataset = TensorDataset(embd)
 
         val_size = int(len(dataset) * self.val_split)
         train_size = len(dataset) - val_size
         self.train_dataset, self.val_dataset = random_split(dataset, [train_size, val_size])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers
+        )
 
     def test_dataloader(self):
         return None
@@ -155,8 +182,8 @@ class TimeSlidesDataloader(pl.LightningDataModule):
         self._logger = self.get_logger()
 
         bandpass = TorchBandpassFIR(
-            lowcut=30,
-            highcut=2047,
+            highpass=30,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
 
@@ -342,7 +369,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
 
     def __init__(
         self,
-        data_dir: Path,
+        data_tag: str,
         sample_rate: int,
         kernel_length: float, # how many data points
         psd_length: int, # for whitening
@@ -355,8 +382,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
         data_saving_file: Path = None,
         ifos: str = 'HL',
         remake_cache: bool = False, # whether to remake the glitch cache file for the h5s
+        model_mode: Optional[str] = None,
     ):
         super().__init__()
+        data_dir = gwak_data_dir(suffix=f"{ifos}/{data_tag}")()
         self.train_fnames, self.val_fnames, self.test_fnames = self.train_val_test_split(data_dir)
         self.sample_rate = sample_rate
         self.kernel_length = kernel_length
@@ -369,6 +398,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.glitch_root = glitch_root
         self.data_saving_file = data_saving_file
         self.remake_cache = remake_cache
+        self.model_mode = model_mode
         if type(ifos) == list:
             self.ifos = ifos
         else:
@@ -376,8 +406,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
             if self.ifos not in [['H1', 'L1'], ['H1', 'V1'], ['L1', 'V1'], ['H1', 'L1', 'V1']]:
                 print(f"Unrecognized ifo configuration {self.ifos}, please specify a valid one")
                 sys.exit(1)
+        self.num_ifos = len(self.ifos)
         print("ifos are", self.ifos)
         print("data dir is", data_dir)
+        print("Number of ifos are", self.num_ifos)
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
@@ -394,23 +426,32 @@ class GwakBaseDataloader(pl.LightningDataModule):
             "fduration": fduration,
             "fftlength": fftlength,
         }
-
+        highpass = 30
         bandpass = TorchBandpassFIR(
-                    lowcut=30,
-                    highcut=2047,
-                    sample_rate=self.sample_rate
+            highpass=highpass,
+            lowpass=2047,
+            sample_rate=self.sample_rate
         )
 
         whitener = Whiten(
             self.fduration,
             self.sample_rate,
-            highpass = 30,
+            highpass=highpass,
         )
 
-        spectral_density = SpectralDensity(self.sample_rate, self.fftlength, average='median')
-        self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
-        self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
-        self.spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
+        spectral_density = SpectralDensity(
+            self.sample_rate,
+            self.fftlength,
+            average='median'
+        )
+
+        device = "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        self.device = device
+        self.bandpass = bandpass.to(device)
+        self.whitener = whitener.to(device)
+        self.spectral_density = spectral_density.to(device)
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -520,7 +561,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
         return logger
 
     def whiten(self, batch):
-
+        batch_size = batch.shape[0]
+        if self.model_mode == "random":
+            return torch.randn(
+                (batch_size,self.num_ifos,self.sample_rate),
+                device=self.device
+            )
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
         splits = [batch.size(-1) - split_size, split_size]
@@ -543,7 +589,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
             [batch] = batch
             # inject waveforms; maybe also whiten data preprocess etc..
             batch = self.whiten(batch)
-
+            batch_size = batch.shape[0]
+            if self.model_mode == "random":
+                label = torch.ones(batch_size)
+                return batch, label
             if self.trainer.training and (self.data_saving_file is not None):
 
                 step_name = f"Training/Step_{self.trainer.global_step:06d}_BK"
@@ -581,14 +630,26 @@ class SignalDataloader(GwakBaseDataloader):
         snr_anneal_epochs: float = 10, # number of epochs to anneal SNR over
         rebalance_classes: bool = True, # whether to rebalance the classes (e.g. waveforms with same label but different names)
         whiten: bool = True,   # make whitening optional
+        ccsn_on_gpu: bool = False, # simulate CCSN on the GPU instead of with numpy
         **kwargs
     ):
+
+        for name, value in {
+            "signal_classes": signal_classes,
+            "waveforms": waveforms,
+            "priors": priors,
+            "extra_kwargs": extra_kwargs,
+        }.items():
+            if not isinstance(value, list):
+                raise TypeError(
+                    f"{name} must be a list, got {type(value).__name__}"
+                )
         super().__init__(*args, **kwargs)
-        self.signal_classes = signal_classes if type(signal_classes) == list else [signal_classes]
         self.num_classes = len(signal_classes)
-        self.waveforms = waveforms if type(waveforms) == list else [waveforms]
-        self.priors = priors if type(priors) == list else [priors]
-        self.extra_kwargs = extra_kwargs if type(extra_kwargs) == list else [extra_kwargs]
+        self.signal_classes = signal_classes
+        self.waveforms = waveforms
+        self.priors = priors
+        self.extra_kwargs = extra_kwargs
         self.loader_mode = loader_mode
         self.anneal_snr = anneal_snr
         self.snr_init_factor = snr_init_factor
@@ -597,6 +658,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.cache_dir = cache_dir
         self.rebalance_classes = rebalance_classes
         self.do_whiten = whiten
+        self.ccsn_on_gpu = ccsn_on_gpu
+        if ccsn_on_gpu and not torch.cuda.is_available():
+            raise RuntimeError("ccsn_on_gpu is set but CUDA is not available")
         self.num_workers = kwargs["num_workers"]
 
         self.all_signal_labels = {
@@ -609,9 +673,12 @@ class SignalDataloader(GwakBaseDataloader):
             "WhiteNoiseBurst":5,
             "CCSN":6,
             "Background":7,
-            "Glitch":7,
-            "FakeGlitch":8,
-            "MultiSineGaussian":9
+            # "Glitch":7,
+            # "FakeGlitch":8,
+            # "MultiSineGaussian":9
+            "Glitch":8,
+            "FakeGlitch":9,
+            "MultiSineGaussian":10
         }
         self.all_signal_label_names = {
             1:"SineGaussian",
@@ -620,11 +687,16 @@ class SignalDataloader(GwakBaseDataloader):
             4:"Strings (Cusp/Kink/2Kink)",
             5:"WhiteNoiseBurst",
             6:"CCSN",
-            7:"Bkg/Glitch",
-            8:"FakeGlitch",
-            9:"MultiSineGaussian"
+            # 7:"Bkg/Glitch",
+            # 8:"FakeGlitch",
+            # 9:"MultiSineGaussian"
+            7: "Background",
+            8: "Glitch",
+            9: "FakeGlitch",
+            10: "MultiSineGaussian"
         }
-
+        # self.noise_type = ["Bkg/Glitch"]
+        self.noise_type = ["Glitch", "Background"]
         self.signal_configs = []
         for i in range(len(signal_classes)):
             signal_config = copy.deepcopy(self.config)
@@ -638,12 +710,9 @@ class SignalDataloader(GwakBaseDataloader):
         self.phic_prior = Uniform(0, 2 * torch.pi)
 
         # CCSN second-derivitive waveform data if using
-        file_path = Path(__file__).resolve()
-        # To Do: Change this to absolute path, and perhaps 
-        # make a wapper function to contorl the input yaml and data source
         self.ccsn_dict = load_h5_as_dict(
-            chosen_signals=file_path.parents[2] / "data/configs/ccsn.yaml",
-            source_file=Path(file_path.parents[3] / "gwak-dlc/Resampled/")
+            chosen_signals=gwak_dir(suffix="gwak/data/configs")("ccsn.yaml"),
+            source_file=gwak_dir(suffix="gwak-dlc")("Resampled"),
         )
         self.generate_waveforms_ccsn = CCSN_Injector(
             ifos=self.ifos,
@@ -661,7 +730,7 @@ class SignalDataloader(GwakBaseDataloader):
 
         # new computation for when several classes have the same label (e.g. merging strings)
         if self.rebalance_classes:
-            uniq,counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
+            uniq, counts = np.unique([self.all_signal_labels[signal_class] for signal_class in self.signal_classes], return_counts=True)
             frac_per_label = 1.0/len(uniq)
             counts_per_label = {}
             for label,ct in zip(uniq,counts):
@@ -678,13 +747,6 @@ class SignalDataloader(GwakBaseDataloader):
                     for i in range(deficit):
                         self.num_per_class[i] += 1
 
-        # save correspondence between numerical labels and signal names
-        # convention is label 1 = first signal, label 2 = second signal, etc.
-        #class_labels = [i+1 for i in range(self.num_classes)]
-        #if self.data_saving_file is not None:
-        #    self.data_group.create_dataset("class_label_numbers",data=np.array(class_labels))
-        #    self.data_group["class_label_names"] = self.signal_classes
-
         # make a list of signals we can use for "fake" glitch generation
         # i.e. where we populate one ifo with a signal and the other with nothing
         # use only signals for which waveforms/priors are easy
@@ -696,8 +758,8 @@ class SignalDataloader(GwakBaseDataloader):
         self.snr_prior = snr_prior
         highpass = 30
         bandpass = TorchBandpassFIR(
-            lowcut=highpass,
-            highcut=2047,
+            highpass=highpass,
+            lowpass=2047,
             sample_rate=self.sample_rate
         )
         rescaler = SnrRescaler_Online(
@@ -752,14 +814,14 @@ class SignalDataloader(GwakBaseDataloader):
             coincident=False,
             mode=self.loader_mode
         )
+
+        train_glitch_dataset = None
         if self.has_glitch:
             train_glitch_dataset = self.make_dataset(
                 self.train_fnames,
                 coincident=True,
                 mode="glitch"
             )
-        else:
-            train_glitch_dataset = None
 
         train_paired_dataset = CleanGlitchPairedDataset(
             train_clean_dataset,
@@ -767,8 +829,8 @@ class SignalDataloader(GwakBaseDataloader):
         )
 
         return torch.utils.data.DataLoader(
-            train_paired_dataset, 
-            batch_size=None, 
+            train_paired_dataset,
+            batch_size=None,
             num_workers=self.num_workers,
         )
 
@@ -778,16 +840,23 @@ class SignalDataloader(GwakBaseDataloader):
             coincident=False,
             mode=self.loader_mode
         )
+
+        val_glitch_dataset = None
         if self.has_glitch:
             val_glitch_dataset = self.make_dataset(
                 self.val_fnames,
                 coincident=True,
                 mode="glitch"
             )
-        else:
-            val_glitch_dataset = None
-        val_paired_dataset = CleanGlitchPairedDataset(val_clean_dataset, val_glitch_dataset)
-        return torch.utils.data.DataLoader(val_paired_dataset, batch_size=None)
+            
+        val_paired_dataset = CleanGlitchPairedDataset(
+            val_clean_dataset,
+            val_glitch_dataset
+        )
+        return torch.utils.data.DataLoader(
+            val_paired_dataset,
+            batch_size=None
+        )
 
     def test_dataloader(self):
         test_clean_dataset = self.make_dataset(
@@ -827,8 +896,11 @@ class SignalDataloader(GwakBaseDataloader):
                     dec=decs[i] if decs is not None else None
                 )
             elif signal_class == "CCSN":
+                # the current device, so it also works when each process uses its own GPU
+                device = torch.device("cuda", torch.cuda.current_device()) if self.ccsn_on_gpu else None
                 responses, dec, phic, hrss_raw = self.generate_waveforms_ccsn(
-                    total_counts=self.num_per_class[i]
+                    total_counts=self.num_per_class[i],
+                    device=device,
                 )
                 params, ra = None, None
             elif signal_class in ["Background", "Glitch"]:
@@ -949,7 +1021,7 @@ class SignalDataloader(GwakBaseDataloader):
 
             snrs = torch.zeros(len(whitened)).to('cuda' if torch.cuda.is_available() else 'cpu')
             # if waveforms is not None:
-            if waveform_class not in ["Background", "Glitch", "FakeGlitch", "CCSN"]:
+            if waveform_class not in ["Background", "Glitch", "FakeGlitch"]:
                 snrs = compute_network_snr(rescaled_waveforms, psds_resampled, self.sample_rate, highpass=30)
 
             if waveform_class in ["Background", "Glitch", "FakeGlitch"]:
@@ -1042,6 +1114,27 @@ class SignalDataloader(GwakBaseDataloader):
         hrss = hrss_raw * snr_scaling
         return batch, snrs, hrss
 
+    def align_params(self, params, ras, decs, phics, perm):
+        # Per-class parameters in the order of the permuted batch: entry k of
+        # class i belongs to the k-th sample with indexed label i+1.
+        aligned = []
+        idx_lo = 0
+        for i in range(self.num_classes):
+            n = self.num_per_class[i]
+            order = perm[(perm >= idx_lo) & (perm < idx_lo + n)] - idx_lo
+            class_params = dict(params[i]) if isinstance(params[i], dict) else {}
+            for name, value in [("ra", ras[i]), ("dec", decs[i]), ("phic", phics[i])]:
+                if value is not None:
+                    class_params[name] = value
+            for name, value in class_params.items():
+                value = torch.as_tensor(value)
+                # Constant priors give a single value rather than one per sample
+                if value.numel() == 1:
+                    value = value.flatten().expand(n)
+                class_params[name] = value.to(order.device)[order]
+            aligned.append(class_params)
+            idx_lo += n
+        return aligned
 
     def on_after_batch_transfer(self, batch, dataloader_idx, local_test=False):
 
@@ -1097,12 +1190,13 @@ class SignalDataloader(GwakBaseDataloader):
             if local_test:
                 snrs = _snrs[perm]
                 hrss = _hrss[perm]
+                params = self.align_params(params, ras, decs, phics, perm)
             labels = labels[perm]
             indexed_labels = indexed_labels.to('cuda') if torch.cuda.is_available() else indexed_labels
             indexed_labels = indexed_labels[perm]
 
         if local_test:
-            return batch, indexed_labels, snrs, hrss
+            return batch, indexed_labels, snrs, hrss, params
 
         if self.trainer.training and (self.data_saving_file is not None):
             # Set a warning that when the global_step exceed 1e6,
@@ -1309,194 +1403,6 @@ def generate_waveforms_bbh(
 
     return responses, parameters, ra, dec, parameters['phic'], hrss
 
-
-def load_h5_as_dict(
-    chosen_signals: Path,
-    source_file: Path
-)-> dict:
-    """Open up a buffer to load in different CCSN wavefroms.
-
-    Args:
-        chosen_signals (Path): A file with names of each wavefrom.
-        source_file (Path): The path that contains reasmpled raw waveform.
-
-    Returns:
-        dict: Time and resampled SQDM of Each waveform
-    """
-    with open(chosen_signals) as f:
-        selected_ccsn = yaml.load(f, Loader=yaml.SafeLoader)
-
-    source_file = Path(source_file)
-
-    grand_dict = {}
-    ccsn_list = []
-
-    for key in selected_ccsn.keys():
-
-        for name in selected_ccsn[key]:
-            ccsn_list.append(f"{key}/{name}")
-
-    for name in ccsn_list:
-
-        with h5py.File(source_file/ f'{name}.h5', 'r', locking=False) as h:
-
-            time = np.array(h['time'][:])
-            quad_moment = h['quad_moment'][:]
-
-        grand_dict[name] =  [time, quad_moment]
-
-    return grand_dict
-
-def get_hp_hc_from_q2ij(
-    q2ij,
-    theta: np.ndarray,
-    phi: np.ndarray
-):
-
-    '''
-    The orientation of GW emition is given by theta, phi
-    '''
-
-    hp =\
-        q2ij[:,0,0]*(np.cos(theta)**2*np.cos(phi)**2 - np.sin(phi)**2).reshape(-1, 1)\
-        + q2ij[:,1,1]*(np.cos(theta)**2*np.sin(phi)**2 - np.cos(phi)**2).reshape(-1, 1)\
-        + q2ij[:,2,2]*(np.sin(theta)**2).reshape(-1, 1)\
-        + q2ij[:,0,1]*(np.cos(theta)**2*np.sin(2*phi) - np.sin(2*phi)).reshape(-1, 1)\
-        - q2ij[:,1,2]*(np.sin(2*theta)*np.sin(phi)).reshape(-1, 1)\
-        - q2ij[:,2,0]*(np.sin(2*theta)*np.cos(phi)).reshape(-1, 1)
-
-    hc = 2*(
-        - q2ij[:,0,0]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,1,1]*(np.cos(theta)*np.sin(phi)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,0,1]*(np.cos(theta)*np.cos(2*phi)).reshape(-1, 1)
-        - q2ij[:,1,2]*(np.sin(theta)*np.cos(phi)).reshape(-1, 1)
-        + q2ij[:,2,0]*(np.sin(theta)*np.sin(phi)).reshape(-1, 1)
-    )
-
-    return hp, hc
-
-def padding(
-    time,
-    hp,
-    hc,
-    distance,
-    sample_kernel = 3,
-    sample_rate = 4096,
-    time_shift = -0.15, # shift zero to distination time
-):
-
-    # Two polarization
-    signal = np.zeros([hp.shape[0], 2, int(sample_kernel * sample_rate)])
-
-    half_kernel_idx = int(sample_kernel * sample_rate/2)
-    time_shift_idx = int(time_shift * sample_rate)
-    t0_idx = int(time[0] * sample_rate)
-
-    start = half_kernel_idx + t0_idx + time_shift_idx
-    end = half_kernel_idx + t0_idx + time.shape[0] + time_shift_idx
-
-    signal[:, 0, start:end] = hp / distance.reshape(-1, 1)
-    signal[:, 1, start:end] = hc / distance.reshape(-1, 1)
-
-    return signal
-
-from ml4gw import gw
-from ml4gw.distributions import PowerLaw
-from ml4gw.transforms import SnrRescaler
-class CCSN_Injector:
-
-    def __init__(
-        self,
-        ifos,
-        signals_dict,
-        sample_rate,
-        sample_duration,
-        buffer_duration = 4,
-        off_set = 0.0,
-        time_shift = -0.15
-    ):
-
-        self.tensors, self.vertices = gw.get_ifo_geometry(*ifos)
-
-        self.signals = signals_dict
-        self.ccsn_list = list(self.signals.keys())
-
-        self.sample_rate = sample_rate
-        self.sample_duration = sample_duration
-        self.buffer_duration = buffer_duration
-        self.off_set = off_set
-        self.time_shift = time_shift
-        self.kernel_length = int(sample_duration * sample_rate)
-        self.buffer_length = int(buffer_duration * sample_rate)
-        self.max_center_offset = int((buffer_duration/2 - sample_duration - off_set) * sample_rate)
-
-        if off_set <= -time_shift:
-
-            logging.info(f"Core bounce siganl may leak out of sample kernel by {-time_shift - off_set}")
-
-    def __call__(
-        self,
-        total_counts # batch_size
-    ):
-
-        ccsn_num = len(self.ccsn_list)
-        ccsn_sample = np.random.choice(ccsn_num, total_counts)
-        ccsn_counts = np.eye(ccsn_num)[ccsn_sample].sum(0).astype("int")
-        X = torch.empty((total_counts, 2, self.buffer_length))
-        ccsne_agg_count = 0
-
-        for name, count in zip(self.ccsn_list, ccsn_counts):
-
-            time = self.signals[name][0]
-            quad_moment = torch.Tensor(self.signals[name][1]) * 10
-
-            theta = torch.Tensor(np.random.uniform(0, np.pi, count))
-            phi = torch.Tensor(np.random.uniform(0, 2*np.pi, count))
-
-            hp, hc = get_hp_hc_from_q2ij(
-                quad_moment,
-                theta=theta,
-                phi=phi
-            )
-
-            hp_hc = padding(
-                time,
-                hp,
-                hc,
-                np.random.uniform(1, 10, count),
-                sample_kernel = self.buffer_duration,
-                sample_rate = self.sample_rate,
-                time_shift = self.time_shift, # Core-bounce will be at here
-            )
-
-            X[ccsne_agg_count:ccsne_agg_count+count, :, :] = torch.Tensor(hp_hc)
-
-
-            ccsne_agg_count += count
-        # X = X[:, :, 2048:-2048]
-        dec_distro = Cosine()
-        psi_distro = Uniform(0, np.pi)
-        phi_distro = Uniform(0, 2 * np.pi)
-
-        dec = dec_distro.rsample(total_counts)
-        psi = psi_distro.sample((total_counts,))
-        phi = phi_distro.sample((total_counts,))
-
-        ht = gw.compute_observed_strain(
-            dec,
-            psi,
-            phi,
-            detector_tensors=self.tensors,
-            detector_vertices=self.vertices,
-            sample_rate=self.sample_rate,
-            plus=X[:,0,:],
-            cross=X[:,1,:]
-        )
-
-        ht = ht.to('cuda') if torch.cuda.is_available() else ht
-        hrss = hrrs_value(X[:,0,:], X[:,1,:])
-
-        return ht, dec, phi, hrss
 
 from ml4gw.waveforms import MultiSineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
 class FakeGlitchWaveform:

@@ -7,8 +7,8 @@ from typing import Callable, Optional, Tuple
 from ml4gw.transforms import SpectralDensity, Whiten
 from ml4gw.utils.slicing import unfold_windows
 
-
 from transforms import TorchBandpassFIR
+
 Tensor = torch.Tensor
 
 
@@ -144,8 +144,8 @@ class BatchWhitener(torch.nn.Module):
             fast=False
         )
         self.bandpass = TorchBandpassFIR(
-            lowcut=highpass,
-            highcut=2047,
+            highpass=highpass,
+            lowpass=2047,
             sample_rate=sample_rate
         )
         self.whitener = Whiten(

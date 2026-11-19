@@ -1,0 +1,78 @@
+Bootstrap: docker
+From: ghcr.io/astral-sh/uv:0.6.11-python3.11-bookworm-slim
+
+%setup
+    ROOTFS="${APPTAINER_ROOTFS:-${SINGULARITY_ROOTFS:-}}"
+    : "${ROOTFS:?Container rootfs path is not set}"
+
+    mkdir -p "${ROOTFS}/opt/gwak"
+
+    # Copy project directories with exclusions
+    for project in gwak/train ml4gw hermes libs; do
+        mkdir -p "${ROOTFS}/opt/gwak/${project}"
+
+        rsync -a \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude '.pytest_cache' \
+            --exclude '.git' \
+            --exclude '*.pyc' \
+            "$GWAK_ROOT/${project}/" \
+            "${ROOTFS}/opt/gwak/${project}/"
+    done
+
+    # Copy additional files and directories
+    rsync -a "$GWAK_ROOT/setups" "${ROOTFS}/opt/gwak/"
+    rsync -a "$GWAK_ROOT/Snakefile" "${ROOTFS}/opt/gwak/"
+    rsync -a "$GWAK_ROOT/gwak-dlc" "${ROOTFS}/opt/gwak/"
+
+    # Copy individual workflow files
+    for file in \
+        gwak/data/data.smk \
+        gwak/data/configs/ccsn.yaml \
+        gwak/deploy/deploy.smk \
+        gwak/postselection/postselection.smk
+    do
+        mkdir -p "${ROOTFS}/opt/gwak/$(dirname "$file")"
+        rsync -a "$GWAK_ROOT/$file" "${ROOTFS}/opt/gwak/$file"
+    done
+
+%post
+    apt-get update
+    apt-get install -y build-essential wget
+    apt-get clean
+    # Install Pelican
+    mkdir -p /opt/bin
+    wget -O - "https://dl.pelicanplatform.org/7.26.3/pelican_$(uname -s)_$(uname -m).tar.gz" | tar zx -C /opt/bin/ --strip-components=1
+    # Install Snakemake
+    export UV_TOOL_DIR=/opt/uv-tools
+    export UV_TOOL_BIN_DIR=/opt/bin
+    export PATH="/opt/bin:$PATH"
+
+    uv tool install snakemake
+
+    # Install GWAK environment
+    export UV_PROJECT_ENVIRONMENT=/opt/env
+    cd /opt/gwak/gwak/train
+    uv sync --frozen --no-dev
+
+%environment
+    # Append venv dir to PATH so the 
+    # environment is active by default
+    export UV_TOOL_DIR=/opt/uv-tools
+    export UV_TOOL_BIN_DIR=/opt/bin
+    export UV_PROJECT_ENVIRONMENT=/opt/env
+    export PATH="/opt/bin:/opt/env/bin:$PATH"
+    
+    export GWAK_ROOT=/opt/gwak
+
+    export GWAK_LOG_DIR=/production/logs
+    export GWAK_DATA_DIR=/production/data
+    export GWAK_OUTPUT_DIR=/production/output
+
+
+%runscript
+    echo "Environment Check!"
+    echo "    GWAK_LOG_DIR: $GWAK_LOG_DIR"
+    echo "    GWAK_DATA_DIR: $GWAK_DATA_DIR"
+    echo "    GWAK_OUTPUT_DIR: $GWAK_OUTPUT_DIR"
