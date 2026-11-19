@@ -1,5 +1,6 @@
 import glob
 import re
+import os
 from pathlib import Path
 from typing import Iterable
 
@@ -122,28 +123,47 @@ def write_triggers(
     output_path: Path | str,
     missing_segments: Iterable[tuple[float, float]] = (),
 ) -> None:
-    """Write trigger records to a text or HDF5 file."""
+    """Write trigger records to a HDF5 file."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     missing = np.asarray(list(missing_segments), dtype=[("start", "<f8"), ("end", "<f8")])
 
-    if output_path.suffix == ".txt":
-        with output_path.open("w") as output_file:
-            if triggers.dtype.names:
-                names = " ".join(triggers.dtype.names)
-                output_file.write(f"{names}\n")
-                for trigger in triggers:
-                    values = " ".join(
-                        str(trigger[name]) for name in triggers.dtype.names
-                    )
-                    output_file.write(values + "\n")
-            if len(missing):
-                output_file.write("#################################\n")
-                for start, end in missing:
-                    output_file.write(f"{start} {end}\n")
-    elif output_path.suffix == ".h5":
+    segment_dir = '/home/shihhong.hsu/gwak/gwak/data/segments'
+    cats = ['cat1', 'cat2', 'cat3']
+    cats_path = { cat :f'{segment_dir}/segments.o4.{cat}-strain-HL.npy' for cat in cats }
+    cat_segments = { cat: np.load(cats_path[cat]) for cat in cats }
+    triggers_cat = {}
+    
+    trigger_dtype = triggers.dtype
+    for cat in cats + ['none']:
+        triggers_cat[cat] = np.asarray([], dtype=trigger_dtype)
+
+    for trigger in triggers:
+        is_none = False
+        t_trigger = trigger[0]
+        for cat in cats:
+            segments = cat_segments[cat]
+            cat_st = np.asarray([ t for t,_ in segments ])
+            cat_ed = np.asarray([ t for _,t in segments ])
+            cond_st = cat_st < t_trigger
+            cond_ed = t_trigger <= cat_ed
+            cond_cat = any([ cond_st[i] and cond_ed[i] for i in range(len(cond_st)) ])
+            is_none = is_none or cond_cat
+            if cond_cat:
+                triggers_cat[cat] = np.append(triggers_cat[cat], trigger)
+        if not is_none:
+            triggers_cat['none'] = np.append(triggers_cat['none'], trigger)
+
+
+    if output_path.suffix == ".h5":
         with h5py.File(output_path, "w") as hdf_file:
             hdf_file.create_dataset("triggers", data=triggers)
             hdf_file.create_dataset("missing_segments", data=missing)
+
+            for cat in cats + ['none']:
+                group_cat = hdf_file.create_group(cat)
+                group_cat.create_dataset('triggers', data=triggers_cat[cat])
+
+
     else:
         raise ValueError("Output path must have a '.txt' or '.h5' suffix")
