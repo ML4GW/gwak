@@ -1,5 +1,5 @@
 conda_env_name: gwak-data
-run_bootstrap_conda_data_env: true
+run_bootstrap_conda_data_env: false
 
 paths:
   gwak_root: .

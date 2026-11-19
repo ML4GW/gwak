@@ -391,7 +391,7 @@ class SimCLRBase(GwakBaseModelClass):
             )
             label_name_list = [label_names[int(label)] for label in labels]
             fig = make_corner(
-                embd, 
+                embd,
                 label_name_list,
                 hist_bar=self.trainer.datamodule.noise_type,
                 contour_bins=50,

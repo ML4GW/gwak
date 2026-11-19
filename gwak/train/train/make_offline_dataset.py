@@ -5,10 +5,24 @@ import sys
 from dataloader import SignalDataloader
 import torch
 
-from ml4gw.waveforms import SineGaussian, IMRPhenomPv2, Gaussian, GenerateString, WhiteNoiseBurst
+from ml4gw.waveforms import (
+    SineGaussian,
+    IMRPhenomPv2,
+    Gaussian,
+    GenerateString,
+    WhiteNoiseBurst
+)
 from ml4gw.distributions import PowerLaw
 
-from trainer.prior import SineGaussianBBC, LAL_BBHPrior, GaussianBBC, CuspBBC, KinkBBC, KinkkinkBBC, WhiteNoiseBurstBBC
+from trainer.prior import (
+    SineGaussianBBC,
+    LAL_BBHPrior,
+    GaussianBBC,
+    CuspBBC,
+    KinkBBC,
+    KinkkinkBBC,
+    WhiteNoiseBurstBBC
+)
 from pathlib import Path
 
 from tqdm import tqdm
@@ -20,20 +34,37 @@ import os
 from machinery import gwak_data_dir, gwak_dir
 DATA_DIR = Path(os.getenv("GWAK_DATA_DIR"))
 
-def write_file(filename, signal_classes, data, labels, snrs, hrss):
+def append_dataset(group, name, arr):
+    if name not in group:
+        group.create_dataset(
+            name, data=arr, 
+            maxshape=(None, *arr.shape[1:]), chunks=True
+        )
+    else:
+        ds = group[name]
+        n = ds.shape[0]
+        ds.resize(n + len(arr), axis=0)
+        ds[n:] = arr
+
+def write_file(filename, signal_classes, data, labels, snrs, hrss, params):
     with h5py.File(filename, "a") as f:
         for label in np.unique(labels):
             mask = labels == label
             group = f.require_group(signal_classes[int(label) - 1])
 
-            for name, arr in [("data", data[mask]), ("snrs", snrs[mask]), ("hrss", hrss[mask])]:
-                if name not in group:
-                    group.create_dataset(name, data=arr, maxshape=(None, *arr.shape[1:]), chunks=True)
-                else:
-                    ds = group[name]
-                    n = ds.shape[0]
-                    ds.resize(n + len(arr), axis=0)
-                    ds[n:] = arr
+            for name, arr in [
+                ("data", data[mask]),
+                ("snrs", snrs[mask]),
+                ("hrss", hrss[mask])
+            ]:
+                append_dataset(group, name, arr)
+
+            # params[i][name][k] belongs to the k-th sample of class i
+            class_params = params[int(label) - 1]
+            if class_params:
+                param_group = group.require_group("params")
+                for name, arrs in class_params.items():
+                    append_dataset(param_group, name, np.concatenate(arrs, axis=0))
 
 def main(
     ifos,
@@ -66,7 +97,7 @@ def main(
     num_workers = 4
     duration = fduration + kernel_length
 
-    OUTFILE = DATA_DIR / f"dataset_{dataset}_{ifos}_SR{int(sample_rate)}_kernel{kernel_length}_hrss.h5"
+    OUTFILE = DATA_DIR / f"dataset_{dataset}_{ifos}_SR{int(sample_rate)}_kernel{kernel_length}_hrss_params.h5"
 
     os.makedirs(os.path.dirname(OUTFILE), exist_ok=True)
 
@@ -120,13 +151,12 @@ def main(
         None,
         None
     ]
-    snr_prior = PowerLaw(index=-3, minimum=4, maximum=50)
+    snr_prior = PowerLaw(index=-3, minimum=6, maximum=50)
 
     # compute number of batches needed to get enough samples (equal number per class per batch)
     num_classes = len(signal_classes)
     num_samples = num_classes * num_samples_per_class
     batches_per_epoch = num_samples // batch_size + 1
-
 
     sig_loader = SignalDataloader(
         signal_classes,
@@ -164,19 +194,21 @@ def main(
     labels = []
     snrs = []
     hrsss = []
+    params = [{} for _ in signal_classes]
 
     num_loaded = 0
     max_in_memory = 5_000
-    # breakpoint()
+
     for _ in tqdm(range(num_batches)):
         clean_batch, glitch_batch = next(data_iter)
         clean_batch = clean_batch.to(device)
         glitch_batch = glitch_batch.to(device)
-        batch, indexed_labels, snr, hrss = sig_loader.on_after_batch_transfer(
+        batch, indexed_labels, snr, hrss, batch_params = sig_loader.on_after_batch_transfer(
             [clean_batch, glitch_batch],
             None,
             local_test=True
         )
+        # breakpoint()
         # batch: (B, 2, T)
         batch_np = batch.cpu().numpy().astype(np.float32)
         labels_np = indexed_labels.cpu().numpy().astype(np.int32)
@@ -189,6 +221,9 @@ def main(
         labels.append(labels_np)
         snrs.append(snr_np)
         hrsss.append(hrss.cpu().numpy().astype(np.float32))
+        for class_params, batch_class_params in zip(params, batch_params):
+            for name, value in batch_class_params.items():
+                class_params.setdefault(name, []).append(value.cpu().numpy())
 
         num_loaded += batch_np.shape[0]
 
@@ -200,11 +235,11 @@ def main(
             hrsss = np.concatenate(hrsss, axis=0)
 
             write_file(
-                OUTFILE, signal_classes, data, labels, snrs, hrsss,
+                OUTFILE, signal_classes, data, labels, snrs, hrsss, params,
             )
 
             # clean up
-            del data, labels, snrs
+            del data, labels, snrs, params
 
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -213,17 +248,17 @@ def main(
             labels = []
             snrs = []
             hrsss = []
+            params = [{} for _ in signal_classes]
             num_loaded = 0
 
     if num_loaded > 0:
-        print('Loaded data ', data)
         data = np.concatenate(data, axis=0)
         labels = np.concatenate(labels, axis=0)
         snrs = np.concatenate(snrs, axis=0)
         hrsss = np.concatenate(hrsss, axis=0)
 
         write_file(
-            OUTFILE, signal_classes, data, labels, snrs, hrsss,
+            OUTFILE, signal_classes, data, labels, snrs, hrsss, params,
         )
 
 if __name__ == "__main__":

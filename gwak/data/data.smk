@@ -6,6 +6,7 @@ ifo_configs = [
 ]
 segment_types = [
     "o4.strain",
+    "o4.cat3-strain",
     'o4b.bbc-background-0',
     'o4b.bbc-background-2',
     'o4b.short-0-0',

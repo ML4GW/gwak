@@ -1,5 +1,5 @@
-condor_nodes: 16
-max_concurrent_node: 16
+condor_nodes: 32
+max_concurrent_node: 32
 condor_kwargs:
   # universe: vanilla
   universe: container
@@ -8,7 +8,7 @@ condor_kwargs:
   gpus_minimum_memory: 16GB
   request_cpus: 4
   request_memory: 16G
-  request_disk: 16G
+  request_disk: 64G
   accounting_group: ligo.dev.o4.burst.allsky.mlyoffline
 
 run_name: one_test
@@ -23,19 +23,20 @@ ana_data: BBC_AnalysisReady_Cat12
 data_format: h5 # gwf
 shifts: [0, 1]
 project: combination
-grpc_port: 8301
+grpc_port: 8501
 # image: hermes/tritonserver:23.01
-image:
-  class_path: gwak_container_output_dir
-  init_args:
-      suffix: triton_image/tritonserver_25.06.sif
+image: tritonserver_25.06.sif
+# image:
+#   class_path: gwak_container_output_dir
+#   init_args:
+#       suffix: triton_image/tritonserver_25.06.sif
 model_repo_dir: null
 result_dir: null
 server_patients: 55
 monitor_patients: 5
 job_rate_limit: 1
 inference_rate: 4 # export overwrite
-singularity_path: null
+singularity_path: /opt/apptainer/bin/singularity
 ana_ver: O4b_cat1
 data_ver: O4b_cat1
 cl_config: null

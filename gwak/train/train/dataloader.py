@@ -50,46 +50,73 @@ def get_filt_coeffs(freq_low, freq_high, sample_rate, output="ba", order=3):
 
 
 class EmbeddingLoader(pl.LightningDataModule):
-    def __init__(self, embedding_path, labels_path=None, c_path=None, val_split=0.2, batch_size=32, num_workers=0):
+    def __init__(
+        self,
+        embedding_path,
+        labels_path=None,
+        features_path=None,
+        val_split=0.2,
+        batch_size=32,
+        num_workers=0
+    ):
         super().__init__()
         self.embedding_path = Path(embedding_path)
         self.labels_path = Path(labels_path) if labels_path else None
-        self.c_path = Path(c_path) if c_path else None
+        self.features_path = Path(features_path) if features_path else None
         self.val_split = val_split
         self.batch_size = batch_size
         self.num_workers = num_workers
 
     def setup(self, stage=None):
-        x = torch.tensor(np.load(self.embedding_path), dtype=torch.float32)
-        self.x_mean = x.mean(0)
-        self.x_std = x.std(0).clamp(min=1e-8)
 
-        if self.c_path and self.c_path.exists():
-            c = torch.tensor(np.load(self.c_path), dtype=torch.float32)
-            assert len(x) == len(c), "x and c must have the same number of samples"
-            self.c_mean = c.mean(0)
-            self.c_std = c.std(0).clamp(min=1e-8)
-            dataset = TensorDataset(x, c)
-        elif self.labels_path and self.labels_path.exists():
-            self.c_mean = torch.zeros(1)
-            self.c_std = torch.ones(1)
-            l = torch.tensor(np.load(self.labels_path), dtype=torch.float32)
-            assert len(x) == len(l), "x and l must have the same number of samples"
-            dataset = TensorDataset(x, l)
+        if self.trainer.lightning_module.feats_mode == "embedding":
+            self.inputs_data_path = self.embedding_path
+            self.contexts_data_path = self.features_path
         else:
-            self.c_mean = torch.zeros(1)
-            self.c_std = torch.ones(1)
-            dataset = TensorDataset(x)
+            self.inputs_data_path = self.features_path
+            self.contexts_data_path = self.embedding_path
+
+        inputs = torch.tensor(np.load(self.inputs_data_path), dtype=torch.float32)
+        contexts = torch.tensor(np.load(self.contexts_data_path), dtype=torch.float32)
+        assert len(inputs) == len(contexts), "x and c must have the same number of samples"
+        dataset = TensorDataset(inputs, contexts)
+        self.inputs_mean = inputs.mean(0)
+        self.inputs_std = inputs.std(0).clamp(min=1e-8)
+        self.contexts_mean = contexts.mean(0)
+        self.contexts_std = contexts.std(0).clamp(min=1e-8)
+
+        if self.features_path and self.features_path.exists():
+            pass
+        elif self.labels_path and self.labels_path.exists():
+            self.features_mean = torch.zeros(1)
+            self.features_std = torch.ones(1)
+            labels = torch.tensor(np.load(self.labels_path), dtype=torch.float32)
+            assert len(embd) == len(labels), "x and l must have the same number of samples"
+            dataset = TensorDataset(embd, labels)
+        else:
+            self.features_mean = torch.zeros(1)
+            self.features_std = torch.ones(1)
+            dataset = TensorDataset(embd)
 
         val_size = int(len(dataset) * self.val_split)
         train_size = len(dataset) - val_size
         self.train_dataset, self.val_dataset = random_split(dataset, [train_size, val_size])
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers
+        )
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers
+        )
 
     def test_dataloader(self):
         return None
@@ -355,6 +382,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         data_saving_file: Path = None,
         ifos: str = 'HL',
         remake_cache: bool = False, # whether to remake the glitch cache file for the h5s
+        model_mode: Optional[str] = None,
     ):
         super().__init__()
         data_dir = gwak_data_dir(suffix=f"{ifos}/{data_tag}")()
@@ -370,6 +398,7 @@ class GwakBaseDataloader(pl.LightningDataModule):
         self.glitch_root = glitch_root
         self.data_saving_file = data_saving_file
         self.remake_cache = remake_cache
+        self.model_mode = model_mode
         if type(ifos) == list:
             self.ifos = ifos
         else:
@@ -377,8 +406,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
             if self.ifos not in [['H1', 'L1'], ['H1', 'V1'], ['L1', 'V1'], ['H1', 'L1', 'V1']]:
                 print(f"Unrecognized ifo configuration {self.ifos}, please specify a valid one")
                 sys.exit(1)
+        self.num_ifos = len(self.ifos)
         print("ifos are", self.ifos)
         print("data dir is", data_dir)
+        print("Number of ifos are", self.num_ifos)
 
         if self.data_saving_file is not None:
             Path(self.data_saving_file.parents[0]).mkdir(parents=True, exist_ok=True)
@@ -395,9 +426,9 @@ class GwakBaseDataloader(pl.LightningDataModule):
             "fduration": fduration,
             "fftlength": fftlength,
         }
-
+        highpass = 30
         bandpass = TorchBandpassFIR(
-            highpass=30,
+            highpass=highpass,
             lowpass=2047,
             sample_rate=self.sample_rate
         )
@@ -405,13 +436,22 @@ class GwakBaseDataloader(pl.LightningDataModule):
         whitener = Whiten(
             self.fduration,
             self.sample_rate,
-            highpass = 30,
+            highpass=highpass,
         )
 
-        spectral_density = SpectralDensity(self.sample_rate, self.fftlength, average='median')
-        self.bandpass = bandpass.to('cuda') if torch.cuda.is_available() else bandpass
-        self.whitener = whitener.to('cuda') if torch.cuda.is_available() else whitener
-        self.spectral_density = spectral_density.to('cuda') if torch.cuda.is_available() else spectral_density
+        spectral_density = SpectralDensity(
+            self.sample_rate,
+            self.fftlength,
+            average='median'
+        )
+
+        device = "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        self.device = device
+        self.bandpass = bandpass.to(device)
+        self.whitener = whitener.to(device)
+        self.spectral_density = spectral_density.to(device)
 
     def train_val_test_split(self, data_dir, val_split=0.1, test_split=0.1):
         all_files = list(Path(data_dir).glob('*.h5')) + list(Path(data_dir).glob('*.hdf5'))
@@ -521,7 +561,12 @@ class GwakBaseDataloader(pl.LightningDataModule):
         return logger
 
     def whiten(self, batch):
-
+        batch_size = batch.shape[0]
+        if self.model_mode == "random":
+            return torch.randn(
+                (batch_size,self.num_ifos,self.sample_rate),
+                device=self.device
+            )
         # split batch into psd data and data to be whitened
         split_size = int((self.kernel_length + self.fduration) * self.sample_rate)
         splits = [batch.size(-1) - split_size, split_size]
@@ -544,7 +589,10 @@ class GwakBaseDataloader(pl.LightningDataModule):
             [batch] = batch
             # inject waveforms; maybe also whiten data preprocess etc..
             batch = self.whiten(batch)
-
+            batch_size = batch.shape[0]
+            if self.model_mode == "random":
+                label = torch.ones(batch_size)
+                return batch, label
             if self.trainer.training and (self.data_saving_file is not None):
 
                 step_name = f"Training/Step_{self.trainer.global_step:06d}_BK"
@@ -1066,6 +1114,28 @@ class SignalDataloader(GwakBaseDataloader):
         hrss = hrss_raw * snr_scaling
         return batch, snrs, hrss
 
+    def align_params(self, params, ras, decs, phics, perm):
+        # Per-class parameters in the order of the permuted batch: entry k of
+        # class i belongs to the k-th sample with indexed label i+1.
+        aligned = []
+        idx_lo = 0
+        for i in range(self.num_classes):
+            n = self.num_per_class[i]
+            order = perm[(perm >= idx_lo) & (perm < idx_lo + n)] - idx_lo
+            class_params = dict(params[i]) if isinstance(params[i], dict) else {}
+            for name, value in [("ra", ras[i]), ("dec", decs[i]), ("phic", phics[i])]:
+                if value is not None:
+                    class_params[name] = value
+            for name, value in class_params.items():
+                value = torch.as_tensor(value)
+                # Constant priors give a single value rather than one per sample
+                if value.numel() == 1:
+                    value = value.flatten().expand(n)
+                class_params[name] = value.to(order.device)[order]
+            aligned.append(class_params)
+            idx_lo += n
+        return aligned
+
     def on_after_batch_transfer(self, batch, dataloader_idx, local_test=False):
 
         if local_test or self.trainer.training or self.trainer.validating or self.trainer.sanity_checking:
@@ -1120,12 +1190,13 @@ class SignalDataloader(GwakBaseDataloader):
             if local_test:
                 snrs = _snrs[perm]
                 hrss = _hrss[perm]
+                params = self.align_params(params, ras, decs, phics, perm)
             labels = labels[perm]
             indexed_labels = indexed_labels.to('cuda') if torch.cuda.is_available() else indexed_labels
             indexed_labels = indexed_labels[perm]
 
         if local_test:
-            return batch, indexed_labels, snrs, hrss
+            return batch, indexed_labels, snrs, hrss, params
 
         if self.trainer.training and (self.data_saving_file is not None):
             # Set a warning that when the global_step exceed 1e6,

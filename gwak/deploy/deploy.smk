@@ -100,7 +100,7 @@ rule condor_infer:
     input:
         arg = GWAK_ROOT / "gwak/deploy/deploy/cli.py",
         config = GWAK_ROOT / "gwak/deploy/configs/infer_condor.yaml",
-        image = IMAGE_DIR / "deploy.sif"
+        # image = IMAGE_DIR / "deploy.sif"
         # plan_model = rules.export.output
     output:
         # directory(
@@ -109,7 +109,7 @@ rule condor_infer:
         #     / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/inference_result"
         # )
         Path(
-            OUTPUT_DIR / "infer"
+            CONTAINER_OUTPUT_DIR / "condor/deploy"
             / "{ifo_mode}/{ana_ver}/{data_ver}"
             / "{cl_config}_{coh_mode}_{fm_config}/{run_name}/log.log"
         )

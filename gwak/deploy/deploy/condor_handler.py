@@ -21,13 +21,11 @@ from machinery import (
     O4_bbc_short_0_data_dir,
     O4_bbc_short_1_data_dir
 )
-from machinery.cluster_tools import (
+from machinery.condor_tools import (
     submit_condor_job,
-    write_infer_bash_file,
-    write_condor_config,
+    write_deploy_bash_file,
     write_export_config,
     write_infer_core_config,
-    condor_submit_with_rate_limit,
     write_container_condor_sub
 )
 from infer_data import get_shifts_meta_data
@@ -46,7 +44,7 @@ def condor_infer_wrapper(
     shifts: list[float], 
     project: str,
     grpc_port: int = 8001,
-    image: Optional[Pathfinder] = None,
+    image: str = None,
     fname: Optional[Pathfinder] = None, 
     ana_data: Optional[str] = None,
     model_repo_dir: Optional[Pathfinder] = None,
@@ -92,30 +90,27 @@ def condor_infer_wrapper(
         inj_type -- Class of wavform to inject on timeslide. (default: {None})
     """
     patients = 5
-    # ToDo: import the snakemake confog or remove ver-tag-setting
-    # Snakemake config start
-    data_ver_to_path = {
-        "O4b_cat1": "O4_MDC_background", # Have omicron file
-        "O4b_cat1-chunked": "O4_MDC_background-chunked",
-        "O4b_cat12": "BBC_AnalysisReady_Cat12",
-        "O4b_cat12-katya": "BBC_AnalysisReady_Cat12-katya"
-    }
-    data_tag = data_ver_to_path.get("O4b_cat12-katya", data_ver)
-    # Snakemake config end
     Tb = int(Tb)
     output_dir = gwak_container_output_dir(suffix=f"condor")
     deploy_dir = gwak_dir(suffix="gwak/deploy")()
     export_config_file = deploy_dir / "configs/export.yaml"
-    cli = deploy_dir / "deploy/cli.py"
 
+    # Shell commnands
+    cli = "$GWAK_ROOT/gwak/deploy/deploy/cli.py"
+    cmds = [
+        f"python {cli} export --config $SCRATCH/export.yaml",
+        f"python {cli} infer --config $SCRATCH/infer.yaml"
+    ]
     ifo_mode = ''.join(ifo[0] for ifo in ifos)
     prefix = f"{data_ver}/{cl_config}_{coh_mode}_{fm_config}"
     username = os.environ.get("USER")
-    osdf_data_root = f"osdf:///igwn/cit/staging/{username}/Data/GWAK/{ifo_mode}/{data_tag}"
     osdf_image_root = f"osdf:///igwn/cit/staging/{username}/Container/GWAK"
-    # job_dir = gwak_container_output_dir(suffix=f"condor/deploy/{prefix}")()
+    osdf_triton_image = f"{osdf_image_root}/triton_image/{image}"
+    job_dir = gwak_container_output_dir(
+        suffix=f"condor/deploy/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
+    )()
     initialdir = gwak_container_output_dir()()
-    # job_dir.mkdir(parents=True, exist_ok=True)
+    job_dir.mkdir(parents=True, exist_ok=True)
     model_to_transfer = gwak_container_output_dir(
         suffix=f"Outputs/models/{ifo_mode}/{prefix}/{project}"
     )(append_path="model_JIT.pt")
@@ -126,27 +121,31 @@ def condor_infer_wrapper(
         1
     ]
     # File handling
-    if model_repo_dir is None: 
-        model_repo_dir = output_dir(
-            append_path=f"export/{ifo_mode}/{prefix}/{project}"
-        )
     if result_dir is None:
-        result_dir = gwak_container_output_dir(
-            suffix=f"Outputs/condor/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
+        export_result_dir = gwak_container_output_dir(
+            suffix=f"Outputs/export/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
         )()
-    if result_dir.exists():
-        shutil.rmtree(result_dir)
-    result_dir.mkdir(parents=True, exist_ok=True)
+        infer_result_dir = gwak_container_output_dir(
+            suffix=f"Outputs/infer/{ifo_mode}/{ana_ver}/{prefix}/{run_name}"
+        )()
+    if infer_result_dir.exists():
+        shutil.rmtree(infer_result_dir)
+    infer_result_dir.mkdir(parents=True, exist_ok=True)
 
     # Define fname
-    fname = fname(append_path=f"{ana_data}/{ifo_mode}")
+    fname = fname(append_path=f"{ifo_mode}/{ana_data}")
     if run_name == "bbc-short-0":
         fname = O4_bbc_short_0_data_dir(suffix=ifo_mode)()
     if run_name == "bbc-short-1":
         fname = O4_bbc_short_1_data_dir(suffix=ifo_mode)()
+    # The OSDF mirror must be the same folder the file list is built from,
+    # bbc-short dirs are laid out as {data_tag}/{ifo_mode} instead
+    # ToDo: The data_tag should be resolve upfront not in here.
+    # Better to resolve at snakemake level.
+    data_tag = fname.parent.name if fname.name == ifo_mode else fname.name
+    osdf_data_root = f"osdf:///igwn/cit/staging/{username}/Data/GWAK/{ifo_mode}/{data_tag}"
 
-    log_file = result_dir / "log.log"
-    triton_log = result_dir / "triton.log"
+    log_file = job_dir / "log.log"
     gwak_logger(log_file)
 
     logging.info(f"")
@@ -171,9 +170,9 @@ def condor_infer_wrapper(
     width = len(str(condor_nodes))
     node_job_dir, node_fnames, node_segments = [], [], []
     for i in range(condor_nodes):
-        job_dir = result_dir / f"Node_{i:0{width}d}"
-        job_dir.mkdir(parents=True, exist_ok=True)
-        node_job_dir.append(job_dir)
+        _job_dir = job_dir / f"Node_{i:0{width}d}"
+        _job_dir.mkdir(parents=True, exist_ok=True)
+        node_job_dir.append(_job_dir)
         size = files_per_node + (1 if i < extra else 0)
         node_fnames.append(fnames[idx:idx+size])
         node_segments.append(segments[idx:idx+size])
@@ -182,9 +181,9 @@ def condor_infer_wrapper(
     # HTCondor job submission
     for node in range(condor_nodes):
 
-        job_dir = node_job_dir[node]
-        export_job_dir = job_dir / "export"
-        infer_job_dir = job_dir / "infer"
+        _job_dir = node_job_dir[node]
+        export_job_dir = _job_dir / "export"
+        infer_job_dir = _job_dir / "infer"
         export_job_dir.mkdir(parents=True, exist_ok=True)
         infer_job_dir.mkdir(parents=True, exist_ok=True)
 
@@ -193,9 +192,16 @@ def condor_infer_wrapper(
             "class_path": "gwak_container_output_dir",
             "init_args": {"suffix": "Ouputs/export"},
         }
-        node_model_repo_dir = model_repo_dir or (
-            export_job_dir / f"{ifo_mode}/{prefix}/{project}"
-        )
+        triton_image_condor_loc = {
+            "class_path": "gwak_condor_stratch_dir",
+            "init_args": {"suffix": f'{image}'},
+        }
+        # Resolve on the condor node to where export_dir writes the model,
+        # a submit host path doesn't exist there and can't be bind mounted
+        node_model_repo_dir = model_repo_dir or {
+            "class_path": "gwak_container_output_dir",
+            "init_args": {"suffix": f"Ouputs/export/{ifo_mode}/{prefix}/{project}"},
+        }
 
         export_config = write_export_config(
             export_config_file=export_config_file,
@@ -220,10 +226,10 @@ def condor_infer_wrapper(
         infer_config = write_infer_core_config(
             run_name=run_name,
             job_dir=infer_job_dir,
-            result_dir=result_dir,
+            result_dir=infer_result_dir,
             project=project,
             model_repo_dir=node_model_repo_dir,
-            image=image(),
+            image=triton_image_condor_loc, # Watch out this.
             grpc_port=grpc_port,
             patients=server_patients,
             ifos=ifos,
@@ -244,29 +250,23 @@ def condor_infer_wrapper(
             keep_fname_dir=True, # Slurm reads strain in place, no scratch copy
         )
 
-        cmds = [
-            f"python {cli} export --config {export_config}",
-            # f"python {cli} infer --config {infer_config}"
-        ]
-        bash_file = write_infer_bash_file(
+
+        bash_file = write_deploy_bash_file(
             bash_root=node_job_dir[node],
             ifo_mode=ifo_mode,
             data_tag=data_tag,
+            image=image,
+            osdf_triton_image=osdf_triton_image,
             files=node_fnames[node],
             commands=cmds
         )
-
-        # condor_subs = write_condor_config(
-        #     condor_kwargs=condor_kwargs,
-        #     job_dir=node_job_dir[node],
-        #     executable=bash_file,
-        #     config=infer_config
-        # )
 
         condor_subs = write_container_condor_sub(
             job_dir=node_job_dir[node],
             image=pelican_read_latest_project_image(project_name="deploy"),
             transfer_model=model_to_transfer,
+            export_config=export_config,
+            infer_config=infer_config,
             condor_kwargs=condor_kwargs,
             initialdir=initialdir,
             executable=bash_file,
@@ -274,5 +274,5 @@ def condor_infer_wrapper(
 
         logging.info(f"Submitting Condor job with submit file:")
         logging.info(f"    {condor_subs}")
-        # submit_condor_job(condor_subs)
+        submit_condor_job(condor_subs)
         grpc_port += 3

@@ -25,8 +25,9 @@ data_ver_to_path = {
 }
 
 ana_ver_to_path = {
+    "gwak_pseudo": "pseudo_dataset",
     "O4b_gwak_cat1": "O4_MDC_background", # Have omicron file
-    "O4b_gwak_cat12": "BBC_AnalysisReady_Cat12",
+    "O4b_gwak_cat12": "BBC_AnalysisReady_Cat12-katya",
 }
 
 runs_to_TS = {

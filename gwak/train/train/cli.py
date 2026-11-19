@@ -13,8 +13,9 @@ class GwakMultiSignalCLI(LightningCLI):
         sample_rate = self.config["fit.data.init_args.sample_rate"]
         fduration = self.config['fit.data.init_args.fduration']
         kernel_length = self.config['fit.data.init_args.kernel_length']
-        
-        for i in range(len(self.config['fit.data.init_args.waveforms'])):
+        waveforms = self.config.get("fit.data.init_args.waveforms", [])
+
+        for i in range(len(waveforms)):
             if self.config['fit.data.init_args.signal_classes'][i] in ["Background", "Glitch", "CCSN", "FakeGlitch"]: continue
             
             if "sample_rate" in self.config['fit.data.init_args.waveforms'][i]['init_args'].keys():

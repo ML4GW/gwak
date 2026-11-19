@@ -146,7 +146,7 @@ if __name__ == '__main__':
     clean_batch = clean_batch.to(device)
     glitch_batch = glitch_batch.to(device)
 
-    processed, labels, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
+    processed, labels, _, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
     labels = labels.detach().cpu().numpy()
     binary_labels = (~np.isin(labels, [10, 11])).astype(int)
 

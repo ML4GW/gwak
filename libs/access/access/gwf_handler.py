@@ -10,12 +10,13 @@ import multiprocessing as mp
 import numpy as np
 
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlparse
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from gwdatafind import find_urls
 from gwpy.timeseries import TimeSeries, TimeSeriesList
-from gwpy.segments import DataQualityDict
+from gwpy.segments import DataQualityFlag,DataQualityDict
 
 
 def frame_span(source):
@@ -190,21 +191,34 @@ def get_conincident_segs(
     stop:int,
     state_flag:list,
     dqsegdb_url:str="https://segments.igwn.org",
+    open_state_flag:Optional[list] = None,
 ):
 
     segs = []
     query_flag = []
+    mini_dur = 128
+    skipped_short_segs_count = 0
+    if open_state_flag is not None:
 
-    for i, ifo in enumerate(ifos):
-        query_flag.append(f"{ifo}:{state_flag[i]}")
+        flags = DataQualityDict({
+            name: DataQualityFlag.fetch_open_data(
+                name, start, stop
+            )
+            for name in open_state_flag
+        })
+        active_segs = flags.intersection().active.to_table()
 
-    flags = DataQualityDict.query_dqsegdb(
-        query_flag,
-        start,
-        stop,
-        on_error="raise", # warn
-        host=dqsegdb_url,
-    )
+    else:
+        for i, ifo in enumerate(ifos):
+            query_flag.append(f"{ifo}:{state_flag[i]}")
+
+        flags = DataQualityDict.query_dqsegdb(
+            query_flag,
+            start,
+            stop,
+            on_error="raise", # warn
+            host=dqsegdb_url,
+        )
 
     try:
         active_table = flags.intersection().active.to_table()
@@ -213,7 +227,14 @@ def get_conincident_segs(
         return segs
 
     for contents in active_table:
+
+        if contents["duration"] < mini_dur:
+            skipped_short_segs_count += 1
+            continue
         segs.append((contents["start"], contents["end"]))
+
+    logging.info(f"Skipping {skipped_short_segs_count} segments")
+    logging.info(f"    Reason: Segment duration shorter than {mini_dur} seconds")
 
     return segs
     
@@ -251,7 +272,6 @@ def get_background(
             urltype=urltype,
             host=host,
         )
-        
         logging.info(f"Found {len(files)} files for {ifo}")
         if len(files) == 0:
             raise ValueError(f"No files found for {ifo} between {seg_start} and {seg_end}")

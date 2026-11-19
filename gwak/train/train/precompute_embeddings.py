@@ -106,7 +106,7 @@ if __name__=='__main__':
     parser.add_argument('--correlations', type=str)
     parser.add_argument('--latent', type=str, default=None,
                         help='Optional .npy for the latent vector [embedding | correlations] (needs --correlations).')
-    parser.add_argument('--coh_mode', type=str)
+    parser.add_argument('--feature_mode', type=str)
     parser.add_argument('--glitch-root', type=str)
     parser.add_argument('--means', type=str, default=None)
     parser.add_argument('--stds', type=str, default=None)
@@ -128,13 +128,15 @@ if __name__=='__main__':
     sample_rate = config['data']['init_args']['sample_rate']
     kernel_length = config['data']['init_args']['kernel_length']
     psd_length = config['data']['init_args']['psd_length']
+    psd_length = 16
     fduration = config['data']['init_args']['fduration']
     fftlength = config['data']['init_args']['fftlength']
     batch_size = config['data']['init_args']['batch_size']
+    batch_size = 3072
     batches_per_epoch = 2000000
     num_workers = 0
     data_saving_file = config['data']['init_args']['data_saving_file']
-    feature_extractor = FeatureExtractor(mode=args.coh_mode).to(device)
+    feature_extractor = FeatureExtractor(mode=args.feature_mode).to(device)
     duration = fduration + kernel_length
     if args.signal_type in ['All', 'ALL', 'all']:
         signal_classes = [
@@ -227,10 +229,10 @@ if __name__=='__main__':
             labels_chunk = labels_arr[start:end] if labels_arr is not None else None
 
             embeddings = embed_model(processed).detach().cpu().numpy()
+            embeddings = np.random.rand(*embeddings.shape)
             if args.correlations:
                 correlations = feature_extractor(
                     processed,
-                    # mode=args.coh_mode
                 ).cpu().detach().numpy()
 
             if labels_chunk is None:
@@ -280,17 +282,17 @@ if __name__=='__main__':
                 clean_batch = clean_batch.to(device)
                 glitch_batch = glitch_batch.to(device)
 
-                processed, labels, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
+                processed, labels, _, _, _ = loader.on_after_batch_transfer([clean_batch, glitch_batch], None, local_test=True)
 
                 if processed.shape[0] == 0:
                     del clean_batch, glitch_batch
                     torch.cuda.empty_cache()
                     continue
                 embeddings = embed_model(processed).cpu().detach().numpy()
+                embeddings = np.random.rand(*embeddings.shape)
                 if args.correlations:
                     correlations = feature_extractor(
                         processed,
-                        # mode=args.coh_mode
                     ).cpu().detach().numpy()
 
                 all_labels.append(labels.cpu().detach().numpy())
