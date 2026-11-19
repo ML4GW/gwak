@@ -1,12 +1,12 @@
 '''
 run example:
 cd <gwak_dir>
-source .gwak/env.sh
+source .gwak/env.sh; \
 uv run --project /home/shihhong.hsu/gwak/gwak/data/pyproject.toml \
     python /home/shihhong.hsu/gwak/gwak/data/data/omicron_check.py \
         --project-name omicron_check_test \
-            --outlier-config ResNet_6d_narrow_band_corr15_NF_from_file=/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-loud_glitch/ResNet_6d_narrow_band_selected-9_NF_features-no_context/one_decade/outlier_config.h5 \
-            --outlier-config RResNet_6d_narrow_band_corr15_NF_from_file=/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-chunked/ResNet_6d_narrow_band_corr15_NF_from_file/one_decade/outlier_config.h5
+            --outlier-config ResNet_6d_narrow_band_corr15_NF_from_file=/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-chunked/ResNet_6d_narrow_band_corr15_NF_from_file/one_decade/outlier_config.h5 \
+            --outlier-config ResNet_6d_narrow_band_selected-9_NF_features-no_context=/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-loud_glitch/ResNet_6d_narrow_band_selected-9_NF_features-no_context/one_decade/outlier_config.h5
 '''
 
 import argparse
@@ -167,8 +167,8 @@ def plot_trigger_comparison(
 
 def run_omicron_check(
     outlier_configs: Mapping[str, Path | str],
-    out_dir: Path | str,
     project_name: str,
+    out_dir: Path | str = Path(os.environ["GWAK_OUTPUT_DIR"]),
     trigger_root: Path | str = "/home/detchar/triggers",
     ifos: Iterable[str] = ("H1", "L1"),
     channel: str = "GDS_CALIB_STRAIN_NOLINES",

@@ -1,0 +1,16 @@
+# Use: python cli.py --config <this> run_omicron_check --project_name omicron_test_cli
+run_omicron_check:
+  project_name: 'omicron_check_sm'
+  outlier_configs: {
+    'ResNet_6d_narrow_band_corr15_NF_from_file': '/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-chunked/ResNet_6d_narrow_band_corr15_NF_from_file/one_decade/outlier_config.h5',
+    'ResNet_6d_narrow_band_selected-9_NF_features-no_context': '/home/hongyin.chen/Container/GWAK/Outputs/infer/HL/O4b_gwak_cat12/O4b_cat1-loud_glitch/ResNet_6d_narrow_band_selected-9_NF_features-no_context/one_decade/outlier_config.h5'
+  }
+  ### ones with default config input ###
+  # out_dir: Path(os.environ["GWAK_OUTPUT_DIR"])
+  trigger_root: "/home/detchar/triggers"
+  ifos: ["H1", "L1"]
+  channel: GDS_CALIB_STRAIN_NOLINES
+  check_buffer: 5.0
+  correction: -1.25
+
+

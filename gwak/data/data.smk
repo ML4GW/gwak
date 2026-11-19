@@ -72,3 +72,18 @@ rule pull_data_from_segments:
             --config {input.config} get_strain \
             --segments {input.segments} \
             --logger {output.logger}"
+
+
+# Check omicron triggers with outlier configs
+rule outlier_omicron_check:
+    input:
+        arg = GWAK_ROOT / "gwak/data/data/cli.py",
+        config = GWAK_ROOT / 'gwak/data/configs/outlier_omicron_triggers.yaml'
+    params:
+        gwak_env = GWAK_ROOT / ".gwak/env.sh",
+        pyproject = GWAK_ROOT / "gwak/data/pyproject.toml",
+    shell:
+        "source {params.gwak_env}; \
+        uv run \
+            --project {params.pyproject} python {input.arg} \
+            --config {input.config} run_omicron_check"

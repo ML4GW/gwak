@@ -1,10 +1,12 @@
 from background import make_seg_list, gwak_background
+from omicron_check import run_omicron_check
 
 from jsonargparse import ArgumentParser, ActionConfigFile
 
 SUBCOMMANDS = {
     "make_seg_list": make_seg_list,
     "get_strain": gwak_background,
+    "run_omicron_check": run_omicron_check
 }
 
 
