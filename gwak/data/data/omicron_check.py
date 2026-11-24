@@ -18,9 +18,10 @@ from typing import Iterable, Mapping
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.ticker import LogLocator, MultipleLocator
+from matplotlib.ticker import LogLocator
 
 from access.trigger_handler import (
+    categorize_triggers,
     find_missing_intervals,
     find_trigger_files,
     load_triggers,
@@ -32,7 +33,8 @@ from access.trigger_handler import (
 HISTOGRAM_RANGES = {
     "frequency": (30, 10000),
     "snr": (4, 3000),
-    "time": (1400000000, 1410000000),
+    # "time": (1400000000, 1410000000),
+    "q": (4, 150)
 }
 SEGMENT_PATTERN = re.compile(r"-(\d+)-(\d+)\.h5$")
 
@@ -90,8 +92,9 @@ def plot_trigger_comparison(
     segment_time: float,
     outlier_time: float,
     output_path: Path | str,
+    category: str | None = None,
 ) -> None:
-    """Save normalized Omicron histograms and an SNR-frequency scatter plot."""
+    """Save normalized Omicron histograms and a category-specific comparison."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -127,38 +130,84 @@ def plot_trigger_comparison(
         axis.set_xlabel(name)
         axis.set_xscale("log")
         axis.xaxis.set_major_locator(LogLocator(base=10))
+        if category:
+            axis.set_ylim(1e-5, 1)
         axis.set_yscale("log")
         axis.yaxis.set_major_locator(LogLocator(base=10))
         axis.grid(True, axis="x", which="major")
         axis.grid(True, axis="y", which="major")
 
     axes[0].set_ylabel("ratio")
-    axes[1].set_title(f"Normalized Histogram: {ifo}:{channel}")
+    category_label = f"_{category.upper()}" if category else ""
+    axes[1].set_title(f"Normalized Histogram: {ifo}:{channel}{category_label}")
     axes[-1].legend()
 
-    scatter_axis = figure.add_subplot(grid[1, :])
-    scatter_axis.scatter(
-        triggers["frequency"],
-        triggers["snr"],
-        s=10,
-        alpha=0.5,
-        label=f"omicron: {len(triggers)} trg. in {segment_time:.0f} s",
-    )
-    scatter_axis.scatter(
-        outlier_triggers["frequency"],
-        outlier_triggers["snr"],
-        s=10,
-        label=f"outlier: {len(outlier_triggers)} trg. in {outlier_time:.0f} s",
-    )
-    scatter_axis.set_title("SNR - Frequency")
-    scatter_axis.set_xlabel("frequency [Hz]")
-    scatter_axis.set_ylabel("snr")
-    scatter_axis.xaxis.set_major_locator(MultipleLocator(1000))
-    scatter_axis.set_ylim(5, 300)
-    scatter_axis.set_yscale("log")
-    scatter_axis.yaxis.set_major_locator(LogLocator(base=10))
-    scatter_axis.grid(True, which="major")
-    scatter_axis.legend()
+    comparison_axis = figure.add_subplot(grid[1, :])
+    if category:
+        if len(triggers):
+            comparison_axis.scatter(
+                triggers["frequency"],
+                triggers["snr"],
+                s=10,
+                alpha=0.5,
+                label=f"omicron: {len(triggers)} trg. in {segment_time:.0f} s",
+            )
+        if len(outlier_triggers):
+            comparison_axis.scatter(
+                outlier_triggers["frequency"],
+                outlier_triggers["snr"],
+                s=10,
+                label=f"outlier: {len(outlier_triggers)} trg. in {outlier_time:.0f} s",
+            )
+        comparison_axis.set_title("SNR - Frequency")
+        comparison_axis.set_xlabel("frequency [Hz]")
+        comparison_axis.set_ylabel("snr")
+        comparison_axis.set_ylim(5, 1500)
+        comparison_axis.set_xscale("log")
+        comparison_axis.set_yscale("log")
+        if len(triggers) or len(outlier_triggers):
+            comparison_axis.legend()
+        else:
+            comparison_axis.text(
+                0.5,
+                0.5,
+                "No triggers in this category",
+                ha="center",
+                va="center",
+                transform=comparison_axis.transAxes,
+            )
+    else:
+        t_window = 600
+        if len(triggers):
+            t_min = np.min(triggers["time"])
+            t_max = np.max(triggers["time"])
+            bins = np.arange(t_min, t_max + t_window, t_window)
+            if len(bins) < 2:
+                bins = np.array([t_min, t_min + t_window])
+            omi_counts, _ = np.histogram(triggers["time"], bins=bins)
+            comparison_axis.stairs(
+                omi_counts,
+                bins,
+                label=f"omicron: {len(triggers)} trg. in {segment_time:.0f} s",
+            )
+        if len(outlier_triggers):
+            if not len(triggers):
+                t_min = np.min(outlier_triggers["time"])
+                t_max = np.max(outlier_triggers["time"])
+                bins = np.arange(t_min, t_max + t_window, t_window)
+                if len(bins) < 2:
+                    bins = np.array([t_min, t_min + t_window])
+            out_counts, _ = np.histogram(outlier_triggers["time"], bins=bins)
+            comparison_axis.stairs(
+                out_counts,
+                bins,
+                label=f"outlier: {len(outlier_triggers)} trg. in {outlier_time:.0f} s",
+            )
+        comparison_axis.set_title(f"Trigger times (bin width: {t_window} s): {ifo}:{channel}")
+        comparison_axis.set_xlabel("Trigger time [GPS seconds]")
+        comparison_axis.set_ylabel("Number of triggers")
+        comparison_axis.set_yscale("log")
+        comparison_axis.legend(loc=1)
 
     figure.tight_layout(rect=(0, 0, 1, 0.96))
     figure.savefig(output_path)
@@ -208,6 +257,8 @@ def run_omicron_check(
                 interval_starts,
                 interval_ends,
             )
+            categorized_triggers = categorize_triggers(triggers)
+            categorized_outliers = categorize_triggers(outlier_triggers)
             segment_time = sum(end - start for start, end in segments)
             outlier_time = sum(ends - starts for starts, ends in zip(interval_starts, interval_ends))
 
@@ -220,6 +271,17 @@ def run_omicron_check(
                 outlier_time,
                 output_dir / f"{ifo}:{channel}.png",
             )
+            for category in ("cat1", "cat2"):
+                plot_trigger_comparison(
+                    categorized_triggers[category],
+                    categorized_outliers[category],
+                    ifo,
+                    channel,
+                    segment_time,
+                    outlier_time,
+                    output_dir / f"{ifo}:{channel}_{category}.png",
+                    category=category,
+                )
             missing = find_missing_intervals(
                 outlier_triggers,
                 interval_starts,

@@ -9,6 +9,7 @@ import numpy as np
 
 
 TRIGGER_SEGMENT_PATTERN = re.compile(r"-(\d+)-(\d+)\.h5$")
+CATEGORIES = ("cat1", "cat2", "cat3")
 
 
 def find_trigger_files(
@@ -21,6 +22,10 @@ def find_trigger_files(
     trigger_dir = Path(trigger_dir)
     starts = np.asarray(interval_starts, dtype=float).reshape(-1)
     ends = np.asarray(interval_ends, dtype=float).reshape(-1)
+
+    starts = np.asarray([np.min(starts)])
+    ends = np.asarray([np.max(ends)])
+
     if starts.size != ends.size:
         raise ValueError("interval_starts and interval_ends must have equal lengths")
     if starts.size == 0:
@@ -118,6 +123,39 @@ def find_missing_intervals(
     ]
 
 
+def categorize_triggers(
+    triggers: np.ndarray,
+    segment_dir: Path | str = "/home/shihhong.hsu/gwak/gwak/data/segments",
+    categories: Iterable[str] = CATEGORIES,
+    time_key: str = "time",
+) -> dict[str, np.ndarray]:
+    """Split triggers by data-quality category, retaining a ``none`` group."""
+    if triggers.dtype.names is None or time_key not in triggers.dtype.names:
+        raise KeyError(f"Trigger records do not contain a '{time_key}' field")
+
+    trigger_times = np.asarray(triggers[time_key])
+    categorized = {}
+    any_category = np.zeros(len(triggers), dtype=bool)
+    for category in categories:
+        segments = np.asarray(
+            np.load(Path(segment_dir) / f"segments.o4.{category}-strain-HL.npy"),
+            dtype=float,
+        ).reshape(-1, 2)
+        if segments.size:
+            in_category = np.any(
+                (segments[:, 0, np.newaxis] < trigger_times)
+                & (trigger_times <= segments[:, 1, np.newaxis]),
+                axis=0,
+            )
+        else:
+            in_category = np.zeros(len(triggers), dtype=bool)
+        categorized[category] = triggers[in_category]
+        any_category |= in_category
+
+    categorized["none"] = triggers[~any_category]
+    return categorized
+
+
 def write_triggers(
     triggers: np.ndarray,
     output_path: Path | str,
@@ -134,33 +172,11 @@ def write_triggers(
         dtype=[("start", "<f8"), ("end", "<f8")],
     )
 
-    categories = ("cat1", "cat2", "cat3")
-    segment_dir = Path('/home/shihhong.hsu/gwak/gwak/data/segments')
-    time_key = "time" if "time" in (triggers.dtype.names or ()) else triggers.dtype.names[0]
-    trigger_times = np.asarray(triggers[time_key])
-    categorized = {}
-    any_category = np.zeros(len(triggers), dtype=bool)
-
-    for category in categories:
-        segments = np.asarray(
-            np.load(segment_dir / f"segments.o4.{category}-strain-HL.npy"),
-            dtype=float,
-        ).reshape(-1, 2)
-        if segments.size:
-            in_category = np.any(
-                (segments[:, 0, np.newaxis] < trigger_times)
-                & (trigger_times <= segments[:, 1, np.newaxis]),
-                axis=0,
-            )
-        else:
-            in_category = np.zeros(len(triggers), dtype=bool)
-        categorized[category] = triggers[in_category]
-        any_category |= in_category
-    categorized["none"] = triggers[~any_category]
+    categorized = categorize_triggers(triggers, categories=CATEGORIES)
 
     with h5py.File(output_path, "w") as hdf_file:
         hdf_file.create_dataset("triggers", data=triggers)
         hdf_file.create_dataset("missing_segments", data=missing)
-        for category in (*categories, "none"):
+        for category in (*CATEGORIES, "none"):
             group = hdf_file.create_group(category)
             group.create_dataset("triggers", data=categorized[category])
