@@ -1,0 +1,35 @@
+# lightning.pytorch==2.3.2
+seed_everything: 0
+trainer:
+  callbacks:
+    - class_path: callback.ValidationCallback
+  accelerator: gpu
+  devices: [0]
+  # accelerator: auto
+  # devices: auto
+  strategy: ddp_find_unused_parameters_true
+  logger:
+    class_path: lightning.pytorch.loggers.WandbLogger
+    init_args:
+      project: gwak2_NF
+      entity: gwak
+  max_epochs: 25
+  check_val_every_n_epoch: 1
+  accumulate_grad_batches: 1
+ckpt_path: null
+model:
+  class_path: fm_models.BackgroundFlowModel
+  init_args:
+    embedding_model: null
+    embedding_dim: 6
+    # feats_mode: embedding
+    feats_mode: features
+    feature_mode: selected-9
+    concate_context: false
+    apply_context: true
+    normalize: true
+
+data:
+  class_path: dataloader.EmbeddingLoader
+  init_args:
+    batch_size: 2048

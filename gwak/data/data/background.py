@@ -25,6 +25,7 @@ def make_seg_list(
     ana_end: int,
     resolved_segments: Path,
     logger: Path,
+    open_state_flag: Optional[list] = None,
     state_flag: list[str] = None,
     segment_type: Optional[str] = None,
     dqsegdb_url: str = "https://segments.igwn.org",
@@ -57,6 +58,7 @@ def make_seg_list(
             stop=ana_end,
             state_flag=state_flag,
             dqsegdb_url=dqsegdb_url,
+            open_state_flag=open_state_flag,
         )
 
     write_segment_list(segs, resolved_segments)
@@ -137,7 +139,7 @@ def gwak_background(
 
         chunks = None
         if compression is not None:
-            chunks = (4096*32,)
+            chunks = (sample_rate*8,)
 
         # Write to a temporary file and rename, so a killed job never
         # leaves a partial file that would be skipped on resubmission.
@@ -152,6 +154,7 @@ def gwak_background(
                     g.create_dataset(
                         dname,
                         data=dset,
+                        dtype=np.float32,
                         compression=compression,
                         chunks=chunks
                     )

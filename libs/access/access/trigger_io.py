@@ -8,7 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 from collections import defaultdict
-from deploy.libs import accumlator
+from infer_modules import accumlator
 from machinery import ordinal
 
 
@@ -53,20 +53,22 @@ def select_threshold(
     verbose=True
 ):
 
-    if threshold_level >= 1: 
-        threshold = np.sort(tslide_data)[int(threshold_level)]
+    if threshold_level >= 1:
+        threshold = np.sort(tslide_data, axis=0)[int(threshold_level)]
 
         text_1 = f"    The {ordinal(threshold_level)} most outlier trigger "
         text_2 = f"of {run_name} distribution of {model} is: "
-        text_3 = f"{round(threshold, 2)}."
+        text_3 = f"{threshold}."
+        # text_3 = f"{round(threshold, 2)}."
         full_message = text_1 + text_2 + text_3
 
-    if threshold_level < 1: 
-        threshold = np.quantile(tslide_data, threshold_level)
+    if threshold_level < 1:
+        threshold = np.quantile(tslide_data, threshold_level, axis=0)
 
         text_1 = f"    The {int(threshold_level*100)}% outlier from "
         text_2 = f"{run_name} distribution of {model} is: "
-        text_3 = f"{round(threshold, 2)}."
+        text_3 = f"{threshold}."
+        # text_3 = f"{round(threshold, 2)}."
         full_message = text_1 + text_2 + text_3
 
     if verbose:
@@ -81,8 +83,8 @@ def unpack_timeslide(
     infer_sample_rate,
     psd_length,
     tslide_data_dir,
-    dim_split: list=[6,1,1],
     full_return: bool=False,
+    gwak_min_value=None,
 ):
 
     tslide_data = []
@@ -90,7 +92,6 @@ def unpack_timeslide(
     coh_info = []
     tslide_dict = {}
 
-    roll_idx = np.cumsum(dim_split)
     stream_cut = int(infer_sample_rate*psd_length)
     file_list = list(sorted(tslide_data_dir.glob("*.h5")))
 
@@ -99,27 +100,29 @@ def unpack_timeslide(
 
         with h5py.File(fname, "r") as h5_file:
 
-            gwak_stream = h5_file["gwak_value"][stream_cut:]
-            tslide_dict[fname] = gwak_stream
-            if len(gwak_stream.shape) == 1:
-                tslide_data.append(gwak_stream)
+            if full_return:
+                gwak_stream = h5_file["gwak_value"][stream_cut:,:]
             else:
-                embd_info.append(gwak_stream[:,0:roll_idx[0]])
-                coh_info.append(gwak_stream[:,roll_idx[0]:roll_idx[1]])
-                tslide_data.append(gwak_stream[:,roll_idx[1]:roll_idx[2]])
+                gwak_stream = h5_file["gwak_value"][stream_cut:,-1]
 
-    # Merge all the nan-truncated timeslide in the list to 
-    # one numpy array with the shape of (x_n,) and find the threshold. 
-    tslide_data = np.concatenate(tslide_data, axis=0).ravel()
-    if full_return:
+        if gwak_stream.shape[0] == 0:
+            continue
 
-        embd_data = np.concatenate(embd_info, axis=0)
-        coh_data = np.concatenate(coh_info, axis=0)
+        if gwak_min_value is not None:
 
-        return tslide_dict, tslide_data, embd_data, coh_data
+            min_value = gwak_stream.min()
+            if min_value < gwak_min_value:
+                tslide_dict[fname] = gwak_stream
+                tslide_data.append(gwak_stream)
+        else:
+            tslide_dict[fname] = gwak_stream
+            tslide_data.append(gwak_stream)
+
+    # Merge all the nan-truncated timeslide in the list to
+    # one numpy array with the shape of (x_n,) and find the threshold.
+    tslide_data = np.concatenate(tslide_data, axis=0)
 
     return tslide_dict, tslide_data
-
 
 def find_outlier_by_segmets(
     tslide_dict,
@@ -162,7 +165,7 @@ def find_outlier_by_segmets(
 
         indices = np.where(ts_data < threshold)[0]
         H1_time = (indices + stream_cut)/infer_sample_rate + start
-        value = ts_data[indices]
+        value = ts_data[indices][:]
         outlier_info = accumlator(
             H1_time, value, 
             accumlation_length=accumlation_length, pad=pad

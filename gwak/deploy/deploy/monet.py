@@ -11,7 +11,8 @@ from collections import defaultdict
 from machinery import (
     gwak_output_dir,
     gwak_louvre_dir,
-    gwak_logging_dir
+    gwak_logging_dir,
+    gwak_container_output_dir,
 )
 
 from access.trigger_io import (
@@ -53,7 +54,8 @@ def find_outlier_segs(
     )()
     log_dir.mkdir(parents=True, exist_ok=True)
     gwak_logger(log_dir / "find_outlier_segs.log")
-    outlier_file = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}/{run_name}")(
+    outlier_file = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}/{run_name}")(
         append_path="outlier_config.h5"
     )
 
@@ -153,7 +155,8 @@ def plot_bbc_benchmark(
     louvre_dir = gwak_louvre_dir(
         suffix=f"{ana_mode}/{model}/{threshold_setting}"
     )()
-    infer_result_dir = gwak_output_dir(suffix=f"infer/{ana_mode}/{model}")()
+    infer_result_dir = gwak_container_output_dir(
+        suffix=f"Outputs/infer/{ana_mode}/{model}")()
 
     unpack_file_1 = infer_result_dir / "bbc-short-0/bbc-unpack.h5"
     unpack_file_2 = infer_result_dir / "bbc-short-1/bbc-unpack.h5"

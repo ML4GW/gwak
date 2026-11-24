@@ -58,22 +58,29 @@ class FlowWrapper(nn.Module):
     def __init__(
         self, 
         flow, 
-        standardizer=None,
-        # use_correlation=True,
+        input_standardizer=None,
+        context_standardizer=None,
+        # concate_context=True,
         # condition_on_correlation=False, 
         # standardizer_x=None, 
         # standardizer_c=None
-        context_standardizer=None,
     ):
         super().__init__()
         self.flow = flow
-        self.standardizer = standardizer
-        self.context_standardizer = context_standardizer
+        self.input_standardizer = input_standardizer
+        self.context_standardizer =  context_standardizer
 
-    def forward(self, x, context):
-        if self.standardizer: x = self.standardizer(x)
-        if self.context_standardizer: context = self.context_standardizer(context)
-        return self.flow.log_prob(inputs=x,context=context)
+    def forward(
+        self,
+        x,
+        context:Optional[torch.Tensor]=None
+    ):
+        if self.input_standardizer:
+            x = self.input_standardizer(x)
+        if self.context_standardizer:
+            context = self.context_standardizer(context)
+            return self.flow.log_prob(inputs=x, context=context)
+        return self.flow.log_prob(inputs=x)
 
 class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
 
@@ -89,19 +96,21 @@ class ModelCheckpoint(pl.callbacks.ModelCheckpoint):
         module.model.eval()
 
         # Wrap flow in a traceable nn.Module
-        use_corr = getattr(module, 'use_correlation', True)
-        use_cond = getattr(module, 'condition_on_correlation', False)
+        _device = "cuda:0"
+        use_corr = getattr(module, "concate_context", True)
+        # use_cont = getattr(module, 'apply_context', False)
         wrapper = FlowWrapper(
             module.model,
-            module.standardizer,
+            input_standardizer=module.input_standardizer,
             context_standardizer=module.context_standardizer
-        ).to("cuda:0")
+        ).to(_device)
         wrapper.eval()
 
         # this is for spline
-        example_input = torch.randn(1, module.embedding_dims).to("cuda:0")
-        if module.condition_on_correlation:
-            example_context = torch.randn(1, module.context_features).to("cuda:0")
+        # example_input = torch.randn(1, module.embedding_dims).to("cuda:0")
+        example_input = torch.randn(1, module.input_dim).to(_device)
+        if module.apply_context:
+            example_context = torch.randn(1, module.context_dim).to(_device)
             traced = torch.jit.trace(wrapper, (example_input, example_context))
         else:
             traced = torch.jit.trace(wrapper, (example_input))
@@ -397,17 +406,16 @@ class BackgroundFlowModel(GwakBaseModelClass):
     def __init__(
             self,
             embedding_model: str = None,
-            means: Optional[str] = None,
-            stds: Optional[str] = None,
-            new_shape=128,
-            n_dims=8,
-            n_flow_steps=4,
+            embedding_dim=8,
+            n_flow_steps=4, #Bump this up to ~20
+            num_blocks=4,
             hidden_dim=64,
-            coh_mode:str="real",
+            feats_mode: str="embedding",
+            feature_mode:Optional[str]=None,
             # num_bins=50,
             learning_rate=1e-3,
-            use_correlation: bool = True,
-            condition_on_correlation: bool = False,
+            concate_context: bool = True,
+            apply_context: bool = False,
             normalize: bool = True,
     ):
         super().__init__()
@@ -418,102 +426,95 @@ class BackgroundFlowModel(GwakBaseModelClass):
             self.graph = torch.jit.load(self.embedding_model)
             self.graph.eval()
             self.graph.to(device=self.device)
-            self.get_logger().info(f"Loaded embedding model from {embedding_model}")
+            self.get_logger().info(
+                f"Loaded embedding model from {embedding_model}"
+            )
 
-        self.use_correlation = use_correlation
-        self.condition_on_correlation = condition_on_correlation
+        self.embedding_dim = embedding_dim
+        self.concate_context = concate_context
+        self.apply_context = apply_context
         self.normalize = normalize
-        self.n_dims = n_dims
-        self.context_features = cohmode_to_dim(coh_mode)
+        self.context_dim = cohmode_to_dim(feature_mode)
+        self.feats_mode = feats_mode
 
-        if condition_on_correlation:
-            # flow input = embeddings only
-            self.embedding_dims = n_dims
-        elif use_correlation:
-            # flow input = embedding + xcorr concatenated 
-            # (was embedding - xcorr concatenated)
-            self.embedding_dims = n_dims + context_features
-            self.context_features = 0
+        if feats_mode == "embedding":
+            self.input_dim = embedding_dim
+            self.context_dim = cohmode_to_dim(feature_mode)
         else:
-            self.embedding_dims = n_dims
-            self.context_features = 0
+            self.input_dim = cohmode_to_dim(feature_mode)
+            self.context_dim = embedding_dim
+
+        if concate_context:
+            # flow input = embedding + context concatenated 
+            self.input_dim += self.context_dim
+            self.context_dim = 0
+        if apply_context == False:
+            self.context_dim = 0
+
 
         # Define MAF Flow
         transforms = []
         for _ in range(n_flow_steps):
             maf = MaskedAffineAutoregressiveTransform(
-                features=self.n_dims,
+                features=self.input_dim,
                 hidden_features=hidden_dim,
-                num_blocks=4,
-                context_features=self.context_features
+                num_blocks=num_blocks, # Add this to config arguments ~32
+                context_features=self.context_dim
             )
             transforms.append(maf)
-            transforms.append(ReversePermutation(features=self.n_dims))
+            transforms.append(ReversePermutation(features=self.input_dim))
 
-        if not self.condition_on_correlation: 
-            distribution = StandardNormal([self.n_dims])
-        else:
-            context_encoder=nn.Linear(self.context_features, 2*self.n_dims)
-            distribution = ConditionalDiagonalNormal(
-                [self.n_dims],
-                context_encoder=context_encoder
-            )
+        # if not self.apply_context: 
+        #     distribution = StandardNormal([self.input_dim])
+        # else:
+        #     context_encoder=nn.Linear(self.context_dim, 2*self.input_dim)
+        #     distribution = ConditionalDiagonalNormal(
+        #         [self.input_dim],
+        #         context_encoder=context_encoder
+        #     )
+        distribution = StandardNormal([self.input_dim])
 
         self.flow = Flow(
             transform=CompositeTransform(transforms),
             distribution=distribution
         )
-
         # Store mean and std for standardization
-        self.embedding_mean = None
-        self.embedding_std = None
-        self.standardizer = None
-        if means is not None and stds is not None:
-            self.register_buffer(
-                "embedding_mean",
-                torch.from_numpy(np.load(means))
-            )
-            self.register_buffer(
-                "embedding_std",
-                torch.from_numpy(np.load(stds))
-            )
-            self.standardizer = Standardizer(
-                self.embedding_mean,
-                self.embedding_std
-            )
-
-        # Context standardization, filled from the datamodule in setup() and
-        # stored with the checkpoint so the exported JIT model applies it too
+        self.input_standardizer = Standardizer(
+            torch.zeros(self.input_dim),
+            torch.ones(self.input_dim)
+        )
         self.context_standardizer = None
-        if self.condition_on_correlation and self.normalize:
+        if apply_context:
             self.context_standardizer = Standardizer(
-                torch.zeros(self.context_features),
-                torch.ones(self.context_features)
+                torch.zeros(self.context_dim),
+                torch.ones(self.context_dim)
             )
 
         self.model = self.flow
-
-        self.new_shape = new_shape
         self.learning_rate = learning_rate
 
         self.save_hyperparameters()
         self.feature_extractor = FeatureExtractor(
-            mode=coh_mode
+            mode=feature_mode
         )
     def setup(self, stage=None):
         if stage != "fit" or self.context_standardizer is None:
             return
         datamodule = getattr(self.trainer, "datamodule", None)
-        c_mean = getattr(datamodule, "c_mean", None)
-        c_std = getattr(datamodule, "c_std", None)
-        if c_mean is None or c_mean.numel() != self.context_features:
+        features_mean = getattr(datamodule, "features_mean", None)
+        features_std = getattr(datamodule, "features_std", None)
+        embd_mean = getattr(datamodule, "embd_mean", None)
+        embd_std = getattr(datamodule, "embd_std", None)
+        if features_mean is None or features_mean.numel() != self.context_dim:
             self.get_logger().warning(
                 "No context statistics from the datamodule, context is not standardized"
             )
             return
 
-        self.context_standardizer.mean.copy_(c_mean)
-        self.context_standardizer.std.copy_(c_std)
+        self.embd_standardizer.mean.copy_(embd_mean)
+        self.embd_standardizer.std.copy_(embd_std)
+        self.context_standardizer.mean.copy_(features_mean)
+        self.context_standardizer.std.copy_(features_std)
 
     def freq_cos_sim(self, batch):
         sim_score = self.feature_extractor(batch)
@@ -526,21 +527,19 @@ class BackgroundFlowModel(GwakBaseModelClass):
         if self.embedding_model:
             if len(batch) == 2:
                 batch, _ = batch
-            feats = self.graph(batch)
-            c = self.freq_cos_sim(batch)
+            inputs = self.graph(batch)
+            context = self.freq_cos_sim(batch)
         else:
-            feats, c = batch
+            inputs, context = batch
 
-        if self.standardizer is not None:
-            feats = self.standardizer(feats)
+        inputs = self.input_standardizer(inputs)
 
-        if self.context_standardizer is not None:
-            c = self.context_standardizer(c)
-
-        if self.condition_on_correlation:
-            log_prob = self.model.log_prob(inputs=feats,context=c)
+        if self.apply_context:
+            context = self.context_standardizer(context)
+            log_prob = self.model.log_prob(inputs=inputs, context=context)
         else:
-            log_prob = self.model.log_prob(inputs=feats)
+            log_prob = self.model.log_prob(inputs=inputs)
+
         loss = -log_prob.mean()
         self.log("train/loss", loss, on_epoch=True, sync_dist=True)
         return loss
@@ -550,22 +549,17 @@ class BackgroundFlowModel(GwakBaseModelClass):
         if self.embedding_model:
             if len(batch) == 2:
                 batch, _ = batch
-            feats = self.graph(batch)
-            c_score = self.freq_cos_sim(batch)
+            inputs = self.graph(batch)
+            context = self.freq_cos_sim(batch)
         else:
-            feats, c_score = batch
+            inputs, context = batch
 
-        if self.standardizer is not None:
-            feats = self.standardizer(feats)
-
-        if self.context_standardizer is not None:
-            c_score = self.context_standardizer(c_score)
-
-        if self.condition_on_correlation:
-
-            log_prob = self.model.log_prob(inputs=feats,context=c_score)
+        inputs = self.input_standardizer(inputs)
+        if self.apply_context:
+            context = self.context_standardizer(context)
+            log_prob = self.model.log_prob(inputs=inputs, context=context)
         else:
-            log_prob = self.model.log_prob(inputs=feats)
+            log_prob = self.model.log_prob(inputs=inputs)
 
         loss = -log_prob.mean()
         self.log("val/loss", loss, sync_dist=True)

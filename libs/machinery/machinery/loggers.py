@@ -190,6 +190,18 @@ class gwak_timeslide_dir(Pathfinder):
             suffix=suffix
         )
 
+class gwak_louvre_dir(Pathfinder):
+
+    def __init__(
+        self,
+        suffix: Optional[str]=None,
+    ):
+        super().__init__(
+            dir_var="GWAK_LOUVRE_DIR",
+            path_function_name="figure directory",
+            suffix=suffix
+        )
+
 class gwak_image_dir(Pathfinder):
 
     def __init__(
@@ -214,15 +226,15 @@ class gwak_container_output_dir(Pathfinder):
             suffix=suffix
         )
 
-class gwak_louvre_dir(Pathfinder):
+class gwak_condor_stratch_dir(Pathfinder):
 
     def __init__(
         self,
         suffix: Optional[str]=None,
     ):
         super().__init__(
-            dir_var="GWAK_LOUVRE_DIR",
-            path_function_name="figure directory",
+            dir_var="SCRATCH",
+            path_function_name="Stratch directory of the condor node",
             suffix=suffix
         )
 

@@ -1,14 +1,14 @@
 import time
 import logging
 
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 from hermes.aeriel.serve import serve
 from hermes.aeriel.monitor import ServerMonitor
 
-from machinery import gwak_logger, gwak_dir
+from machinery import gwak_logger, gwak_dir, gwak_data_dir, Pathfinder
 from infer_modules import get_ip_address
 from infer_modules.infer_core import client_action, run_bash
 
@@ -16,8 +16,8 @@ from infer_modules.infer_core import client_action, run_bash
 def infer(
     # Triron and model
     project: str,
-    model_repo_dir: Path, # >>> Dicided after slurm_batch >>> job_dir
-    image: str,
+    model_repo_dir: Union[Path, Pathfinder], # >>> Dicided after slurm_batch/condor_submit >>> job_dir
+    image: Pathfinder,
     patients: int,
     # Data setting
     fnames: list, # >>> Dicided after slurm_batch (Data Cut)
@@ -50,9 +50,22 @@ def infer(
     # Triton server setup
     ip = get_ip_address()
     gwak_streamer = f"gwak-{project}-streamer"
+    # Condor passes a Pathfinder so the repo resolves on the node, Slurm a Path
+    if isinstance(model_repo_dir, Pathfinder):
+        model_repo_dir = model_repo_dir()
+    # condor_cmd.sh pulls each osdf file to $GWAK_DATA_DIR/{ifo_mode}/{data_tag},
+    # with GWAK_DATA_DIR=$SCRATCH/Data, so keep the path after "Data/GWAK/"
+    data_dir = gwak_data_dir()()
+    # This part should consider resolved upfront (before pass a argument)
+    # Check if env absoulte notion is allowed ($STRATCH/file_name)
+    fnames = [
+        data_dir / str(fname).split("Data/GWAK/", 1)[1]
+        if str(fname).startswith("osdf:") else Path(fname)
+        for fname in fnames
+    ]
     serve_context = serve(
         model_repo_dir,
-        image,
+        str(image()), # spython joins the command as str
         grpc_port,
         log_file=triton_log,
         wait=False,

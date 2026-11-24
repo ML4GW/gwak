@@ -7,6 +7,6 @@ coh_mode: null
 fm_config: null
 condor_kwargs:
   request_cpus: 16
-  request_memory: 32G
-  request_disk: 80G
+  request_memory: 58G
+  request_disk: 128G
   accounting_group: ligo.dev.o4.burst.allsky.mlyoffline

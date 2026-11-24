@@ -2,6 +2,7 @@
 make_seg_list:
   ifos: &ifos ["H1", "L1"]
   state_flag: &state_flag ["DMT-ANALYSIS_READY:1", "DMT-ANALYSIS_READY:1"]
+  open_state_flag: null
   version_tag: &version_tag test
   ana_start: 1401544825 # to match O4b-2 from MDC https://git.ligo.org/bursts/burst-pipeline-benchmark/-/wikis/o4b_2/O4b-2
   ana_end:   1401699900

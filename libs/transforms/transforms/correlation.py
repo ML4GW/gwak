@@ -38,6 +38,7 @@ TF_LOUD_FEATURES = ["ecoh_tf", "enet_peak", "epeak_H", "epeak_L", "e_clu_H", "e_
 FEATURES = {
     "corr15": TD_FEATURES + TF_COH_FEATURES,
     "corr21": TD_FEATURES + TF_COH_FEATURES + TF_LOUD_FEATURES,
+    "selected-9": TD_FEATURES[:8] + ["ccen_tf_reg"]
 }
 
 # time domain

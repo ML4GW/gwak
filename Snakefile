@@ -20,32 +20,22 @@ ana_ver_list = [
 ]
 ifos_list = ["HL"]
 data_ver_list = [
-    "pseudo",
-    # "O4b_cat1-chunked",
-    # "O4b_cat1-loud_glitch",
-    # "O4b_cat12-katya"
+    "O4b_cat1-loud_glitch",
 ]
 cl_config_list = [
-    # "ResNet_6d",
-    # "ResNet_6d_split",
     "ResNet_6d_narrow_band",
-    # "ResNet_6d.test",
 ]
 coh_mode_list = [
-    "real",
-    # "real_imag",
-    # "abs",
-    # "random",
-    # "random2",
-    # "half",
-    "corr15",
-    "corr21",
+    "selected-9",
 ]
 fm_config_list = [
-    "NF_from_file",
-    # "NF_from_file.test",
+    # "NF_em-feature_context",
+    "NF_features-no_context.test",
+    # "NF_features-em_context",
 ]
-noise_run_list = ["one_year"]
+noise_run_list = [
+    "one_decade"
+]
 foreground_run_list = [
     "bbc-short-0", "bbc-short-1"
 ]
@@ -53,14 +43,6 @@ run_name_list = noise_run_list + foreground_run_list
 
 rule gwak_init:
     input: rules.bootstrap_complete.output
-    shell:
-        """
-        echo "Get scitoken..."
-        echo " "
-        echo "    Check if any window pops up automatically."
-        echo " "
-        htgettoken -a vault.ligo.org -i igwn
-        """
 
 rule build_containers:
     input: 
@@ -76,7 +58,8 @@ rule pull_all:
     input:
         expand(rules.pull_data_from_segments.output,
             segment_type=[
-                "o4.strain",
+                # "o4.strain",
+                "o4.cat3-strain",
                 # 'o4b.bbc-background-2',
                 # 'o4b.short-0-2', 
                 # 'o4b.short-1-2', 

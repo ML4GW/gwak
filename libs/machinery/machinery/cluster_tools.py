@@ -71,7 +71,7 @@ def write_infer_bash_file(
 def write_export_config(
     **export_kwargs
 ):
-
+    breakpoint()
     # Load the arguments in main eport file
     with open(export_kwargs["export_config_file"], "r") as yaml_file:
         export_args = yaml.safe_load(yaml_file)
