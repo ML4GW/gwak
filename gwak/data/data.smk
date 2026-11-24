@@ -14,6 +14,7 @@ segment_types = [
     'o4b.short-0-2',
     'o4b.short-1-2',
 ]
+
 wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs]),
     segment_type = '|'.join([x for x in segment_types])
@@ -73,39 +74,4 @@ rule pull_data_from_segments:
             --config {input.config} get_strain \
             --segments {input.segments} \
             --logger {output.logger}"
-
-
-# Check omicron triggers with outlier configs
-rule outlier_omicron_check:
-    input:
-        arg = GWAK_ROOT / "gwak/data/data/cli.py",
-        config = GWAK_ROOT / 'gwak/data/configs/outlier_omicron_triggers.yaml'
-    # output: # <- need to check and improve
-    #     OUTPUT_DIR / "omicron_check/omicron_check_test/ResNet_6d_narrow_band_corr15_NF_from_file/H1_triggers.h5",
-    #     OUTPUT_DIR / "omicron_check/omicron_check_test/ResNet_6d_narrow_band_corr15_NF_from_file/L1_triggers.h5",
-    #     OUTPUT_DIR / "omicron_check/omicron_check_test/ResNet_6d_narrow_band_selected-9_NF_features-no_context/H1_triggers.h5",
-    #     OUTPUT_DIR / "omicron_check/omicron_check_test/ResNet_6d_narrow_band_selected-9_NF_features-no_context/L1_triggers.h5",
-    params:
-        gwak_env = GWAK_ROOT / ".gwak/env.sh",
-        pyproject = GWAK_ROOT / "gwak/data/pyproject.toml",
-    shell:
-        "source {params.gwak_env}; \
-        uv run \
-            --project {params.pyproject} python {input.arg} \
-            --config {input.config} run_omicron_check"
-
-
-# Create Q-transform spectrograms for the triggers selected by Omicron check
-rule outlier_qtransform:
-    input:
-        arg = GWAK_ROOT / "gwak/data/data/cli.py",
-        config = GWAK_ROOT / 'gwak/data/configs/outlier_omicron_triggers.yaml',
-        omicron = rules.outlier_omicron_check.output # <- need to check
-    params:
-        gwak_env = GWAK_ROOT / ".gwak/env.sh",
-        pyproject = GWAK_ROOT / "gwak/data/pyproject.toml",
-    shell:
-        "source {params.gwak_env}; \
-        uv run \
-            --project {params.pyproject} python {input.arg} \
-            --config {input.config} run_outlier_qtransform"
+            
