@@ -14,6 +14,7 @@ segment_types = [
     'o4b.short-0-2',
     'o4b.short-1-2',
 ]
+
 wildcard_constraints:
     ifos = '|'.join([x for x in ifo_configs]),
     segment_type = '|'.join([x for x in segment_types])
@@ -73,3 +74,4 @@ rule pull_data_from_segments:
             --config {input.config} get_strain \
             --segments {input.segments} \
             --logger {output.logger}"
+            

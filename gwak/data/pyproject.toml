@@ -14,11 +14,14 @@ dependencies = [
     "pycbc>=2.9.0",
     "python-ligo-lw==1.8.3",
     "cowsay>=6.1",
+    "torch>=2.0",
+    "ml4gw",
 ]
 
 [tool.uv.sources]
 access = {path = "../../libs/access", editable = true }
 machinery = {path = "../../libs/machinery", editable = true }
+ml4gw = {path = "../../ml4gw", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["data"]
